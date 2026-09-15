@@ -378,7 +378,14 @@ func TestExecuteHandler_TimesOutARunawayCommand(t *testing.T) {
 	// index runs can be slow, but they cannot be unbounded: an MCP client
 	// blocked forever on one tool call is worse than a failed one. The timeout
 	// message has to say so explicitly rather than surfacing "signal: killed".
-	script, _ := fakeBinary(t, "sleep 30")
+	// "exec sleep 30", not "sleep 30". exec REPLACES the shell with sleep, so
+	// the process CommandContext kills on deadline is the sleeping process
+	// itself. Without exec, sleep is a grandchild: the context kills the shell,
+	// the orphan survives holding the inherited stdout/stderr pipe, and
+	// CombinedOutput blocks until that pipe closes 30 seconds later. That is
+	// invisible on macOS and fails on Linux, which is how CI caught it and a
+	// local run did not.
+	script, _ := fakeBinary(t, "exec sleep 30")
 	useFakeBinary(t, script)
 
 	originalTimeout := CommandTimeout

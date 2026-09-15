@@ -9,9 +9,9 @@ Severity is about consequence. **HIGH** means a caller can be misled about what 
 | | Open | Resolved | Total |
 |---|---|---|---|
 | HIGH | 3 | 0 | 3 |
-| MEDIUM | 4 | 0 | 4 |
+| MEDIUM | 5 | 0 | 5 |
 | LOW | 2 | 0 | 2 |
-| **Total** | **9** | **0** | **9** |
+| **Total** | **10** | **0** | **10** |
 
 Every item below was found by writing a test, sabotaging the code it covers, and reading what the failure actually said. None came from reading the source.
 
@@ -24,6 +24,12 @@ Every item below was found by writing a test, sabotaging the code it covers, and
 - [ ] **HIGH** — `internal/semantic/search.go:86`, `:103`, `:156` — `Searcher.Search` silently ignores the caller's `TopK` whenever reranking is on. Line 86 overwrites `searchOpts.TopK` with the over-fetch candidate count, line 103 hands those same options to `applyReranking`, and the trim at line 156 therefore cuts to the candidate count rather than to what the caller asked for. `Search(ctx, q, {TopK: 2, Rerank: true})` returns up to 50 results. `PrefilterSearch` repeats the bug at `:333` and `:348`.
 
   This is the "do not report something other than what was asked" rule: nothing errors, and a caller that asked for 2 gets 50 with no signal that its limit was discarded. Fix: keep the caller's `TopK` in a separate variable from the candidate count and trim with the former. Pinned as-is by `TestSearch_RerankingIgnoresCallerTopK`, whose comment names the bug so the test is not mistaken for approval of the behaviour.
+
+- [ ] **MEDIUM** — `internal/semantic/mcpserver/handlers.go` — the `CommandTimeout` guarantee is weaker than it reads. `ExecuteHandler` runs `exec.CommandContext(...).CombinedOutput()`, and the context deadline kills only the **direct child**. A grandchild that inherited stdout and stderr keeps the pipe open, and `CombinedOutput` blocks until that pipe closes — so the call returns when the grandchild finishes, not when the deadline fires. An MCP client can therefore stay blocked well past the timeout it was promised.
+
+  Latent rather than live: the child in production is `llm-semantic`, which does not spawn grandchildren today. It stops being latent the moment it does. The durable fix is to run the child in its own process group and signal the group, rather than the single pid.
+
+  Found because CI caught it and a local run could not. `TestExecuteHandler_TimesOutARunawayCommand` used a fake binary running `sleep 30` as a grandchild: it passed on macOS and failed on Linux at exactly 30 seconds. The test now uses `exec sleep 30` so the shell is replaced by the sleeping process and the kill lands on it. Measured: without `exec` the script has one child process, with `exec` it has none. That change makes the TEST deterministic; it does not fix the source, which is why this row exists.
 
 - [ ] **MEDIUM** — `internal/semantic/lexical_index.go:708` — `LexicalIndex.GetAllMemoryStats` runs `LEFT JOIN memory m ON ms.memory_id = m.id`, but `LexicalIndex.initSchema` never creates a `memory` table; it creates `chunks`, `chunks_fts`, `memory_stats` and `retrieval_log`. A standalone lexical index therefore always errors from this method. It works today only when the index happens to share a database file with a `SQLiteStorage`, which makes it an accident of deployment rather than a contract.
 
