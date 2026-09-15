@@ -1,0 +1,44 @@
+module github.com/samestrin/llm-semantic-axi
+
+go 1.24.0
+
+require (
+	github.com/bmatcuk/doublestar/v4 v4.9.2
+	github.com/goccy/go-yaml v1.19.1
+	github.com/gofrs/flock v0.13.0
+	github.com/modelcontextprotocol/go-sdk v1.2.0
+	github.com/odvcencio/gotreesitter v0.13.4
+	github.com/qdrant/go-client v1.16.2
+	github.com/samestrin/go-axi v0.3.0
+	github.com/spf13/cobra v1.8.0
+	golang.org/x/net v0.47.0
+	golang.org/x/sync v0.18.0
+	golang.org/x/term v0.39.0
+	gopkg.in/yaml.v3 v3.0.1
+	modernc.org/sqlite v1.42.2
+)
+
+require (
+	github.com/dustin/go-humanize v1.0.1 // indirect
+	github.com/google/jsonschema-go v0.3.0 // indirect
+	github.com/google/uuid v1.6.0 // indirect
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/kr/text v0.1.0 // indirect
+	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/ncruces/go-strftime v0.1.9 // indirect
+	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
+	github.com/rogpeppe/go-internal v1.14.1 // indirect
+	github.com/spf13/pflag v1.0.5 // indirect
+	github.com/toon-format/toon-go v0.0.0-20251202084852-7ca0e27c4e8c // indirect
+	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
+	golang.org/x/exp v0.0.0-20250620022241-b7579e27df2b // indirect
+	golang.org/x/oauth2 v0.30.0 // indirect
+	golang.org/x/sys v0.40.0 // indirect
+	golang.org/x/text v0.31.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20251111163417-95abcf5c77ba // indirect
+	google.golang.org/grpc v1.76.0 // indirect
+	google.golang.org/protobuf v1.36.10 // indirect
+	modernc.org/libc v1.66.10 // indirect
+	modernc.org/mathutil v1.7.1 // indirect
+	modernc.org/memory v1.11.0 // indirect
+)

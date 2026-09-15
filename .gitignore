@@ -1,0 +1,40 @@
+# Build output
+/build/
+/dist/
+*.exe
+
+# Test / coverage
+*.out
+coverage.txt
+coverage.html
+
+# OS
+.DS_Store
+
+# Editor
+.idea/
+.vscode/
+
+# atcr workspace: local config plus runtime outputs (diff cache, reviewer
+# output, reconciled reports). Never committed. atcr runs in this checkout
+# before the push, so nothing downstream needs to see it — unlike the
+# technical-debt file below, which the no-mistakes worktree does need.
+.atcr/
+
+# Planning artifacts stay local, with one exception: the technical-debt record
+# is tracked so the no-mistakes pipeline can read and update it. That pipeline
+# runs in a disposable worktree built from the pushed branch, never from this
+# checkout, so an untracked file is invisible to it and any edit it makes there
+# is discarded with the worktree.
+#
+# The directory itself must be re-included at every level. Git does not descend
+# into an excluded directory, so a bare "!.planning/technical-debt/README.md"
+# under ".planning/" would never match.
+.planning/*
+!.planning/technical-debt/
+.planning/technical-debt/*
+!.planning/technical-debt/README.md
+
+# Local index artifacts
+/.index/
+/.llm-index/
