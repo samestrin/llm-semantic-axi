@@ -9,9 +9,9 @@ Severity is about consequence. **HIGH** means a caller can be misled about what 
 | | Open | Resolved | Total |
 |---|---|---|---|
 | HIGH | 4 | 0 | 4 |
-| MEDIUM | 5 | 0 | 5 |
+| MEDIUM | 7 | 0 | 7 |
 | LOW | 2 | 0 | 2 |
-| **Total** | **11** | **0** | **11** |
+| **Total** | **13** | **0** | **13** |
 
 Every item below was found by writing a test, sabotaging the code it covers, and reading what the failure actually said. None came from reading the source.
 
@@ -38,6 +38,10 @@ Every item below was found by writing a test, sabotaging the code it covers, and
   Latent rather than live: the child in production is `llm-semantic`, which does not spawn grandchildren today. It stops being latent the moment it does. The durable fix is to run the child in its own process group and signal the group, rather than the single pid.
 
   Found because CI caught it and a local run could not. `TestExecuteHandler_TimesOutARunawayCommand` used a fake binary running `sleep 30` as a grandchild: it passed on macOS and failed on Linux at exactly 30 seconds. The test now uses `exec sleep 30` so the shell is replaced by the sleeping process and the kill lands on it. Measured: without `exec` the script has one child process, with `exec` it has none. That change makes the TEST deterministic; it does not fix the source, which is why this row exists.
+
+- [ ] **MEDIUM** — `internal/semantic/storage_qdrant.go:867` — `ReadEmbeddings` reads `VectorOutput.Data`, a field the Qdrant protobuf marks deprecated. The go-client's own helper `(*VectorOutput).GetDenseVector()` checks `Data` **and falls back to the `Dense` oneof**, so the library plainly expects either to be populated. Against a server that sends only `Dense`, `ReadEmbeddings` returns an empty map and no error — a caller sees "no embeddings" where the truth is "could not read them". Fix is one line: `vec.GetDenseVector().GetData()`. Found while building the in-process fake; the fake populates both fields, which is the backward-compatible shape, so the tests pass either way and would not have caught a server that dropped `Data`.
+
+- [ ] **MEDIUM** — `internal/semantic/storage_qdrant_stats.go:210` and `:388` — `GetAllMemoryStats` and `PruneMemoryRetrievalLog` page by setting the next offset to the **last returned** point id. Qdrant's scroll offset is the id to start **at**, inclusive, so an exactly-full page causes the next page to re-return that same point: a duplicate `RetrievalStats` row, and one id counted twice in `deletedCount`. `List` and `ListIndexedFiles` get this right by using the server's `NextPageOffset` via `ScrollAndOffset`, so the correct pattern already exists in the same file. No test pins the exact-multiple boundary, deliberately — a test there would be pinning the bug.
 
 - [ ] **MEDIUM** — `internal/semantic/lexical_index.go:708` — `LexicalIndex.GetAllMemoryStats` runs `LEFT JOIN memory m ON ms.memory_id = m.id`, but `LexicalIndex.initSchema` never creates a `memory` table; it creates `chunks`, `chunks_fts`, `memory_stats` and `retrieval_log`. A standalone lexical index therefore always errors from this method. It works today only when the index happens to share a database file with a `SQLiteStorage`, which makes it an accident of deployment rather than a contract.
 
