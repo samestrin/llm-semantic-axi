@@ -8,12 +8,18 @@ Severity is about consequence. **HIGH** means a caller can be misled about what 
 
 | | Open | Resolved | Total |
 |---|---|---|---|
-| HIGH | 0 | 0 | 0 |
+| HIGH | 1 | 0 | 1 |
 | MEDIUM | 3 | 0 | 3 |
-| LOW | 1 | 0 | 1 |
-| **Total** | **4** | **0** | **4** |
+| LOW | 2 | 0 | 2 |
+| **Total** | **6** | **0** | **6** |
 
 ## Open
+
+- [ ] **HIGH** — `internal/semantic/index_manager.go:115-121` — `IndexResult` carries no struct tags at all, while `UpdateResult` six lines below it tags every field. So `llm-semantic index --json` emits `FilesProcessed` and `ChunksCreated`, and `llm-semantic index-update --json` emits `files_updated` and `chunks_created`. One binary, two naming conventions, and a consumer parsing both has to know which command it called.
+
+  It is filed HIGH rather than MEDIUM because of what it does to `--axi`. `output.EncodeAXI` runs `projectJSON` first — marshal to JSON, then decode — precisely so the TOON encoder honours the `json` tag instead of the Go identifier. With no tag to honour, the Go field names become the published TOON column contract. That is the exact defect class go-axi's `CheckTags` exists to catch: nothing errors, nothing is empty, and the column names are silently wrong. An instruction like "the third column is ChunksCreated" is then pinned to a Go identifier that any refactor may rename.
+
+  Fix: tag `IndexResult` to match `UpdateResult`, and add a `CheckTags` test over every type these commands print so the next untagged struct fails at test time rather than in a consumer.
 
 - [ ] **MEDIUM** — `cmd/llm-semantic-mcp/main.go` — `serverInstructions` tells the client the server "wraps the llm-semantic CLI with 4 tools". It registers **16**. A model reading the instruction string is told the surface is a quarter of its real size. Reproduce: run the binary and compare its startup line (`started with 16 tools`) against the instructions text. Fix is a one-line correction, but it wants a test pinning the two to each other so the number cannot drift again.
 
@@ -22,6 +28,8 @@ Severity is about consequence. **HIGH** means a caller can be misled about what 
 - [ ] **MEDIUM** — `internal/semantic/commands/root.go:40` and `internal/semantic/mcpserver/handlers.go:114` — the default config path `.planning/.config/config.yaml` is hardcoded in two places. They can disagree, and nothing would catch it.
 
 - [ ] **LOW** — `internal/semantic` — call edges are emitted by `GoChunker` only. Eight chunkers ship (generic, go, html, javascript, markdown, php, python, rust) and seven are silent, so `callers` and `refs` return an empty result for non-Go files that is indistinguishable from "no callers exist". Documented in the README and in `AGENTS.md` rather than fixed, because extending ref extraction past Go is a feature, not a defect. Filed so the ambiguity stays visible.
+
+- [ ] **LOW** — `internal/semantic/commands/index.go:652-674` — `filterExcludedPaths` applies two matchers where one can never decide alone. Disabling the path-component check leaves the tests green, and so does disabling the `strings.Contains` check, because any exclude matching as a path segment necessarily also matches as a substring. Disabling both does go red, so the behaviour is pinned correctly and this is not a correctness bug — it is dead logic that reads as if it were load-bearing. Found by sabotage while writing `TestFilterExcludedPathsMatchesGlobs`.
 
 ## Resolved
 
