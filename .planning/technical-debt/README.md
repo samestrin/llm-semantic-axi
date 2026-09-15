@@ -8,10 +8,10 @@ Severity is about consequence. **HIGH** means a caller can be misled about what 
 
 | | Open | Resolved | Total |
 |---|---|---|---|
-| HIGH | 3 | 0 | 3 |
+| HIGH | 4 | 0 | 4 |
 | MEDIUM | 5 | 0 | 5 |
 | LOW | 2 | 0 | 2 |
-| **Total** | **10** | **0** | **10** |
+| **Total** | **11** | **0** | **11** |
 
 Every item below was found by writing a test, sabotaging the code it covers, and reading what the failure actually said. None came from reading the source.
 
@@ -24,6 +24,14 @@ Every item below was found by writing a test, sabotaging the code it covers, and
 - [ ] **HIGH** — `internal/semantic/search.go:86`, `:103`, `:156` — `Searcher.Search` silently ignores the caller's `TopK` whenever reranking is on. Line 86 overwrites `searchOpts.TopK` with the over-fetch candidate count, line 103 hands those same options to `applyReranking`, and the trim at line 156 therefore cuts to the candidate count rather than to what the caller asked for. `Search(ctx, q, {TopK: 2, Rerank: true})` returns up to 50 results. `PrefilterSearch` repeats the bug at `:333` and `:348`.
 
   This is the "do not report something other than what was asked" rule: nothing errors, and a caller that asked for 2 gets 50 with no signal that its limit was discarded. Fix: keep the caller's `TopK` in a separate variable from the candidate count and trim with the former. Pinned as-is by `TestSearch_RerankingIgnoresCallerTopK`, whose comment names the bug so the test is not mistaken for approval of the behaviour.
+
+- [ ] **HIGH** — `cmd/llm-semantic-mcp/main.go` (the `server.Run` arm) — the server exits **1** when a client disconnects normally. `main()` treats any error from `server.Run` as fatal, and an ordinary MCP client hanging up produces one: `server is closing: EOF`. So every clean shutdown is reported as a failure. Under a supervisor, systemd or a harness that reads exit codes, a healthy session that ended the way sessions are supposed to end looks like a crash, and a restart loop is the likely consequence.
+
+  This is the house rule running backwards. The rule is that nothing may report success when it did not succeed; the same rule forbids reporting failure when nothing failed.
+
+  Measured while making the entrypoint test pass in CI. Every possible teardown trips it: closing the client session or the write end gives `server is closing: EOF`, closing a read end gives `read |0: file already closed`, and both end in `os.Exit(1)`. Because `os.Exit` from that goroutine takes the whole test binary down, there is no shutdown sequence a test can perform that leaves the process alive — which is why `cmd/llm-semantic-mcp/main_test.go` now parks the server rather than shutting it down, and says so.
+
+  Fix: treat EOF and a closed-pipe read as a normal end of session and return 0, reserving exit 1 for a genuine transport or protocol failure. Then the test can assert a clean shutdown, which is the assertion actually worth having.
 
 - [ ] **MEDIUM** — `internal/semantic/mcpserver/handlers.go` — the `CommandTimeout` guarantee is weaker than it reads. `ExecuteHandler` runs `exec.CommandContext(...).CombinedOutput()`, and the context deadline kills only the **direct child**. A grandchild that inherited stdout and stderr keeps the pipe open, and `CombinedOutput` blocks until that pipe closes — so the call returns when the grandchild finishes, not when the deadline fires. An MCP client can therefore stay blocked well past the timeout it was promised.
 
