@@ -8,12 +8,24 @@ Severity is about consequence. **HIGH** means a caller can be misled about what 
 
 | | Open | Resolved | Total |
 |---|---|---|---|
-| HIGH | 1 | 0 | 1 |
-| MEDIUM | 3 | 0 | 3 |
+| HIGH | 3 | 0 | 3 |
+| MEDIUM | 4 | 0 | 4 |
 | LOW | 2 | 0 | 2 |
-| **Total** | **6** | **0** | **6** |
+| **Total** | **9** | **0** | **9** |
+
+Every item below was found by writing a test, sabotaging the code it covers, and reading what the failure actually said. None came from reading the source.
 
 ## Open
+
+- [ ] **HIGH** — `internal/semantic/storage_sqlite.go:90` and `:129` — the schema block creates `idx_chunks_file_mtime ON chunks(file_mtime)` **before** `migrateMtimeColumn()` is called. On a database written before `file_mtime` existed, `CREATE INDEX` hits a column that is not there yet and `initSchema` fails with `no such column: file_mtime`. The migration that exists precisely to add that column never gets to run, so the one case it was written for is the one case it cannot serve, and the old index is unopenable.
+
+  `LexicalIndex.initSchema` (`internal/semantic/lexical_index.go:85-91`) orders the same two steps correctly and carries the comment "This must run BEFORE creating indexes that reference file_mtime". So the correct ordering was already known in this codebase and one of the two call sites did not get it. Fix: move the migration above the index creation in `storage_sqlite.go`, matching its sibling. Pinned by `TestSQLiteStorage_OpenLegacyDatabase`.
+
+- [ ] **HIGH** — `internal/semantic/search.go:86`, `:103`, `:156` — `Searcher.Search` silently ignores the caller's `TopK` whenever reranking is on. Line 86 overwrites `searchOpts.TopK` with the over-fetch candidate count, line 103 hands those same options to `applyReranking`, and the trim at line 156 therefore cuts to the candidate count rather than to what the caller asked for. `Search(ctx, q, {TopK: 2, Rerank: true})` returns up to 50 results. `PrefilterSearch` repeats the bug at `:333` and `:348`.
+
+  This is the "do not report something other than what was asked" rule: nothing errors, and a caller that asked for 2 gets 50 with no signal that its limit was discarded. Fix: keep the caller's `TopK` in a separate variable from the candidate count and trim with the former. Pinned as-is by `TestSearch_RerankingIgnoresCallerTopK`, whose comment names the bug so the test is not mistaken for approval of the behaviour.
+
+- [ ] **MEDIUM** — `internal/semantic/lexical_index.go:708` — `LexicalIndex.GetAllMemoryStats` runs `LEFT JOIN memory m ON ms.memory_id = m.id`, but `LexicalIndex.initSchema` never creates a `memory` table; it creates `chunks`, `chunks_fts`, `memory_stats` and `retrieval_log`. A standalone lexical index therefore always errors from this method. It works today only when the index happens to share a database file with a `SQLiteStorage`, which makes it an accident of deployment rather than a contract.
 
 - [ ] **HIGH** — `internal/semantic/index_manager.go:115-121` — `IndexResult` carries no struct tags at all, while `UpdateResult` six lines below it tags every field. So `llm-semantic index --json` emits `FilesProcessed` and `ChunksCreated`, and `llm-semantic index-update --json` emits `files_updated` and `chunks_created`. One binary, two naming conventions, and a consumer parsing both has to know which command it called.
 
