@@ -12,9 +12,15 @@ import (
 
 const (
 	serverName         = "llm-semantic-mcp"
-	serverVersion      = "1.6.0"
 	serverInstructions = "llm-semantic-mcp provides semantic code search using local embedding models. It wraps the llm-semantic CLI with 4 tools for searching, indexing, and managing semantic code indexes."
 )
+
+// serverVersion is a var, not a const, so the build can stamp it with
+// -X main.serverVersion. A const cannot be set by ldflags: the linker rewrites
+// a symbol's data, and a const has no symbol to rewrite. It was a const with a
+// hardcoded "1.6.0" while the repo was inside llm-tools, which is why the
+// reported version drifted from the tag.
+var serverVersion = "dev"
 
 func main() {
 	// Verify llm-semantic binary exists

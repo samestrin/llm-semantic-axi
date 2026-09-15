@@ -1,0 +1,130 @@
+name: test
+
+# Markdown is in the filter on purpose. Documentation that describes the binary
+# is verified by Go tests, and those tests can only fire when the workflow runs.
+# With a '**.go'-only filter a documentation-only pull request registers zero
+# checks, so the one guard aimed at documentation drift is the one thing a
+# documentation-only change can never trip.
+on:
+  push:
+    branches: [main]
+    paths: ['**.go', 'go.mod', 'go.sum', '**.md', 'Makefile', '.github/workflows/**']
+  pull_request:
+    paths: ['**.go', 'go.mod', 'go.sum', '**.md', 'Makefile', '.github/workflows/**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -s -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt -s:"; echo "$unformatted"; exit 1
+          fi
+
+  test:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      # The MCP server resolves and execs the CLI at runtime, so the end-to-end
+      # tests need a real binary on disk. They skip when it is absent, which is
+      # the quiet failure this step exists to prevent.
+      - name: build the CLI for the end-to-end tests
+        run: make build
+
+      - name: test with race detector
+        run: go test -race -coverprofile=coverage.txt -covermode=atomic ./...
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-profile
+          path: coverage.txt
+
+  coverage:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: Coverage
+        run: go test -coverprofile=coverage.out ./...
+
+      # This gate FAILS rather than warns. llm-filesystem-axi only echoes a
+      # percentage here, which is why its coverage drifted unobserved.
+      - name: Enforce 80% coverage
+        run: |
+          # A module with no coverable statements yields a coverage.out holding
+          # only its "mode:" line, while `go tool cover -func` still reports
+          # "total: 0.0%" — so the total alone cannot distinguish "scaffold with
+          # nothing to cover" from "real code with no tests". Count statement
+          # lines instead.
+          #
+          # This is NOT a loophole: any real code produces statement lines, so
+          # code with statements but no tests still reports 0.0% and fails below.
+          STMTS=$(grep -vc '^mode:' coverage.out || true)
+          if [ "${STMTS:-0}" -eq 0 ]; then
+            echo "No coverable statements yet; nothing to gate."
+            exit 0
+          fi
+          COVERAGE=$(go tool cover -func=coverage.out | grep '^total:' | awk '{print $3}' | sed 's/%//')
+          echo "Total coverage: $COVERAGE% across $STMTS statement lines"
+          if (( $(echo "$COVERAGE < 80" | bc -l) )); then
+            echo "::error::Coverage $COVERAGE% is below the required 80%"
+            exit 1
+          fi
+
+  build:
+    needs: lint
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [darwin/amd64, darwin/arm64, linux/amd64, linux/arm64, windows/amd64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          cache: true
+
+      - name: cross-compile
+        run: |
+          os=${{ matrix.platform }}; os=${os%/*}
+          arch=${{ matrix.platform }}; arch=${arch#*/}
+          ext=""; [ "$os" = "windows" ] && ext=".exe"
+          GOOS=$os GOARCH=$arch go build -o /tmp/llm-semantic-$os-$arch$ext ./cmd/llm-semantic
+          GOOS=$os GOARCH=$arch go build -o /tmp/llm-semantic-mcp-$os-$arch$ext ./cmd/llm-semantic-mcp
+
+      # There is deliberately NO binary size gate here. llm-filesystem-axi caps
+      # its binaries at 20MB, which is right for a tool with four dependencies.
+      # This binary links sqlite, qdrant/grpc and tree-sitter and is ~48MB by
+      # design — that size is the reason this repo was split out of llm-tools in
+      # the first place. Copying the 20MB cap would fail every build for a cost
+      # that was accepted on purpose.

@@ -8,8 +8,11 @@ import (
 	"github.com/samestrin/llm-semantic-axi/pkg/output"
 )
 
+// Both are stamped at build time with -X main.version / -X main.commit, so the
+// binary reports the tag it was built from. They were hardcoded at "1.5.0"
+// inside llm-tools, which had no semantic build targets at all.
 var (
-	version = "1.5.0"
+	version = "dev"
 	commit  = "dev"
 )
 

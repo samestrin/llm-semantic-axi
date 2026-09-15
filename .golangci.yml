@@ -1,0 +1,16 @@
+# golangci-lint config (v2.12.2), matching the selection used across
+# samestrin/atcr and samestrin/go-axi so rules cannot drift between the
+# projects that share this toolchain.
+#
+# Linter selection is pinned explicitly (errcheck, govet, ineffassign,
+# staticcheck) so it is identical in CI and in local runs. This is a stable,
+# reproducible subset, not a relaxation introduced to silence findings.
+version: "2"
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
