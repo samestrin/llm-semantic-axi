@@ -1,0 +1,25 @@
+# Changelog
+
+All notable changes to this project are documented here.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+### Added
+
+- Standalone repository, extracted from [samestrin/llm-tools](https://github.com/samestrin/llm-tools). `internal/semantic`, `cmd/llm-semantic`, `cmd/llm-semantic-mcp` and the used slice of `pkg/output` move across unchanged.
+- `Makefile` with `build`, `build-all`, `test`, `test-race`, `test-cover`, `lint`, `vet`, `fmt`, `install`, `clean` and `hooks` targets. `llm-tools` had no semantic build targets at all, so this is new rather than copied.
+- CI: `lint` → `test -race` → `coverage`, chained by `needs:`, plus a five-platform cross-compile matrix and a tag-triggered release workflow.
+- `.golangci.yml` matching the selection used across `samestrin/atcr` and `samestrin/go-axi`.
+
+### Changed
+
+- go-axi moves from **v0.1.2** to **v0.3.0**.
+- Eleven direct dependencies that only `internal/support` and `internal/filesystem` used are dropped: `BurntSushi/toml`, `html-to-markdown`, `goquery`, `cascadia`, `expr`, `go-gitignore`, `go-diff`, `gjson`, `sjson`, `match`, `pretty`. Thirteen direct requires remain.
+- Both binaries now report the version they were built from. `version` and `commit` in `cmd/llm-semantic`, and `serverVersion` in `cmd/llm-semantic-mcp`, are stamped by `-X` at build time instead of being hardcoded to `1.5.0` and `1.6.0`.
+- `serverVersion` changed from a `const` to a `var`. `ldflags -X` rewrites a symbol, and a const has no symbol to rewrite, so the hardcoded value would have silently outlived every tag.
+
+### Coverage gate
+
+CI fails below 80% total coverage rather than printing a percentage and moving on. The sibling repo only echoes the number, which is how its coverage drifted unobserved.

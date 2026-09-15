@@ -1,0 +1,46 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+
+      - name: verify
+        run: |
+          test -z "$(gofmt -s -l .)"
+          go vet ./...
+          go test -race ./...
+
+      - name: build all platforms
+        run: |
+          VERSION="${GITHUB_REF_NAME}"
+          COMMIT="$(git rev-parse --short HEAD)"
+          mkdir -p dist
+          CLI_LDFLAGS="-s -w -X main.version=$VERSION -X main.commit=$COMMIT"
+          MCP_LDFLAGS="-s -w -X main.serverVersion=$VERSION"
+          for platform in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/amd64; do
+            os=${platform%/*}; arch=${platform#*/}
+            ext=""; [ "$os" = "windows" ] && ext=".exe"
+            GOOS=$os GOARCH=$arch go build -ldflags "$CLI_LDFLAGS" -o dist/llm-semantic-$os-$arch$ext ./cmd/llm-semantic
+            GOOS=$os GOARCH=$arch go build -ldflags "$MCP_LDFLAGS" -o dist/llm-semantic-mcp-$os-$arch$ext ./cmd/llm-semantic-mcp
+          done
+          cd dist && sha256sum * > SHA256SUMS.txt
+
+      - name: publish
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/*
+          generate_release_notes: true
