@@ -38,7 +38,7 @@ Five things worth knowing before you add one:
 
 ## Technical debt
 
-`.planning/technical-debt/README.md` is the record. It is the one thing under `.planning/` that is committed, because the validation pipeline runs in a disposable worktree built from the pushed branch and cannot see an untracked file.
+`.planning/technical-debt/README.md` is the record. It lives in the planning tree, a private repository cloned at `.planning/`, and is not part of this repository.
 
 **When you resolve an item, update it in the same change that fixes it.** Mark the row `[x]`, rewrite the entry to say what was done while keeping the original report readable, and correct the counts. A debt file that lags reality is worse than none, because it is trusted.
 
