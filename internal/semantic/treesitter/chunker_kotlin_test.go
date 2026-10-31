@@ -127,9 +127,10 @@ func TestKotlinChunker_TopLevelObjectWithoutModifiers(t *testing.T) {
 
 func TestKotlinChunker_InfixExpressionThatIsNotAnObjectIsIgnored(t *testing.T) {
 	// The object workaround keys on the exact `object Name {}` shape. An
-	// ordinary infix call at the top of a script (`a to b`) must not become a
-	// chunk.
-	chunks, err := NewKotlinChunker().Chunk("s.kts", []byte("val p = 1 to 2\nx shl 3\n"))
+	// ordinary infix call at the top of a script (`a to b`, or an anonymous
+	// object followed by `apply { }`) must not become a chunk.
+	src := "val p = 1 to 2\nx shl 3\nobject : Runnable { override fun run() {} } apply {\n}\n"
+	chunks, err := NewKotlinChunker().Chunk("s.kts", []byte(src))
 	if err != nil {
 		t.Fatalf("Chunk failed: %v", err)
 	}
