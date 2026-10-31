@@ -98,3 +98,22 @@ func TestRubyChunker_RegisteredForRb(t *testing.T) {
 		t.Error("no chunker registered for extension rb")
 	}
 }
+
+func TestRubyChunker_NamelessNodeIsDropped(t *testing.T) {
+	// A node with no name field (here the program root, the shape tree-sitter
+	// hands back when it error-recovers a half-written def) must be skipped,
+	// not stored as a nameless row that search cannot label.
+	c := NewRubyChunker()
+	src := []byte("puts 1\n")
+	tree, err := ParseSource(src, c.lang)
+	if err != nil {
+		t.Fatalf("ParseSource: %v", err)
+	}
+	defer tree.Release()
+
+	var chunks []semantic.Chunk
+	c.extractType(tree.RootNode(), src, "a.rb", &chunks, semantic.ChunkStruct)
+	if len(chunks) != 0 {
+		t.Errorf("emitted %d chunk(s) for a node with no name: %+v", len(chunks), chunks)
+	}
+}

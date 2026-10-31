@@ -85,6 +85,7 @@ var brokenSamples = map[string]string{
 	"rs":   "fn ok() {}\nfn broken( {\n",
 	"c":    "int ok(void) { return 1; }\nint broken( {\n",
 	"java": "class ok {}\nclass Broken { void f( {\n",
+	"rb":   "def ok\n  1\nend\n\ndef broken(\n",
 	"cpp":  "int ok() { return 1; }\nint broken( {\n", "cxx": "int ok() { return 1; }\nint broken( {\n", "cc": "int ok() { return 1; }\nint broken( {\n", "hpp": "int ok() { return 1; }\nint broken( {\n", "hxx": "int ok() { return 1; }\nint broken( {\n", "hh": "int ok() { return 1; }\nint broken( {\n", "h": "int ok() { return 1; }\nint broken( {\n",
 }
 
