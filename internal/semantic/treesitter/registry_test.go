@@ -67,7 +67,10 @@ func TestRegisterAll_RegistersEveryTreesitterChunker(t *testing.T) {
 
 	want := map[string]func(semantic.Chunker) bool{
 		"js":  func(c semantic.Chunker) bool { _, ok := c.(*JSChunker); return ok },
-		"ts":  func(c semantic.Chunker) bool { _, ok := c.(*JSChunker); return ok },
+		"ts":  func(c semantic.Chunker) bool { _, ok := c.(*TypeScriptChunker); return ok },
+		"tsx": func(c semantic.Chunker) bool { _, ok := c.(*TypeScriptChunker); return ok },
+		"mts": func(c semantic.Chunker) bool { _, ok := c.(*TypeScriptChunker); return ok },
+		"cts": func(c semantic.Chunker) bool { _, ok := c.(*TypeScriptChunker); return ok },
 		"py":  func(c semantic.Chunker) bool { _, ok := c.(*PythonChunker); return ok },
 		"php": func(c semantic.Chunker) bool { _, ok := c.(*PHPChunker); return ok },
 		"rs":  func(c semantic.Chunker) bool { _, ok := c.(*RustChunker); return ok },
