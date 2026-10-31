@@ -110,7 +110,7 @@ func TestCppChunker_SkipsDeclarationsWithoutBodies(t *testing.T) {
 // Defends preprocessor branches: a function in an #else/#elif arm must be
 // indexed, or it vanishes from search with nothing saying so.
 func TestCppChunker_PreprocessorBranchesAreWalked(t *testing.T) {
-	src := []byte("#ifdef A\nint in_if() { return 1; }\n#elif defined(B)\nint in_elif() { return 2; }\n#else\nint in_else() { return 3; }\n#endif\n")
+	src := []byte("#ifdef A\nint in_if() { return 1; }\n#elif defined(B)\nint in_elif() { return 2; }\n#elifdef C\nint in_elifdef() { return 4; }\n#else\nint in_else() { return 3; }\n#endif\n")
 	chunks, err := NewCppChunker().Chunk("p.h", src)
 	if err != nil {
 		t.Fatalf("Chunk: %v", err)
@@ -118,7 +118,8 @@ func TestCppChunker_PreprocessorBranchesAreWalked(t *testing.T) {
 	assertChunks(t, chunks, []wantChunk{
 		{"in_if", semantic.ChunkFunction, 2, 2},
 		{"in_elif", semantic.ChunkFunction, 4, 4},
-		{"in_else", semantic.ChunkFunction, 6, 6},
+		{"in_elifdef", semantic.ChunkFunction, 6, 6},
+		{"in_else", semantic.ChunkFunction, 8, 8},
 	})
 }
 
