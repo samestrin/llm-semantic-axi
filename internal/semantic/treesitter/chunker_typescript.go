@@ -58,8 +58,7 @@ func (c *TypeScriptChunker) walkNode(node *gotreesitter.Node, lang *gotreesitter
 		case "function_declaration":
 			c.js.extractFunction(child, lang, content, path, ext, chunks, "")
 
-		case "class_declaration", "abstract_class_declaration", "class":
-			// `class` is the node for `export default class Name`.
+		case "class_declaration", "abstract_class_declaration":
 			c.js.extractClass(child, lang, content, path, ext, chunks)
 
 		case "interface_declaration":

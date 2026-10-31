@@ -72,7 +72,7 @@ TOON encoding goes through [go-axi](https://github.com/samestrin/go-axi), which 
 
 ## Known limit: call edges are Go-only
 
-`callers` and `refs` read call edges from the index. Eight chunkers ship — generic, go, html, javascript, markdown, php, python, rust — but only the Go one emits edges. **An empty `callers` result in a Python or JavaScript file means "not indexed for edges", not "no callers."** Do not read it as proof.
+`callers` and `refs` read call edges from the index. Chunkers ship for c, generic, go, html, java, javascript, markdown, php, python, rust and typescript, but only the Go one emits edges. **An empty `callers` result in a Python or JavaScript file means "not indexed for edges", not "no callers."** Do not read it as proof.
 
 ## Development
 
