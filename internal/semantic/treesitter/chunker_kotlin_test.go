@@ -130,7 +130,8 @@ func TestKotlinChunker_InfixExpressionThatIsNotAnObjectIsIgnored(t *testing.T) {
 	// line below is an infix expression that is not that shape, and each would
 	// become a bogus chunk named after its operator or operand if one guard in
 	// extractBareObject were dropped:
-	//   - `a to b`, `x shl 3`: the left operand is not `object`.
+	//   - `a to b`, `x shl 3`, `x to {}`: the left operand is not `object`;
+	//     `x to {}` has the lambda on the right, so only that check stops it.
 	//   - `object {} to {}`: an anonymous object (its `object` node owns a class
 	//     body) with a lambda on the right; without the keyword-only check this
 	//     was chunked as a struct named "to".
@@ -139,6 +140,7 @@ func TestKotlinChunker_InfixExpressionThatIsNotAnObjectIsIgnored(t *testing.T) {
 	//   - an anonymous object followed by `apply { }`.
 	for _, src := range []string{
 		"val p = 1 to 2\nx shl 3\n",
+		"x to {}\n",
 		"object {} to {}\n",
 		"object {} to 1\n",
 		"object Foo bar {}\n",
