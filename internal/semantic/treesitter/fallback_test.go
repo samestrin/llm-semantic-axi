@@ -80,7 +80,7 @@ func TestTreeError_ReportsATreeWithAnErrorNode(t *testing.T) {
 var brokenSamples = map[string]string{
 	"py": "def ok(x):\n    return x\n\nwhile True print(\n", "pyw": "def ok(x):\n    return x\n\nwhile True print(\n", "pyi": "def ok(x):\n    return x\n\nwhile True print(\n",
 	"js": "function ok() { return 1 }\nfunction (\n", "jsx": "function ok() { return 1 }\nfunction (\n", "mjs": "function ok() { return 1 }\nfunction (\n", "cjs": "function ok() { return 1 }\nfunction (\n",
-	"ts": "function ok() { return 1 }\nfunction (\n", "tsx": "function ok() { return 1 }\nfunction (\n",
+	"ts": "function ok() { return 1 }\nfunction (\n", "tsx": "function ok() { return 1 }\nfunction (\n", "mts": "function ok() { return 1 }\nfunction (\n", "cts": "function ok() { return 1 }\nfunction (\n",
 	"php": "<?php\nfunction ok() { return 1; }\nfunction broken( {\n", "phtml": "<?php\nfunction ok() { return 1; }\nfunction broken( {\n", "php5": "<?php\nfunction ok() { return 1; }\nfunction broken( {\n", "php7": "<?php\nfunction ok() { return 1; }\nfunction broken( {\n",
 	"rs": "fn ok() {}\nfn broken( {\n",
 }
