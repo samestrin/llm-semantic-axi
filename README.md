@@ -70,9 +70,31 @@ Any OpenAI-compatible embedding endpoint works — TEI, Ollama, vLLM, OpenAI, Az
 
 TOON encoding goes through [go-axi](https://github.com/samestrin/go-axi), which guards against the failure mode the raw codec has: a type it cannot encode does not error, it emits **empty output**, and a command then silently prints nothing.
 
+## Languages
+
+Every extension `RegisterAllChunkers` registers, and what indexes it. A test (`TestReadmeLanguageTable_MatchesRegisteredExtensions`) fails when this table and the registered extensions disagree.
+
+| Language | Extensions | Chunker | Call edges |
+|---|---|---|---|
+| Go | `.go` | Go (`go/ast`) | yes |
+| C | `.c` | tree-sitter | no |
+| C++ | `.cpp` `.cxx` `.cc` `.hpp` `.hxx` `.hh` `.h` | tree-sitter | no |
+| C# | `.cs` | tree-sitter | no |
+| Java | `.java` | tree-sitter | no |
+| JavaScript | `.js` `.jsx` `.mjs` `.cjs` | tree-sitter | no |
+| Kotlin | `.kt` `.kts` | tree-sitter | no |
+| PHP | `.php` `.php5` `.php7` `.phtml` | tree-sitter | no |
+| Python | `.py` `.pyi` `.pyw` | tree-sitter | no |
+| Ruby | `.rb` | tree-sitter | no |
+| Rust | `.rs` | tree-sitter | no |
+| TypeScript | `.ts` `.tsx` `.mts` `.cts` | tree-sitter | no |
+| Markdown | `.md` `.markdown` | markdown | no |
+| HTML | `.html` `.htm` | HTML | no |
+| Other text | `.adoc` `.bash` `.cfg` `.conf` `.csv` `.diff` `.fish` `.ini` `.json` `.log` `.patch` `.rst` `.sh` `.text` `.toml` `.txt` `.xml` `.yaml` `.yml` `.zsh` | generic text windows | no |
+
 ## Known limit: call edges are Go-only
 
-`callers` and `refs` read call edges from the index. Chunkers ship for c, csharp, generic, go, html, java, javascript, markdown, php, python, rust and typescript, but only the Go one emits edges. **An empty `callers` result in a Python or JavaScript file means "not indexed for edges", not "no callers."** Do not read it as proof.
+`callers` and `refs` read call edges from the index, and only the Go chunker emits them (see the table above). **An empty `callers` result in a Python, JavaScript or any other non-Go file means "not indexed for edges", not "no callers."** Do not read it as proof.
 
 ## Development
 
