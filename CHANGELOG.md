@@ -12,7 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `Makefile` with `build`, `build-all`, `test`, `test-race`, `test-cover`, `lint`, `vet`, `fmt`, `install`, `clean` and `hooks` targets. `llm-tools` had no semantic build targets at all, so this is new rather than copied.
 - CI: `lint` → `test -race` → `coverage`, chained by `needs:`, plus a five-platform cross-compile matrix and a tag-triggered release workflow.
 - `.golangci.yml` matching the selection used across `samestrin/atcr` and `samestrin/go-axi`.
-- Parse-error fallback for the tree-sitter chunkers. A file whose parse tree has an error, or whose chunker fails or panics, is chunked into text windows by the generic chunker instead of being indexed as whatever fragments the walk found. `index` and `index-update` print `Chunked N files as text windows (parse failed):` and list the files; `--json` / `--axi` carry `FilesFallback` and `FallbackFiles` (`files_fallback` and `fallback_files` for `index-update`). A clean run prints nothing and reports `0`.
+- Parse-error fallback for the tree-sitter chunkers: when a file's parse tree has an error, the functions and classes still parsed are kept and every other non-blank line is indexed as generic text windows (a chunker failure or panic windows the whole file). `index` and `index-update` print `Chunked N files as text windows (parse failed):` with the paths, and `--json` / `--axi` carry `FilesFallback` and `FallbackFiles` (`files_fallback`, `fallback_files` for `index-update`). (epic 02)
 
 ### Changed
 

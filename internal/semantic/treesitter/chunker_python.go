@@ -37,7 +37,7 @@ func (c *PythonChunker) Chunk(path string, content []byte) ([]semantic.Chunk, er
 	root := tree.RootNode()
 
 	c.walkNode(root, content, path, &chunks, "")
-	return chunks, nil
+	return chunks, TreeError(tree)
 }
 
 func (c *PythonChunker) walkNode(node *gotreesitter.Node, content []byte, path string, chunks *[]semantic.Chunk, enclosingClass string) {

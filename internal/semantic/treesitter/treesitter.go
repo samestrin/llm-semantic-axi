@@ -22,22 +22,21 @@ const maxChunkSize = 4000
 var ErrParseTree = errors.New("parse tree has errors")
 
 // ParseSource parses source bytes with the given language and returns the tree.
-// A tree the grammar could not parse cleanly is released and reported as
-// ErrParseTree, so a chunker never walks it and returns a partial set of
-// chunks as if the file were whole. The caller must call tree.Release() when
-// done.
+// The caller must call tree.Release() when done.
 func ParseSource(content []byte, lang *gotreesitter.Language) (*gotreesitter.Tree, error) {
 	parser := gotreesitter.NewParser(lang)
-	tree, err := parser.Parse(content)
-	if err != nil {
-		return nil, err
-	}
+	return parser.Parse(content)
+}
+
+// TreeError returns ErrParseTree if the grammar could not parse the tree
+// cleanly, and nil otherwise. A chunker returns its chunks together with
+// TreeError(tree), so the fallback wrapper can keep what the walk found and
+// window the lines it missed, rather than pass a partial file off as whole.
+func TreeError(tree *gotreesitter.Tree) error {
 	if tree.RootNode().HasError() || tree.ParseStoppedEarly() {
-		reason := tree.ParseStopReason()
-		tree.Release()
-		return nil, fmt.Errorf("%w (stop reason %v)", ErrParseTree, reason)
+		return fmt.Errorf("%w (stop reason %v)", ErrParseTree, tree.ParseStopReason())
 	}
-	return tree, nil
+	return nil
 }
 
 // NodeToChunk converts a tree-sitter node to a semantic.Chunk.
