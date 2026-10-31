@@ -6,40 +6,30 @@ import (
 	"github.com/samestrin/llm-semantic-axi/internal/semantic"
 )
 
-// JSChunker uses tree-sitter to parse JavaScript and TypeScript source code.
+// JSChunker uses tree-sitter to parse JavaScript source code. TypeScript is
+// TypeScriptChunker's.
 type JSChunker struct {
 	jsLang *gotreesitter.Language
-	tsLang *gotreesitter.Language
 }
 
 func init() {
 	Register(func() semantic.Chunker { return NewJSChunker() })
 }
 
-// NewJSChunker creates a new tree-sitter based JavaScript/TypeScript chunker.
+// NewJSChunker creates a new tree-sitter based JavaScript chunker.
 func NewJSChunker() *JSChunker {
 	return &JSChunker{
 		jsLang: grammars.JavascriptLanguage(),
-		tsLang: grammars.TypescriptLanguage(),
 	}
 }
 
 func (c *JSChunker) SupportedExtensions() []string {
-	return []string{"js", "jsx", "ts", "tsx", "mjs", "cjs"}
-}
-
-func (c *JSChunker) langForExt(ext string) *gotreesitter.Language {
-	switch ext {
-	case "ts", "tsx":
-		return c.tsLang
-	default:
-		return c.jsLang
-	}
+	return []string{"js", "jsx", "mjs", "cjs"}
 }
 
 func (c *JSChunker) Chunk(path string, content []byte) ([]semantic.Chunk, error) {
 	ext := semantic.LanguageFromExtension(path)
-	lang := c.langForExt(ext)
+	lang := c.jsLang
 
 	tree, err := ParseSource(content, lang)
 	if err != nil {
@@ -62,12 +52,6 @@ func (c *JSChunker) walkNode(node *gotreesitter.Node, lang *gotreesitter.Languag
 
 		case "class_declaration":
 			c.extractClass(child, lang, content, path, ext, chunks)
-
-		case "interface_declaration":
-			c.extractInterface(child, lang, content, path, ext, chunks)
-
-		case "type_alias_declaration":
-			c.extractTypeAlias(child, lang, content, path, ext, chunks)
 
 		case "lexical_declaration":
 			// Check for arrow functions: const foo = () => {}
@@ -131,30 +115,6 @@ func (c *JSChunker) extractMethod(node *gotreesitter.Node, lang *gotreesitter.La
 
 	sig := ExtractSignature(node, content)
 	chunk := NodeToChunk(node, content, path, ext, semantic.ChunkMethod, name, sig)
-	*chunks = append(*chunks, chunk)
-}
-
-func (c *JSChunker) extractInterface(node *gotreesitter.Node, lang *gotreesitter.Language, content []byte, path, ext string, chunks *[]semantic.Chunk) {
-	nameNode := GetChildByFieldName(node, "name", lang)
-	name := GetNodeText(nameNode, content)
-	if name == "" {
-		return
-	}
-
-	sig := ExtractSignature(node, content)
-	chunk := NodeToChunk(node, content, path, ext, semantic.ChunkInterface, name, sig)
-	*chunks = append(*chunks, chunk)
-}
-
-func (c *JSChunker) extractTypeAlias(node *gotreesitter.Node, lang *gotreesitter.Language, content []byte, path, ext string, chunks *[]semantic.Chunk) {
-	nameNode := GetChildByFieldName(node, "name", lang)
-	name := GetNodeText(nameNode, content)
-	if name == "" {
-		return
-	}
-
-	sig := ExtractSignature(node, content)
-	chunk := NodeToChunk(node, content, path, ext, semantic.ChunkStruct, name, sig)
 	*chunks = append(*chunks, chunk)
 }
 
