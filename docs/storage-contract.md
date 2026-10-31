@@ -178,3 +178,23 @@ Consumers doing vector search over chunk points should also be aware that
 zero-vector points (`file_hash`, `calibration_metadata`, `retrieval_log`)
 exist in the same collection; the `chunk_id` presence rule is the reliable
 way to exclude them.
+
+## Bumping this contract
+
+This document carries a `contract_version`, stated in the title
+(`Storage Contract — Version 1`). The rule:
+
+- **A breaking change raises `contract_version` and is listed in
+  `CHANGELOG.md`.** Breaking means anything an existing consumer may rely on
+  changing underneath it: a point kind removed or split, a payload key
+  renamed or removed, a value type changed, an ID-derivation rule changed, or
+  the filter rule changed (for example chunks no longer selected by
+  `chunk_id` presence).
+- **Additive changes do not bump the version.** Adding a new payload key to
+  an existing kind, adding a new point kind alongside the existing five, or
+  documenting a previously undocumented shape leaves `contract_version` where
+  it is, because a consumer written against an older version still reads the
+  collection correctly.
+- **When `contract_version` does change,** the version in the title is
+  updated, and the change is recorded in `CHANGELOG.md` so consumers pinning
+  to a version can see what moved.
