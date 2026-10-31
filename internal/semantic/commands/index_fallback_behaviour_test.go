@@ -156,3 +156,35 @@ func TestReportUpdateResultOmitsTheFallbackLineWhenNoneFellBack(t *testing.T) {
 		t.Errorf("a clean update reported a fallback:\n%s", out)
 	}
 }
+
+// TestRunIndexKeepsNamedChunksForAPartlyParsedFile pins the board's choice on
+// EST-3580 (hybrid) in the database: the function the grammar did parse keeps
+// its named row, the code it swallowed is stored as a text window, and the
+// file is still counted. Whole-file fallback dropped the named row; keeping
+// only the named rows dropped `after`.
+func TestRunIndexKeepsNamedChunksForAPartlyParsedFile(t *testing.T) {
+	dir := newWorkspace(t)
+	useEmbedder(t, newFakeEmbedder(t))
+	writeFile(t, filepath.Join(dir, "partial.py"),
+		"import os\n\ndef ok(x):\n    return x\n\nwhile True print(\n\ndef after(y):\n    return y\n")
+
+	out := runIndexIn(t, ".", indexOpts{skipCalibration: true})
+	if !strings.Contains(out, "Chunked 1 files as text windows (parse failed)") {
+		t.Errorf("summary does not count the partly parsed file:\n%s", out)
+	}
+
+	var named, windowText []string
+	for _, c := range storedChunks(t)["partial.py"] {
+		if c.Type == semantic.ChunkFile {
+			windowText = append(windowText, c.Content)
+		} else {
+			named = append(named, c.Name)
+		}
+	}
+	if len(named) != 1 || named[0] != "ok" {
+		t.Errorf("named rows = %v, want [ok]", named)
+	}
+	if !strings.Contains(strings.Join(windowText, "\n"), "def after(y):") {
+		t.Errorf("no text window row holds `def after`; windows = %q", windowText)
+	}
+}

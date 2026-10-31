@@ -2,6 +2,7 @@ package treesitter
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/samestrin/llm-semantic-axi/internal/semantic"
@@ -46,20 +47,139 @@ func assertTextWindows(t *testing.T, chunks []semantic.Chunk, path string) {
 	}
 }
 
+// partlyBrokenPython parses up to `ok`; the error swallows `after`, so the
+// walk returns `ok` alone and lines 6-9 would drop without the gap windows.
+const partlyBrokenPython = "import os\n\ndef ok(x):\n    return x\n\nwhile True print(\n\ndef after(y):\n    return y\n"
+
 // Defends AC2 at its source: a tree with an error node used to yield whatever
 // nodes the walk happened to find, so a broken file indexed as a partial (or
 // empty) set of chunks and nothing said so.
-func TestParseSource_ReportsATreeWithAnErrorNode(t *testing.T) {
-	_, err := ParseSource([]byte(brokenPython), NewPythonChunker().lang)
-	if !errors.Is(err, ErrParseTree) {
-		t.Fatalf("ParseSource(broken) err = %v, want ErrParseTree", err)
-	}
-
-	tree, err := ParseSource([]byte(cleanPython), NewPythonChunker().lang)
+func TestTreeError_ReportsATreeWithAnErrorNode(t *testing.T) {
+	lang := NewPythonChunker().lang
+	tree, err := ParseSource([]byte(brokenPython), lang)
 	if err != nil {
-		t.Fatalf("ParseSource(clean) err = %v", err)
+		t.Fatalf("ParseSource(broken): %v", err)
+	}
+	if err := TreeError(tree); !errors.Is(err, ErrParseTree) {
+		t.Errorf("TreeError(broken) = %v, want ErrParseTree", err)
 	}
 	tree.Release()
+
+	tree, err = ParseSource([]byte(cleanPython), lang)
+	if err != nil {
+		t.Fatalf("ParseSource(clean): %v", err)
+	}
+	if err := TreeError(tree); err != nil {
+		t.Errorf("TreeError(clean) = %v, want nil", err)
+	}
+	tree.Release()
+}
+
+// brokenSamples holds, per extension, source whose first definition parses
+// and whose tail does not.
+var brokenSamples = map[string]string{
+	"py": "def ok(x):\n    return x\n\nwhile True print(\n", "pyw": "def ok(x):\n    return x\n\nwhile True print(\n", "pyi": "def ok(x):\n    return x\n\nwhile True print(\n",
+	"js": "function ok() { return 1 }\nfunction (\n", "jsx": "function ok() { return 1 }\nfunction (\n", "mjs": "function ok() { return 1 }\nfunction (\n", "cjs": "function ok() { return 1 }\nfunction (\n",
+	"ts": "function ok() { return 1 }\nfunction (\n", "tsx": "function ok() { return 1 }\nfunction (\n",
+	"php": "<?php\nfunction ok() { return 1; }\nfunction broken( {\n", "phtml": "<?php\nfunction ok() { return 1; }\nfunction broken( {\n", "php5": "<?php\nfunction ok() { return 1; }\nfunction broken( {\n", "php7": "<?php\nfunction ok() { return 1; }\nfunction broken( {\n",
+	"rs": "fn ok() {}\nfn broken( {\n",
+}
+
+// Defends the contract every chunker owes the wrapper: return the chunks the
+// walk found together with ErrParseTree. A chunker that returns nil error on a
+// broken tree is never counted; one that returns no chunks loses the named
+// definitions the board chose to keep (EST-3580, hybrid). A new chunker that
+// registers an extension without a sample here fails this test on purpose.
+func TestChunkers_ReturnTheirChunksWithErrParseTree(t *testing.T) {
+	factory := semantic.NewChunkerFactory()
+	RegisterAll(factory)
+	for _, ext := range factory.SupportedExtensions() {
+		src, ok := brokenSamples[ext]
+		if !ok {
+			t.Errorf("no broken sample for %q: add one so its chunker is proven to report parse errors", ext)
+			continue
+		}
+		c, _ := factory.GetChunker(ext)
+		chunks, err := unwrap(c).Chunk("a."+ext, []byte(src))
+		if !errors.Is(err, ErrParseTree) {
+			t.Errorf("%s: err = %v, want ErrParseTree", ext, err)
+		}
+		if len(chunks) == 0 || chunks[0].Name != "ok" {
+			t.Errorf("%s: chunks = %+v, want the parsed `ok` kept", ext, chunks)
+		}
+	}
+}
+
+// Defends the blank-gap skip: the blank lines between two parsed functions
+// are not dropped code, and a whitespace-only window would be an empty search
+// hit embedded for nothing.
+func TestFallback_BlankGapsBetweenNamedChunksGetNoWindow(t *testing.T) {
+	src := "def a():\n    return 1\n    \n\t\ndef b():\n    return 2\n\nwhile True print(\n"
+	chunks, fellBack, err := WithFallback(NewPythonChunker()).ChunkWithFallback("g.py", []byte(src))
+	if err != nil || !fellBack {
+		t.Fatalf("ChunkWithFallback: fellBack=%v err=%v", fellBack, err)
+	}
+	for _, c := range chunks {
+		if c.Type == semantic.ChunkFile && strings.TrimSpace(c.Content) == "" {
+			t.Errorf("window %d-%d holds only whitespace", c.StartLine, c.EndLine)
+		}
+	}
+	if len(chunks) != 3 {
+		t.Errorf("got %d chunks, want a, b and one window for the broken tail: %+v", len(chunks), chunks)
+	}
+}
+
+// Defends the board's choice (EST-3580, hybrid): a partly parsed file keeps
+// its named chunks, and only the lines no chunk covers become text windows.
+// Replacing the whole file threw away 610 named chunks from 36 valid CPython
+// stdlib files that gotreesitter flags; keeping only the named chunks would
+// drop `after` here without a word.
+func TestFallback_PartlyParsedFileKeepsNamedChunksAndWindowsTheRest(t *testing.T) {
+	chunks, fellBack, err := WithFallback(NewPythonChunker()).ChunkWithFallback("p.py", []byte(partlyBrokenPython))
+	if err != nil {
+		t.Fatalf("ChunkWithFallback: %v", err)
+	}
+	if !fellBack {
+		t.Error("a partly parsed file was not reported as a fallback")
+	}
+
+	var named, windows []semantic.Chunk
+	for _, c := range chunks {
+		if c.Type == semantic.ChunkFile {
+			windows = append(windows, c)
+		} else {
+			named = append(named, c)
+		}
+	}
+	if len(named) != 1 || named[0].Name != "ok" || named[0].StartLine != 3 || named[0].EndLine != 4 {
+		t.Fatalf("named chunks = %+v, want `ok` at lines 3-4", named)
+	}
+
+	var text strings.Builder
+	for _, w := range windows {
+		if w.StartLine <= 4 && w.EndLine >= 3 {
+			t.Errorf("window %d-%d overlaps the named chunk at 3-4", w.StartLine, w.EndLine)
+		}
+		if strings.TrimSpace(w.Content) == "" {
+			t.Errorf("window %d-%d holds only whitespace", w.StartLine, w.EndLine)
+		}
+		text.WriteString(w.Content)
+	}
+	for _, want := range []string{"import os", "while True print(", "def after(y):"} {
+		if !strings.Contains(text.String(), want) {
+			t.Errorf("no text window holds %q; that line dropped", want)
+		}
+	}
+	for _, w := range windows {
+		if strings.Contains(w.Content, "def after(y):") && (w.StartLine > 8 || w.EndLine < 8) {
+			t.Errorf("window holding `def after` spans %d-%d, which does not include its line 8", w.StartLine, w.EndLine)
+		}
+	}
+	for i := 1; i < len(chunks); i++ {
+		if chunks[i].StartLine < chunks[i-1].StartLine {
+			t.Errorf("chunks are not in line order: %d after %d", chunks[i].StartLine, chunks[i-1].StartLine)
+		}
+	}
 }
 
 // Defends the fallback itself: an unparseable file must come back as text
