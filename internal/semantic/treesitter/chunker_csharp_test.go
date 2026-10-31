@@ -138,6 +138,21 @@ func TestCSharpChunker_TreeThatDroppedDeclarationsIsAParseError(t *testing.T) {
 	if !errors.Is(err, ErrParseTree) {
 		t.Errorf("err = %v, want ErrParseTree", err)
 	}
+
+	// Through the wrapper, the lines the tree lost must still be indexed.
+	chunks, fellBack, err := WithFallback(NewCSharpChunker()).ChunkWithFallback("D.cs", []byte(src))
+	if err != nil || !fellBack {
+		t.Fatalf("ChunkWithFallback: fellBack=%v err=%v", fellBack, err)
+	}
+	covered := false
+	for _, c := range chunks {
+		if c.StartLine <= 1 && c.EndLine >= 2 && strings.Contains(c.Content, "namespace N") {
+			covered = true
+		}
+	}
+	if !covered {
+		t.Errorf("lines 1-2 (A and N) are in no chunk: %+v", chunks)
+	}
 }
 
 func TestCSharpChunker_NamelessDeclarationIsDropped(t *testing.T) {

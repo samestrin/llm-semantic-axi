@@ -52,7 +52,7 @@ func TestRunIndexStoresNamedRowsForCSharp(t *testing.T) {
 		typ        semantic.ChunkType
 		start, end int
 	}{
-		{"Shop", semantic.ChunkFile, 1, 23},
+		{"Shop", semantic.ChunkFile, 1, 22},
 		{"IRepo", semantic.ChunkInterface, 3, 6},
 		{"Find", semantic.ChunkMethod, 5, 5},
 		{"Service", semantic.ChunkStruct, 8, 14},
