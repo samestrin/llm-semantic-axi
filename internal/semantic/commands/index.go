@@ -396,6 +396,7 @@ func runIndex(ctx context.Context, path string, opts indexOpts) error {
 	if result.FilesSkipped > 0 {
 		fmt.Printf("Skipped %d files with errors\n", result.FilesSkipped)
 	}
+	printFallback(result.FilesFallback, result.FallbackFiles)
 	if len(result.Errors) > 0 {
 		fmt.Println("Errors:")
 		for _, e := range result.Errors {
@@ -571,6 +572,18 @@ func truncatePath(path string, maxLen int) string {
 	}
 	half := (maxLen - 3) / 2
 	return string(runes[:half]) + "..." + string(runes[len(runes)-half:])
+}
+
+// printFallback states how many files were chunked as text windows because
+// their parse failed, and names them. A clean run prints nothing.
+func printFallback(count int, files []string) {
+	if count == 0 {
+		return
+	}
+	fmt.Printf("Chunked %d files as text windows (parse failed):\n", count)
+	for _, f := range files {
+		fmt.Printf("  - %s\n", f)
+	}
 }
 
 // RegisterAllChunkers registers all supported language chunkers with the factory.

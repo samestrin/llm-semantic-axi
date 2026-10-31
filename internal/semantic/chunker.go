@@ -15,6 +15,14 @@ type Chunker interface {
 	SupportedExtensions() []string
 }
 
+// FallbackChunker is a Chunker that can chunk a file some other way when its
+// own parse fails, and says when it did. The index manager counts those files
+// so the output can state them rather than pass them off as parsed.
+type FallbackChunker interface {
+	Chunker
+	ChunkWithFallback(path string, content []byte) (chunks []Chunk, fellBack bool, err error)
+}
+
 // ChunkerFactory manages language-specific chunkers
 type ChunkerFactory struct {
 	mu       sync.RWMutex
