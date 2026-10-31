@@ -41,15 +41,16 @@ func (c *CppChunker) Chunk(path string, content []byte) ([]semantic.Chunk, error
 }
 
 // walk visits the declarations of a scope: the file, a namespace body, an
-// extern "C" block, or a class body. `outer` is the node whose range a chunk
-// should cover (a template_declaration wraps the class or function it
-// templates), and is nil when the child is not wrapped.
+// extern "C" block, or a class body.
 func (c *CppChunker) walk(node *gotreesitter.Node, content []byte, path string, chunks *[]semantic.Chunk, enclosing string) {
 	WalkNamedChildren(node, c.lang, func(child *gotreesitter.Node, nodeType string) {
 		c.visit(child, child, nodeType, content, path, chunks, enclosing)
 	})
 }
 
+// visit emits the chunk for one declaration. `outer` is the node whose range
+// the chunk should cover: a template_declaration wraps the class or function
+// it templates, otherwise it is the node itself.
 func (c *CppChunker) visit(node, outer *gotreesitter.Node, nodeType string, content []byte, path string, chunks *[]semantic.Chunk, enclosing string) {
 	switch nodeType {
 	case "template_declaration":
@@ -125,9 +126,7 @@ func (c *CppChunker) extractNamespace(node *gotreesitter.Node, content []byte, p
 		return
 	}
 	if nameNode := GetChildByFieldName(node, "name", c.lang); nameNode != nil {
-		if name := GetNodeText(nameNode, content); name != "" {
-			*chunks = append(*chunks, NodeToChunk(node, content, path, "cpp", semantic.ChunkFile, name, ExtractSignature(node, content)))
-		}
+		*chunks = append(*chunks, NodeToChunk(node, content, path, "cpp", semantic.ChunkFile, GetNodeText(nameNode, content), ExtractSignature(node, content)))
 	}
 	c.walk(body, content, path, chunks, "")
 }
