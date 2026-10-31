@@ -28,18 +28,21 @@ func (r *Registry) Add(newChunker func() semantic.Chunker) {
 	r.news = append(r.news, newChunker)
 }
 
-// RegisterInto builds every chunker and registers it in the factory under each
-// extension it supports. It panics if an extension is claimed twice, either by
+// RegisterInto builds every chunker, wraps it in the parse-error fallback, and
+// registers it in the factory under each extension it supports. It panics if an extension is claimed twice, either by
 // two chunkers here or by a chunker the factory already holds: a silent
 // overwrite would chunk one language's files with another's grammar.
 func (r *Registry) RegisterInto(factory *semantic.ChunkerFactory) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, newChunker := range r.news {
-		c := newChunker()
+		c := WithFallback(newChunker())
 		for _, ext := range c.SupportedExtensions() {
 			if prev, exists := factory.GetChunker(ext); exists {
-				panic(fmt.Sprintf("treesitter: extension %q claimed by %T is already registered to %T", ext, c, prev))
+				if w, ok := prev.(*Fallback); ok {
+					prev = w.Unwrap()
+				}
+				panic(fmt.Sprintf("treesitter: extension %q claimed by %T is already registered to %T", ext, c.Unwrap(), prev))
 			}
 			factory.Register(ext, c)
 		}

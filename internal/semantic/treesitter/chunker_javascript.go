@@ -51,7 +51,7 @@ func (c *JSChunker) Chunk(path string, content []byte) ([]semantic.Chunk, error)
 	root := tree.RootNode()
 
 	c.walkNode(root, lang, content, path, ext, &chunks, "")
-	return chunks, nil
+	return chunks, TreeError(tree)
 }
 
 func (c *JSChunker) walkNode(node *gotreesitter.Node, lang *gotreesitter.Language, content []byte, path, ext string, chunks *[]semantic.Chunk, enclosingClass string) {

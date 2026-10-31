@@ -204,5 +204,6 @@ func reportUpdateResult(result *semantic.UpdateResult, jsonOutput bool) error {
 
 	fmt.Printf("Updated %d files, removed %d files (%s mode)\n", result.FilesUpdated, result.FilesRemoved, result.Mode)
 	fmt.Printf("Created %d chunks, removed %d chunks\n", result.ChunksCreated, result.ChunksRemoved)
+	printFallback(result.FilesFallback, result.FallbackFiles)
 	return nil
 }

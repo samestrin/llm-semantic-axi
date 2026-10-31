@@ -37,7 +37,7 @@ func (c *RustChunker) Chunk(path string, content []byte) ([]semantic.Chunk, erro
 	root := tree.RootNode()
 
 	c.walkNode(root, content, path, &chunks, "")
-	return chunks, nil
+	return chunks, TreeError(tree)
 }
 
 func (c *RustChunker) walkNode(node *gotreesitter.Node, content []byte, path string, chunks *[]semantic.Chunk, enclosingType string) {

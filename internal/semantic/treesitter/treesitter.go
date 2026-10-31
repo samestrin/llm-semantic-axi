@@ -4,6 +4,8 @@
 package treesitter
 
 import (
+	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/odvcencio/gotreesitter"
@@ -15,11 +17,26 @@ import (
 // Chunks exceeding this are truncated with a comment indicating truncation.
 const maxChunkSize = 4000
 
+// ErrParseTree reports source the grammar could not parse cleanly: the tree
+// has an error or missing node, or the parser stopped before the end.
+var ErrParseTree = errors.New("parse tree has errors")
+
 // ParseSource parses source bytes with the given language and returns the tree.
 // The caller must call tree.Release() when done.
 func ParseSource(content []byte, lang *gotreesitter.Language) (*gotreesitter.Tree, error) {
 	parser := gotreesitter.NewParser(lang)
 	return parser.Parse(content)
+}
+
+// TreeError returns ErrParseTree if the grammar could not parse the tree
+// cleanly, and nil otherwise. A chunker returns its chunks together with
+// TreeError(tree), so the fallback wrapper can keep what the walk found and
+// window the lines it missed, rather than pass a partial file off as whole.
+func TreeError(tree *gotreesitter.Tree) error {
+	if tree.RootNode().HasError() || tree.ParseStoppedEarly() {
+		return fmt.Errorf("%w (stop reason %v)", ErrParseTree, tree.ParseStopReason())
+	}
+	return nil
 }
 
 // NodeToChunk converts a tree-sitter node to a semantic.Chunk.
