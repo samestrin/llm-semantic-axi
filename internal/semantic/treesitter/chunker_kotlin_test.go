@@ -126,17 +126,48 @@ func TestKotlinChunker_TopLevelObjectWithoutModifiers(t *testing.T) {
 }
 
 func TestKotlinChunker_InfixExpressionThatIsNotAnObjectIsIgnored(t *testing.T) {
-	// The object workaround keys on the exact `object Name {}` shape. An
-	// ordinary infix call at the top of a script (`a to b`, or an anonymous
-	// object followed by `apply { }`) must not become a chunk.
-	src := "val p = 1 to 2\nx shl 3\nobject : Runnable { override fun run() {} } apply {\n}\n"
-	chunks, err := NewKotlinChunker().Chunk("s.kts", []byte(src))
+	// The object workaround keys on the exact `object Name {}` shape. Each
+	// line below is an infix expression that is not that shape, and each would
+	// become a bogus chunk named after its operator or operand if one guard in
+	// extractBareObject were dropped:
+	//   - `a to b`, `x shl 3`: the left operand is not `object`.
+	//   - `object {} to {}`: an anonymous object (its `object` node owns a class
+	//     body) with a lambda on the right; without the keyword-only check this
+	//     was chunked as a struct named "to".
+	//   - `object {} to 1`, `object Foo bar {}`: the right operand is not a
+	//     lambda body.
+	//   - an anonymous object followed by `apply { }`.
+	for _, src := range []string{
+		"val p = 1 to 2\nx shl 3\n",
+		"object {} to {}\n",
+		"object {} to 1\n",
+		"object Foo bar {}\n",
+		"object : Runnable { override fun run() {} } apply {\n}\n",
+	} {
+		chunks, err := NewKotlinChunker().Chunk("s.kts", []byte(src))
+		if err != nil {
+			t.Fatalf("Chunk(%q) failed: %v", src, err)
+		}
+		if len(chunks) != 0 {
+			t.Errorf("Chunk(%q) = %d chunks, want 0: %v", src, len(chunks), ktChunks(chunks))
+		}
+	}
+}
+
+func TestKotlinChunker_BareObjectWithACommentInItsHeader(t *testing.T) {
+	// A comment is a named node, so `object /* c */ Name {}` gives the infix
+	// expression four named children instead of three. Counting the comment
+	// dropped the object from the index while the file reported as parsed.
+	src := []byte("object /* registry */ Registry {\n    fun a() {}\n}\n\nobject Other /* c */ {\n}\n")
+	chunks, err := NewKotlinChunker().Chunk("o.kt", src)
 	if err != nil {
 		t.Fatalf("Chunk failed: %v", err)
 	}
-	if len(chunks) != 0 {
-		t.Errorf("got %d chunks for plain infix expressions, want 0: %v", len(chunks), ktChunks(chunks))
-	}
+	assertKotlinChunks(t, chunks, []ktChunk{
+		{"Registry", semantic.ChunkStruct, 1, 3},
+		{"a", semantic.ChunkMethod, 2, 2},
+		{"Other", semantic.ChunkStruct, 5, 6},
+	})
 }
 
 func TestKotlinChunker_DetachedAnnotationStaysWithItsDeclaration(t *testing.T) {
