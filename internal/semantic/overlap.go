@@ -135,7 +135,7 @@ func extractParentContext(fileLines []string, chunks []Chunk) string {
 		return extractGoPackageContext(fileLines)
 	case "py", "pyw", "pyi":
 		return extractPythonClassContext(fileLines, chunks)
-	case "js", "jsx", "ts", "tsx", "mjs", "cjs":
+	case "js", "jsx", "ts", "tsx", "mts", "cts", "mjs", "cjs":
 		return extractJSClassContext(fileLines, chunks)
 	default:
 		return ""
