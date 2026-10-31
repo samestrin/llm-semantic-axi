@@ -83,6 +83,7 @@ var brokenSamples = map[string]string{
 	"ts": "function ok() { return 1 }\nfunction (\n", "tsx": "function ok() { return 1 }\nfunction (\n",
 	"php": "<?php\nfunction ok() { return 1; }\nfunction broken( {\n", "phtml": "<?php\nfunction ok() { return 1; }\nfunction broken( {\n", "php5": "<?php\nfunction ok() { return 1; }\nfunction broken( {\n", "php7": "<?php\nfunction ok() { return 1; }\nfunction broken( {\n",
 	"rs": "fn ok() {}\nfn broken( {\n",
+	"c":  "int ok(void) { return 1; }\nint broken( {\n",
 }
 
 // Defends the contract every chunker owes the wrapper: return the chunks the

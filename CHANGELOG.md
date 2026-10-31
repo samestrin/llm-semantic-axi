@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - CI: `lint` → `test -race` → `coverage`, chained by `needs:`, plus a five-platform cross-compile matrix and a tag-triggered release workflow.
 - `.golangci.yml` matching the selection used across `samestrin/atcr` and `samestrin/go-axi`.
 - Parse-error fallback for the tree-sitter chunkers: when a file's parse tree has an error, the functions and classes still parsed are kept and every other non-blank line is indexed as generic text windows (a chunker failure or panic windows the whole file). `index` and `index-update` print `Chunked N files as text windows (parse failed):` with the paths, and `--json` / `--axi` carry `FilesFallback` and `FallbackFiles` (`files_fallback`, `fallback_files` for `index-update`). (epic 02)
+- C chunker (`.c`): functions, structs, unions, enums and typedefs are indexed with names and line ranges, including definitions inside `#ifdef`. `.h` is left to the C++ chunker. (epic 02)
 
 ### Changed
 
