@@ -127,15 +127,23 @@ func (c *KotlinChunker) extractFunction(node, outer *gotreesitter.Node, content 
 }
 
 // extractBareObject chunks the infix expression the grammar produces for a
-// file-scope `object Name { ... }` with no modifiers or supertypes: the
-// children are exactly `object`, the name, and the body as a lambda. Any other
-// infix expression is ordinary code and is left alone.
+// file-scope `object Name { ... }` with no modifiers or supertypes: ignoring
+// comments, the children are exactly the bare `object` keyword, the name, and
+// the body as a lambda. Any other infix expression is ordinary code and is
+// left alone; in particular `object {} to {}` is an anonymous object, whose
+// object_literal owns its class body.
 func (c *KotlinChunker) extractBareObject(node, outer *gotreesitter.Node, content []byte, path string, chunks *[]semantic.Chunk) {
-	if node.NamedChildCount() != 3 {
+	var parts []*gotreesitter.Node
+	WalkNamedChildren(node, c.lang, func(child *gotreesitter.Node, nodeType string) {
+		if nodeType != "line_comment" && nodeType != "multiline_comment" {
+			parts = append(parts, child)
+		}
+	})
+	if len(parts) != 3 {
 		return
 	}
-	kw, id, body := node.NamedChild(0), node.NamedChild(1), node.NamedChild(2)
-	if kw.Type(c.lang) != "object_literal" || id.Type(c.lang) != "simple_identifier" ||
+	kw, id, body := parts[0], parts[1], parts[2]
+	if kw.Type(c.lang) != "object_literal" || kw.NamedChildCount() != 0 ||
 		body.Type(c.lang) != "lambda_literal" {
 		return
 	}
