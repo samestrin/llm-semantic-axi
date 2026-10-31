@@ -12,6 +12,10 @@ type JSChunker struct {
 	tsLang *gotreesitter.Language
 }
 
+func init() {
+	Register(func() semantic.Chunker { return NewJSChunker() })
+}
+
 // NewJSChunker creates a new tree-sitter based JavaScript/TypeScript chunker.
 func NewJSChunker() *JSChunker {
 	return &JSChunker{

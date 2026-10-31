@@ -579,30 +579,9 @@ func RegisterAllChunkers(factory *semantic.ChunkerFactory) {
 	// Go chunker (already AST-based via go/ast, stays as-is)
 	factory.Register("go", semantic.NewGoChunker())
 
-	// Tree-sitter chunkers (pure Go, accurate AST parsing)
-	// JS/TS chunker
-	tsJSChunker := treesitter.NewJSChunker()
-	for _, ext := range tsJSChunker.SupportedExtensions() {
-		factory.Register(ext, tsJSChunker)
-	}
-
-	// Python chunker
-	tsPyChunker := treesitter.NewPythonChunker()
-	for _, ext := range tsPyChunker.SupportedExtensions() {
-		factory.Register(ext, tsPyChunker)
-	}
-
-	// PHP chunker
-	tsPHPChunker := treesitter.NewPHPChunker()
-	for _, ext := range tsPHPChunker.SupportedExtensions() {
-		factory.Register(ext, tsPHPChunker)
-	}
-
-	// Rust chunker
-	tsRustChunker := treesitter.NewRustChunker()
-	for _, ext := range tsRustChunker.SupportedExtensions() {
-		factory.Register(ext, tsRustChunker)
-	}
+	// Tree-sitter chunkers (pure Go, accurate AST parsing). Each chunker file
+	// registers itself with the treesitter registry; add new languages there.
+	treesitter.RegisterAll(factory)
 
 	// Markdown chunker for documentation files
 	mdChunker := semantic.NewMarkdownChunker(markdownMaxChunkSize)

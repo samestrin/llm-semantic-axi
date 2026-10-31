@@ -11,6 +11,10 @@ type PHPChunker struct {
 	lang *gotreesitter.Language
 }
 
+func init() {
+	Register(func() semantic.Chunker { return NewPHPChunker() })
+}
+
 // NewPHPChunker creates a new tree-sitter based PHP chunker.
 func NewPHPChunker() *PHPChunker {
 	return &PHPChunker{
