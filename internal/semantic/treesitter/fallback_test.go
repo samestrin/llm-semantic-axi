@@ -88,6 +88,7 @@ var brokenSamples = map[string]string{
 	"rb":   "def ok\n  1\nend\n\ndef broken(\n",
 	"cpp":  "int ok() { return 1; }\nint broken( {\n", "cxx": "int ok() { return 1; }\nint broken( {\n", "cc": "int ok() { return 1; }\nint broken( {\n", "hpp": "int ok() { return 1; }\nint broken( {\n", "hxx": "int ok() { return 1; }\nint broken( {\n", "hh": "int ok() { return 1; }\nint broken( {\n", "h": "int ok() { return 1; }\nint broken( {\n",
 	"cs": "class ok {}\nclass Broken { void f( {\n",
+	"kt": "fun ok() = 1\nclass Broken { fun f( {\n", "kts": "fun ok() = 1\nclass Broken { fun f( {\n",
 }
 
 // Defends the contract every chunker owes the wrapper: return the chunks the
