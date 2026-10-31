@@ -38,3 +38,35 @@ const handleError = (err: Error) => {
 export const processData = async (data: UserDTO[]): Promise<UserDTO[]> => {
     return data.filter(u => u.id > 0);
 };
+
+export interface Repository<T extends { id: number }> {
+    find(id: number): Promise<T | undefined>;
+    save(item: T): Promise<void>;
+}
+
+export type Result<T, E = Error> = { ok: true; value: T } | { ok: false; error: E };
+
+export class Box<T> {
+    constructor(private readonly value: T) {}
+
+    map<U>(fn: (value: T) => U): Box<U> {
+        return new Box(fn(this.value));
+    }
+}
+
+export function identity<T>(value: T): T {
+    return value;
+}
+
+export abstract class Shape {
+    abstract area(): number;
+
+    describe(): string {
+        return `area ${this.area()}`;
+    }
+}
+
+export enum Color {
+    Red,
+    Green,
+}

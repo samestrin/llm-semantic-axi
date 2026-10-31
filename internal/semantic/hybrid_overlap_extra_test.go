@@ -24,7 +24,7 @@ func TestExtractParentContext_JavaScriptClass(t *testing.T) {
 	}
 
 	// Every JS-family extension routes to the same extractor.
-	for _, lang := range []string{"jsx", "ts", "tsx", "mjs", "cjs"} {
+	for _, lang := range []string{"jsx", "ts", "tsx", "mts", "cts", "mjs", "cjs"} {
 		chunks := []Chunk{{Language: lang, Type: ChunkMethod, Name: "spin"}}
 		if got := extractParentContext(lines, chunks); got != "class Widget" {
 			t.Errorf("extractParentContext(lang=%s) = %q, want \"class Widget\"", lang, got)

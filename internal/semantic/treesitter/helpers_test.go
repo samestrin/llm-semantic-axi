@@ -313,8 +313,12 @@ func TestExtractors_NeverEmitANamelessChunk(t *testing.T) {
 	defer pyDone()
 
 	js := NewJSChunker()
-	jsRoot, jsSrc, jsDone := rootOf(t, "const x = 1;\n", js.tsLang)
+	jsRoot, jsSrc, jsDone := rootOf(t, "const x = 1;\n", js.jsLang)
 	defer jsDone()
+
+	ts := NewTypeScriptChunker()
+	tsRoot, tsSrc, tsDone := rootOf(t, "const x = 1;\n", ts.tsLang)
+	defer tsDone()
 
 	rs := NewRustChunker()
 	rsRoot, rsSrc, rsDone := rootOf(t, "const X: u8 = 1;\n", rs.lang)
@@ -327,11 +331,11 @@ func TestExtractors_NeverEmitANamelessChunk(t *testing.T) {
 	cases := map[string]func(chunks *[]semantic.Chunk){
 		"python function":   func(c *[]semantic.Chunk) { py.extractFunction(pyRoot, pySrc, "a.py", c, "") },
 		"python class":      func(c *[]semantic.Chunk) { py.extractClass(pyRoot, pySrc, "a.py", c) },
-		"js function":       func(c *[]semantic.Chunk) { js.extractFunction(jsRoot, js.tsLang, jsSrc, "a.ts", "ts", c, "") },
-		"js class":          func(c *[]semantic.Chunk) { js.extractClass(jsRoot, js.tsLang, jsSrc, "a.ts", "ts", c) },
-		"js method":         func(c *[]semantic.Chunk) { js.extractMethod(jsRoot, js.tsLang, jsSrc, "a.ts", "ts", c, "K") },
-		"js interface":      func(c *[]semantic.Chunk) { js.extractInterface(jsRoot, js.tsLang, jsSrc, "a.ts", "ts", c) },
-		"js type alias":     func(c *[]semantic.Chunk) { js.extractTypeAlias(jsRoot, js.tsLang, jsSrc, "a.ts", "ts", c) },
+		"js function":       func(c *[]semantic.Chunk) { js.extractFunction(jsRoot, js.jsLang, jsSrc, "a.js", "js", c, "") },
+		"js class":          func(c *[]semantic.Chunk) { js.extractClass(jsRoot, js.jsLang, jsSrc, "a.js", "js", c) },
+		"js method":         func(c *[]semantic.Chunk) { js.extractMethod(jsRoot, js.jsLang, jsSrc, "a.js", "js", c, "K") },
+		"ts interface":      func(c *[]semantic.Chunk) { ts.extractNamed(tsRoot, ts.tsLang, tsSrc, "a.ts", "ts", c, semantic.ChunkInterface) },
+		"ts type alias":     func(c *[]semantic.Chunk) { ts.extractNamed(tsRoot, ts.tsLang, tsSrc, "a.ts", "ts", c, semantic.ChunkStruct) },
 		"rust function":     func(c *[]semantic.Chunk) { rs.extractFunction(rsRoot, rsSrc, "a.rs", c, "") },
 		"rust struct":       func(c *[]semantic.Chunk) { rs.extractStruct(rsRoot, rsSrc, "a.rs", c) },
 		"rust enum":         func(c *[]semantic.Chunk) { rs.extractEnum(rsRoot, rsSrc, "a.rs", c) },
