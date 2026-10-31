@@ -92,16 +92,34 @@ func TestCppChunker_Extensions(t *testing.T) {
 // Defends against nameless chunks and forward declarations: a prototype or a
 // bodyless class declaration is not code worth a row.
 func TestCppChunker_SkipsDeclarationsWithoutBodies(t *testing.T) {
-	src := []byte("class Fwd;\nint proto(int);\nnamespace n { int v = 1; }\ntypedef struct { int a; } S;\n")
+	src := []byte("class Fwd;\nint proto(int);\nnamespace n { int v = 1; }\ntypedef struct { int a; } S;\nnamespace { int anon = 1; }\nenum class E : int;\nenum { A };\nextern \"C\" void f(void);\nint after() { return 1; }\n")
 	chunks, err := NewCppChunker().Chunk("a.hpp", src)
 	if err != nil {
 		t.Fatalf("Chunk: %v", err)
 	}
 	for _, c := range chunks {
-		if c.Name == "Fwd" || c.Name == "proto" || c.Name == "" {
+		if c.Name == "Fwd" || c.Name == "proto" || c.Name == "E" || c.Name == "f" || c.Name == "" {
 			t.Errorf("unexpected chunk %+v", c)
 		}
 	}
+	// A bodyless extern "C" declaration must not stop the walk: the function
+	// after it still has to be chunked.
+	assertChunks(t, chunks, []wantChunk{{"after", semantic.ChunkFunction, 9, 9}})
+}
+
+// Defends preprocessor branches: a function in an #else/#elif arm must be
+// indexed, or it vanishes from search with nothing saying so.
+func TestCppChunker_PreprocessorBranchesAreWalked(t *testing.T) {
+	src := []byte("#ifdef A\nint in_if() { return 1; }\n#elif defined(B)\nint in_elif() { return 2; }\n#else\nint in_else() { return 3; }\n#endif\n")
+	chunks, err := NewCppChunker().Chunk("p.h", src)
+	if err != nil {
+		t.Fatalf("Chunk: %v", err)
+	}
+	assertChunks(t, chunks, []wantChunk{
+		{"in_if", semantic.ChunkFunction, 2, 2},
+		{"in_elif", semantic.ChunkFunction, 4, 4},
+		{"in_else", semantic.ChunkFunction, 6, 6},
+	})
 }
 
 // Defends operator and template function naming: the name must be the
