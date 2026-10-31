@@ -33,8 +33,9 @@ type fakePoint struct {
 }
 
 type fakeCollection struct {
-	dim    uint64
-	points map[string]*fakePoint
+	dim      uint64
+	distance qdrant.Distance
+	points   map[string]*fakePoint
 }
 
 // fakeQdrant implements the three Qdrant gRPC services QdrantStorage calls.
@@ -140,6 +141,37 @@ func (f *fakeQdrant) collectionDim(name string) uint64 {
 	return c.dim
 }
 
+// collectionDistance returns the distance metric the collection was created
+// with (Distance_UnknownDistance if absent or never set).
+func (f *fakeQdrant) collectionDistance(name string) qdrant.Distance {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	c, ok := f.collections[name]
+	if !ok {
+		return qdrant.Distance_UnknownDistance
+	}
+	return c.distance
+}
+
+// payloadsWhere returns copies of the payloads of every point in a collection
+// for which keep returns true, in insertion order. It reaches points whose IDs
+// a test cannot derive, such as time-based retrieval_log points.
+func (f *fakeQdrant) payloadsWhere(collection string, keep func(map[string]*qdrant.Value) bool) []map[string]*qdrant.Value {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	c, ok := f.collections[collection]
+	if !ok {
+		return nil
+	}
+	var out []map[string]*qdrant.Value
+	for _, p := range f.orderedLocked(c) {
+		if keep(p.payload) {
+			out = append(out, clonePayload(p.payload))
+		}
+	}
+	return out
+}
+
 // ===== Qdrant service =====
 
 func (f *fakeQdrant) HealthCheck(context.Context, *qdrant.HealthCheckRequest) (*qdrant.HealthCheckReply, error) {
@@ -180,10 +212,12 @@ func (f *fakeQdrant) Create(_ context.Context, req *qdrant.CreateCollection) (*q
 		return nil, status.Errorf(codes.AlreadyExists, "collection %s already exists", name)
 	}
 	var dim uint64
+	var distance qdrant.Distance
 	if params := req.GetVectorsConfig().GetParams(); params != nil {
 		dim = params.GetSize()
+		distance = params.GetDistance()
 	}
-	f.collections[name] = &fakeCollection{dim: dim, points: make(map[string]*fakePoint)}
+	f.collections[name] = &fakeCollection{dim: dim, distance: distance, points: make(map[string]*fakePoint)}
 	return &qdrant.CollectionOperationResponse{Result: true}, nil
 }
 
