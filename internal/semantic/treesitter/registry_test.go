@@ -12,6 +12,15 @@ type fakeChunker struct{ exts []string }
 func (f *fakeChunker) Chunk(string, []byte) ([]semantic.Chunk, error) { return nil, nil }
 func (f *fakeChunker) SupportedExtensions() []string                  { return f.exts }
 
+// unwrap returns the chunker inside the registry's fallback wrapper, so a
+// test can check which language chunker an extension routes to.
+func unwrap(c semantic.Chunker) semantic.Chunker {
+	if w, ok := c.(*Fallback); ok {
+		return w.Unwrap()
+	}
+	return c
+}
+
 // mustPanic runs fn and returns the panic message, failing the test if fn returns normally.
 func mustPanic(t *testing.T, fn func()) string {
 	t.Helper()
@@ -44,7 +53,7 @@ func TestRegistry_FakeChunkerReachesFactory(t *testing.T) {
 		if !ok {
 			t.Fatalf("GetByExtension(%q) found nothing", name)
 		}
-		if got != fake {
+		if unwrap(got) != fake {
 			t.Errorf("GetByExtension(%q) = %T, want the registered fake", name, got)
 		}
 	}
@@ -69,7 +78,7 @@ func TestRegisterAll_RegistersEveryTreesitterChunker(t *testing.T) {
 			t.Errorf("extension %q not registered", ext)
 			continue
 		}
-		if !isType(c) {
+		if !isType(unwrap(c)) {
 			t.Errorf("extension %q registered to %T", ext, c)
 		}
 	}
