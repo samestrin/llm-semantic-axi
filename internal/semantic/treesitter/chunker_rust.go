@@ -11,6 +11,10 @@ type RustChunker struct {
 	lang *gotreesitter.Language
 }
 
+func init() {
+	Register(func() semantic.Chunker { return NewRustChunker() })
+}
+
 // NewRustChunker creates a new tree-sitter based Rust chunker.
 func NewRustChunker() *RustChunker {
 	return &RustChunker{

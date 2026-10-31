@@ -11,6 +11,10 @@ type PythonChunker struct {
 	lang *gotreesitter.Language
 }
 
+func init() {
+	Register(func() semantic.Chunker { return NewPythonChunker() })
+}
+
 // NewPythonChunker creates a new tree-sitter based Python chunker.
 func NewPythonChunker() *PythonChunker {
 	return &PythonChunker{
