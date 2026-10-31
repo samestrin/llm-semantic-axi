@@ -124,3 +124,17 @@ func TestCChunker_RegisteredForC(t *testing.T) {
 		t.Error("no chunker registered for extension c")
 	}
 }
+
+func TestCChunker_AnonymousTypesAreNotChunkedWithoutAName(t *testing.T) {
+	// `struct { ... } g;` and `enum { A, B };` have a body but no tag. Without
+	// the empty-name guard they would be stored as nameless rows that search
+	// results cannot label. A named sibling proves the walk carried on.
+	src := "struct { int x; } g;\nenum { A, B };\nunion { int i; };\nint kept(void) { return 1; }\n"
+	chunks, err := NewCChunker().Chunk("anon.c", []byte(src))
+	if err != nil {
+		t.Fatalf("Chunk failed: %v", err)
+	}
+	if len(chunks) != 1 || chunks[0].Name != "kept" {
+		t.Errorf("chunks = %+v, want only `kept`", chunks)
+	}
+}
