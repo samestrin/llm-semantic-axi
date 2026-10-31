@@ -248,6 +248,27 @@ func TestFallback_ChunkerErrorAndPanicFallBack(t *testing.T) {
 	}
 }
 
+// Defends the line between the two fallbacks: only ErrParseTree vouches for
+// the chunks returned with it. A chunker that fails any other way may hand
+// back half-built chunks, and keeping them would mix them with windows over
+// the rest of the file. The whole file must be windowed instead.
+func TestFallback_NonParseErrorDiscardsPartialChunks(t *testing.T) {
+	half := semantic.Chunk{FilePath: "a.stub", Type: semantic.ChunkFunction, Name: "half", StartLine: 1, EndLine: 1}
+	inner := &stubChunker{chunks: []semantic.Chunk{half}, err: errors.New("parser gave up")}
+
+	chunks, fellBack, err := WithFallback(inner).ChunkWithFallback("a.stub", []byte("line one\nline two\nline three"))
+	if err != nil {
+		t.Fatalf("ChunkWithFallback: %v", err)
+	}
+	if !fellBack {
+		t.Error("the failure was not reported as a fallback")
+	}
+	assertTextWindows(t, chunks, "a.stub") // fails on the kept `half` chunk
+	if last := chunks[len(chunks)-1]; last.EndLine != 3 {
+		t.Errorf("windows end at line %d, want 3: the whole file", last.EndLine)
+	}
+}
+
 // Defends the wrapper's transparency: it must claim exactly the inner
 // chunker's extensions, or the registry would route files to the wrong place.
 func TestFallback_ForwardsExtensionsAndUnwraps(t *testing.T) {
