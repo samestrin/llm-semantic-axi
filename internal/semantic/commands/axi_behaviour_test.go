@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/samestrin/llm-semantic-axi/pkg/output"
 )
 
 // captureStdout swaps os.Stdout for a pipe. emitJSON writes there rather than
@@ -53,23 +55,6 @@ func withAXI(t *testing.T) {
 	GlobalAXIOutput = true
 }
 
-// runStatusInEmptyDir drives index-status where no index exists, which reaches
-// the COMPACT emit site — the one that has never called SetIndent.
-//
-// jsonOutput mirrors what the FLAGS actually pass. Passing true unconditionally
-// is what made the first version of this test a false green: it drove the
-// --json branch and reported success while `llm-semantic index-status --axi`
-// printed human text at the command line.
-func runStatusInEmptyDir(t *testing.T, jsonOutput bool) string {
-	t.Helper()
-	t.Chdir(t.TempDir())
-	return captureStdout(t, func() {
-		if err := runIndexStatus(context.Background(), jsonOutput); err != nil {
-			t.Fatalf("runIndexStatus: %v", err)
-		}
-	})
-}
-
 // emitStdout is the wrapper 21 of the 23 converted sites call, and coverage
 // showed it at 0%: the behaviour tests reach emitJSON directly through
 // index-status's COMPACT branches, while its indented branch needs a real
@@ -109,80 +94,42 @@ func TestEmitStdoutHonoursAXI(t *testing.T) {
 	}
 }
 
-func TestIndexStatusHonoursAXIWithoutJSON(t *testing.T) {
-	// --axi ALONE, which is how a caller uses it. Routing every emit site
-	// through emitJSON was necessary and not sufficient: those sites sit behind
-	// `if jsonOutput`, and that gate has to admit --axi too.
-	//
-	// Observed before the fix:
-	//   $ llm-semantic index-status --axi
-	//   Semantic index not found.
-	//   Run 'llm-semantic index' to create one.
-	withAXI(t)
-	got := strings.TrimSpace(runStatusInEmptyDir(t, false))
-	if strings.Contains(got, "Semantic index not found.") {
-		t.Fatalf("--axi was accepted and ignored; human text was emitted:\n%s", got)
+// TestIndexStatusWithNoIndexFailsInEveryMode defends the rule that nothing
+// reports success when it did not succeed: index-status over an empty
+// directory used to print "not found" and exit 0, so a script could not tell
+// "no index" from a healthy one. It drives the same path main does — the
+// error out of runIndexStatus into PrintError — and asserts the exit code and
+// the error text in plain, --json and --axi modes.
+func TestIndexStatusWithNoIndexFailsInEveryMode(t *testing.T) {
+	modes := []struct {
+		name      string
+		json, axi bool
+	}{
+		{"plain", false, false},
+		{"json", true, false},
+		{"axi", false, true},
 	}
-	if strings.HasPrefix(got, "{") {
-		t.Fatalf("--axi emitted JSON rather than TOON: %q", got)
-	}
-	for _, want := range []string{"error", "indexed"} {
-		if !strings.Contains(got, want) {
-			t.Errorf("field %q missing from TOON output: %q", want, got)
-		}
-	}
-}
+	for _, m := range modes {
+		t.Run(m.name, func(t *testing.T) {
+			t.Chdir(t.TempDir())
+			t.Cleanup(func() { GlobalAXIOutput = false; GlobalJSONOutput = false })
+			GlobalAXIOutput, GlobalJSONOutput = m.axi, m.json
 
-func TestIndexStatusTextModeIsUnchanged(t *testing.T) {
-	// Neither flag set must still print the human text, or --axi's fix has
-	// swallowed the default path.
-	got := runStatusInEmptyDir(t, false)
-	if !strings.Contains(got, "Semantic index not found.") {
-		t.Errorf("text mode changed:\n%s", got)
-	}
-}
+			var runErr error
+			captureStdout(t, func() { runErr = runIndexStatus(context.Background(), m.json) })
+			if runErr == nil {
+				t.Fatal("runIndexStatus returned nil with no index; the command would exit 0")
+			}
 
-func TestIndexStatusJSONIsUnchangedAndStaysCompact(t *testing.T) {
-	// The other half of the contract, and the variant most at risk: this branch
-	// builds its encoder inline with no SetIndent, so it must stay on one line.
-	// Routing it through an indenting helper would have reformatted --json
-	// output that consumers already parse.
-	// true: this test is about --json's own output staying compact, so it
-	// drives the --json gate deliberately.
-	got := strings.TrimSpace(runStatusInEmptyDir(t, true))
-	if strings.Contains(got, "\n") {
-		t.Errorf("compact JSON became multi-line:\n%s", got)
-	}
-	var payload map[string]any
-	if err := json.Unmarshal([]byte(got), &payload); err != nil {
-		t.Fatalf("not valid JSON: %v (%q)", err, got)
-	}
-	if payload["indexed"] != false {
-		t.Errorf("indexed = %v, want false", payload["indexed"])
-	}
-	if payload["error"] != "index not found" {
-		t.Errorf("error = %v, want \"index not found\"", payload["error"])
-	}
-}
-
-func TestAXIAndJSONAgreeOnFieldNames(t *testing.T) {
-	// AC3: --axi must carry the same field names --json does. A payload that
-	// renamed or dropped a field would still "work" and still exit 0.
-	// true here: this half exists to read what --json emits, so it drives the
-	// --json gate on purpose.
-	jsonOut := strings.TrimSpace(runStatusInEmptyDir(t, true))
-	var payload map[string]any
-	if err := json.Unmarshal([]byte(jsonOut), &payload); err != nil {
-		t.Fatalf("not valid JSON: %v", err)
-	}
-
-	// false here: --axi ALONE is the invocation a caller makes. Passing true
-	// would drive the --json branch and pass while the flag is ignored.
-	withAXI(t)
-	axiOut := runStatusInEmptyDir(t, false)
-	for field := range payload {
-		if !strings.Contains(axiOut, field+":") {
-			t.Errorf("--json field %q has no counterpart in --axi output:\n%s", field, axiOut)
-		}
+			var buf strings.Builder
+			f := output.New(GlobalJSONOutput, GlobalMinOutput, &buf)
+			f.AXI = GlobalAXIOutput
+			if code := f.PrintError(runErr); code == 0 {
+				t.Errorf("exit code = 0, want non-zero")
+			}
+			if !strings.Contains(buf.String()+runErr.Error(), "index not found") {
+				t.Errorf("error text missing %q: %v / %q", "index not found", runErr, buf.String())
+			}
+		})
 	}
 }

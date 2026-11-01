@@ -350,8 +350,9 @@ func TestRootCmdLoadsAConfigFile(t *testing.T) {
 	cfgPath := writeFile(t, dir+"/semantic.yaml", "semantic:\n  code_collection: configured_code\n")
 
 	root := RootCmd()
-	if _, err := executeCommand(root, "--config", cfgPath, "index-status"); err != nil {
-		t.Fatalf("index-status with a config: %v", err)
+	// the error is expected (no index); only the config load matters here.
+	if _, err := executeCommand(root, "--config", cfgPath, "index-status"); err == nil {
+		t.Fatal("index-status with no index should error")
 	}
 	if loadedConfig == nil {
 		t.Fatal("the config file was never loaded")
@@ -393,7 +394,8 @@ func TestRootCmdRejectsAnUnknownProfile(t *testing.T) {
 // PersistentPreRunE: subcommands declare their own --json, and the global is
 // what the error formatter reads.
 func TestRootCmdPromotesALocalJSONFlagToTheGlobal(t *testing.T) {
-	newWorkspace(t)
+	// A real index: with none, index-status now fails, which this test is not about.
+	indexedWorkspace(t)
 	if GlobalJSONOutput {
 		t.Fatal("GlobalJSONOutput leaked in from an earlier test")
 	}
