@@ -31,6 +31,10 @@ make build     # binaries land in ./build/
 ## Usage
 
 ```bash
+# no arguments: content-first — prints the index status for this directory
+# (a missing index is an error with a non-zero exit, exactly like index-status)
+llm-semantic
+
 # index a repository
 llm-semantic index .
 
