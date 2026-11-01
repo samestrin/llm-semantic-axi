@@ -79,7 +79,8 @@ func TestMain_ReturnsWithoutExitingOnASuccessfulRun(t *testing.T) {
 
 	out := captureStdout(t, main)
 
-	if !strings.Contains(out, "Usage:\n  llm-semantic [command]") {
+	// A runnable root (bare run shows status) adds the "[flags]" usage line.
+	if !strings.Contains(out, "Usage:\n  llm-semantic [flags]\n  llm-semantic [command]") {
 		t.Errorf("--help did not print the root command's help: %q", out)
 	}
 	// The subcommands the MCP server shells out to must be reachable from this
