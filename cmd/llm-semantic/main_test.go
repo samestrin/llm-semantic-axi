@@ -2,7 +2,9 @@ package main
 
 import (
 	"bytes"
+	"errors"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -94,5 +96,75 @@ func TestMain_ReturnsWithoutExitingOnASuccessfulRun(t *testing.T) {
 	// only thing on stdout.
 	if strings.Contains(out, "Error:") {
 		t.Errorf("--help reported an error: %q", out)
+	}
+}
+
+// mainHelperEnv marks a re-exec of this test binary that should run main() with
+// the arguments after "--". main() calls os.Exit on failure, so the only way to
+// observe its exit code and both output streams is from a separate process.
+const mainHelperEnv = "LLM_SEMANTIC_MAIN_HELPER"
+
+func TestMain_Helper(t *testing.T) {
+	if os.Getenv(mainHelperEnv) != "1" {
+		t.Skip("only runs as a re-exec from runMain")
+	}
+	for i, a := range os.Args {
+		if a == "--" {
+			os.Args = append([]string{"llm-semantic"}, os.Args[i+1:]...)
+			break
+		}
+	}
+	main()
+	os.Exit(0)
+}
+
+// runMain runs main() in a child process inside an empty directory, so no
+// index or config file from this checkout is discovered.
+func runMain(t *testing.T, args ...string) (stdout, stderr string, exitCode int) {
+	t.Helper()
+	cmd := exec.Command(os.Args[0], append([]string{"-test.run=^TestMain_Helper$", "--"}, args...)...)
+	cmd.Dir = t.TempDir()
+	cmd.Env = append(os.Environ(), mainHelperEnv+"=1")
+	var out, errOut bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &errOut
+	err := cmd.Run()
+	var exitErr *exec.ExitError
+	if err != nil && !errors.As(err, &exitErr) {
+		t.Fatalf("running main: %v", err)
+	}
+	return out.String(), errOut.String(), cmd.ProcessState.ExitCode()
+}
+
+func TestMain_AXIErrorIsTOONOnStdout(t *testing.T) {
+	// Defends technical-debt row 6b: with --axi, a failed command printed a
+	// plain "Error: ..." on stderr and left stdout empty, because main() built
+	// its error formatter before anything had published --axi to the output
+	// package. An agent parsing TOON from stdout saw no output at all and had
+	// only the exit code to learn that the command failed, and why.
+	cases := map[string][]string{
+		// Fails inside the command: there is no index in the directory.
+		"missing index": {"search", "foo", "--axi", "--index-dir", "nope"},
+		// Fails inside the root PersistentPreRunE itself, before any command
+		// runs, so the flag must be published before that hook can return.
+		"invalid config path": {"index-status", "--axi", "--config", "   "},
+	}
+	for name, args := range cases {
+		t.Run(name, func(t *testing.T) {
+			stdout, stderr, code := runMain(t, args...)
+
+			if code == 0 {
+				t.Errorf("exit code 0 for a failed command; stdout=%q stderr=%q", stdout, stderr)
+			}
+			if !strings.Contains(stdout, "error: true") {
+				t.Errorf("stdout carries no TOON `error: true`: stdout=%q stderr=%q", stdout, stderr)
+			}
+			if !strings.Contains(stdout, "message:") {
+				t.Errorf("stdout carries no TOON `message`: %q", stdout)
+			}
+			if strings.Contains(stderr, "Error:") {
+				t.Errorf("the error went to stderr as plain text instead: %q", stderr)
+			}
+		})
 	}
 }

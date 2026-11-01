@@ -8,6 +8,7 @@ import (
 
 	"github.com/samestrin/llm-semantic-axi/internal/semantic"
 	"github.com/samestrin/llm-semantic-axi/internal/semantic/config"
+	"github.com/samestrin/llm-semantic-axi/pkg/output"
 	"github.com/spf13/cobra"
 )
 
@@ -118,6 +119,13 @@ Supports any OpenAI-compatible embedding API (TEI, Ollama, vLLM, OpenAI, Azure, 
 			return runIndexStatus(cmd.Context(), GlobalJSONOutput)
 		},
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			// Publish --axi to the output package first, before anything here
+			// can return an error: main() builds its error formatter after
+			// Execute, and that formatter only knows about --axi through this
+			// default. Set unconditionally, so the value is always this
+			// invocation's and never one left over from an earlier one.
+			output.SetDefaultAXI(GlobalAXIOutput)
+
 			// Sync local command flags to global vars for error handling
 			if f := cmd.Flag("json"); f != nil && f.Changed {
 				GlobalJSONOutput = true
