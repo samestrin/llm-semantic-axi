@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- `--axi` output of `search`, the profile search aliases, `memory search`, `multisearch` and `index-status` carries a `help` list of suggested next steps, and the missing-index error does too. A search with results points at `callers`/`refs` and narrowing flags; an empty one says how to widen it. `--json` and plain output are unchanged. (epic 05.1)
 - Standalone repository, extracted from [samestrin/llm-tools](https://github.com/samestrin/llm-tools). `internal/semantic`, `cmd/llm-semantic`, `cmd/llm-semantic-mcp` and the used slice of `pkg/output` move across unchanged.
 - `Makefile` with `build`, `build-all`, `test`, `test-race`, `test-cover`, `lint`, `vet`, `fmt`, `install`, `clean` and `hooks` targets. `llm-tools` had no semantic build targets at all, so this is new rather than copied.
 - CI: `lint` → `test -race` → `coverage`, chained by `needs:`, plus a five-platform cross-compile matrix and a tag-triggered release workflow.

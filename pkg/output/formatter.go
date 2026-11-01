@@ -8,6 +8,7 @@ package output
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -15,6 +16,12 @@ import (
 	"reflect"
 	"strings"
 )
+
+// AXIHelper is implemented by errors that know a next step. PrintError emits
+// the suggestions as a help list under --axi; --json and plain are unchanged.
+type AXIHelper interface {
+	AXIHelp() []string
+}
 
 // Formatter handles output formatting with support for AXI, JSON and minimal modes.
 type Formatter struct {
@@ -338,10 +345,18 @@ func (f *Formatter) PrintError(err error) int {
 		// stream never has to switch parsers to learn that the command failed.
 		// The exit code is classified independently of the output mode: a
 		// display flag must not change the process status.
-		_ = EncodeAXI(f.Writer, map[string]interface{}{
+		payload := map[string]interface{}{
 			"error":   true,
 			"message": err.Error(),
-		})
+		}
+		// --axi only: a next step for the errors that have an obvious one.
+		var h AXIHelper
+		if errors.As(err, &h) {
+			if help := h.AXIHelp(); len(help) > 0 {
+				payload["help"] = help
+			}
+		}
+		_ = EncodeAXI(f.Writer, payload)
 		return ExitCodeFor(err)
 	}
 	if f.JSON {

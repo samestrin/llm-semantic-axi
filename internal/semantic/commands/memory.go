@@ -387,7 +387,7 @@ func runMemorySearch(ctx context.Context, opts memorySearchOpts) error {
 	// Output results
 	if opts.jsonOutput || opts.minOutput || GlobalAXIOutput {
 		if GlobalAXIOutput {
-			return emitStdout(axiResultList(opts.query, memoryRows(results, opts.minOutput), len(results)))
+			return emitStdout(axiResultList(opts.query, memoryRows(results, opts.minOutput), len(results), memoryResultHelp(len(results))))
 		}
 		return outputMemoryJSON(results, opts.minOutput)
 	}
@@ -1465,4 +1465,15 @@ func formatDisplayDate(isoDate string) string {
 		return isoDate[:10] + " " + isoDate[11:16]
 	}
 	return isoDate
+}
+
+// memoryResultHelp is the --axi next-step list for memory-search.
+func memoryResultHelp(total int) []string {
+	if total == 0 {
+		return []string{
+			"Lower the cutoff with `--threshold 0` and drop filters",
+			"Run `llm-semantic memory list` to see what is stored",
+		}
+	}
+	return []string{"Run `llm-semantic memory list` to browse stored entries"}
 }
