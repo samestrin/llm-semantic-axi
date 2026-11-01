@@ -78,10 +78,13 @@ func TestSearchAXIZeroResultsSaysSo(t *testing.T) {
 		}
 	})
 
-	for _, want := range []string{"total: 0\n", `message: "No results found for \"authenticate\"."`} {
+	for _, want := range []string{"total: 0\n", `message: "No results found for \"authenticate\"."`, "results[0]:"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("--axi zero-result output lacks %q:\n%s", want, out)
 		}
+	}
+	if strings.Contains(out, "null") {
+		t.Errorf("--axi zero-result output carries a null list:\n%s", out)
 	}
 }
 
@@ -324,6 +327,9 @@ func TestZeroEdgesForAnUnknownSymbolSaySymbolNotIndexed(t *testing.T) {
 		if !strings.Contains(out, "symbol not indexed") {
 			t.Errorf("%s over an unknown symbol does not say it is not indexed:\n%s", name, out)
 		}
+		if strings.Contains(out, "not indexed for edges") {
+			t.Errorf("%s over an unknown symbol claims it is not indexed for edges:\n%s", name, out)
+		}
 	}
 }
 
@@ -391,5 +397,48 @@ func TestZeroEdgesJSONKeepsItsSchema(t *testing.T) {
 	want := "{\n  \"callers\": [],\n  \"count\": 0,\n  \"symbol\": \"validate_token\"\n}\n"
 	if out != want {
 		t.Errorf("--json changed:\n got %q\nwant %q", out, want)
+	}
+}
+
+// TestZeroCallersOfANameInGoAndPythonNamesTheUncoveredLanguage: the Go chunk's
+// empty answer is genuine, but a Python chunk of the same name was never
+// indexed for edges, and saying only "none recorded" would hide that.
+func TestZeroCallersOfANameInGoAndPythonNamesTheUncoveredLanguage(t *testing.T) {
+	dir := newWorkspace(t)
+	useEmbedder(t, newFakeEmbedder(t))
+	writeFile(t, filepath.Join(dir, "sample.go"), callGraphSource)
+	writeFile(t, filepath.Join(dir, "caller.py"), "def Caller(token):\n    return token\n")
+	captureStdout(t, func() {
+		if err := runIndex(context.Background(), ".", indexOpts{skipCalibration: true}); err != nil {
+			t.Fatalf("runIndex: %v", err)
+		}
+	})
+
+	out := captureStdout(t, func() {
+		if err := runCallers(context.Background(), "Caller", false, false); err != nil {
+			t.Fatalf("runCallers: %v", err)
+		}
+	})
+	want := "No callers of Caller recorded in the call graph; its py chunks are not indexed for edges (0 callers).\n"
+	if out != want {
+		t.Errorf("mixed-language zero callers:\n got %q\nwant %q", out, want)
+	}
+}
+
+// TestDiagnoseZeroEdgesSurfacesALookupFailure: if the lookup fails, guessing
+// one of the three answers would be the false report this exists to prevent.
+func TestDiagnoseZeroEdgesSurfacesALookupFailure(t *testing.T) {
+	mixedWorkspace(t)
+	rs, cleanup, err := openRefStorage(context.Background())
+	if err != nil {
+		t.Fatalf("openRefStorage: %v", err)
+	}
+	cleanup()
+
+	if _, err := diagnoseZeroEdges(context.Background(), rs, "validate_token", "callers of", 0); err == nil {
+		t.Error("a failed lookup over a closed index returned no error")
+	}
+	if zero, err := diagnoseZeroEdges(context.Background(), rs, "validate_token", "callers of", 1); zero != nil || err != nil {
+		t.Errorf("a non-empty answer was diagnosed: %+v, %v", zero, err)
 	}
 }

@@ -89,3 +89,15 @@ func (idx *LexicalIndex) GetRefsByName(ctx context.Context, name string) ([]RefE
 
 	return getRefsByNameSQL(ctx, idx.db, name)
 }
+
+// SymbolLanguages reports the languages a symbol is indexed in.
+func (idx *LexicalIndex) SymbolLanguages(ctx context.Context, name string) ([]SymbolLanguage, error) {
+	idx.mu.RLock()
+	defer idx.mu.RUnlock()
+
+	if idx.closed {
+		return nil, ErrStorageClosed
+	}
+
+	return symbolLanguagesSQL(ctx, idx.db, name)
+}

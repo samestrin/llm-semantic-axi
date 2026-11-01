@@ -29,6 +29,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - `index-status` with no index now returns a "semantic index not found" error and exits non-zero in plain, `--json` and `--axi` modes. It previously printed a notice (or `{"error":"index not found","indexed":false}`) and exited 0. (epic 05)
 - A bare `llm-semantic` run is content-first: instead of help, it prints a one-line description, the executable path (home shown as `~`) and the index status for the current directory. A missing index is the same non-zero error as `index-status`; `--help` still prints help (its usage block gains a `llm-semantic [flags]` line). (epic 05)
+- The search family (`search`, `code-search`, `docs-search`, `memory-search`, `multisearch`) states its total and says when it found nothing. Plain output of `search` and `memory-search` opens with `N results for "query"`, and an empty search prints `No results found for "query" (0 results).` instead of `No results found.`. `--axi` output of `search` and `memory-search` is now an object with `query`, `total` and `results`, plus a `message` when there are none; `multisearch --axi` gains the `message`. `--json` and `--min` keep their old shape. (epic 05.1)
+- `callers` and `refs` say what an empty answer means. When no edges come back they look up the chunks named the symbol: none reports `symbol not indexed`, a symbol indexed only in a language the index holds no edges for (every non-Go language today) reports `not indexed for edges`, and only an edge-recording language reports `No callers of X recorded in the call graph`. `--axi` carries this as `status` (`symbol_not_indexed`, `not_indexed_for_edges`, `none_recorded`) and `message`; `--json` is unchanged. Before this all three printed `(the symbol may not be indexed)`. (epic 05.1)
 - go-axi moves from **v0.1.2** to **v0.3.0**.
 - Eleven direct dependencies that only `internal/support` and `internal/filesystem` used are dropped: `BurntSushi/toml`, `html-to-markdown`, `goquery`, `cascadia`, `expr`, `go-gitignore`, `go-diff`, `gjson`, `sjson`, `match`, `pretty`. Thirteen direct requires remain.
 - Both binaries now report the version they were built from. `version` and `commit` in `cmd/llm-semantic`, and `serverVersion` in `cmd/llm-semantic-mcp`, are stamped by `-X` at build time instead of being hardcoded to `1.5.0` and `1.6.0`.
@@ -37,6 +39,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - With `--axi`, a failed command now prints its error as TOON (`error: true`, `message: ...`) on stdout and still exits non-zero. Before this it printed a plain `Error: ...` on stderr and left stdout empty, because nothing passed `--axi` to the error formatter. This covers errors from the root command's config checks as well as from the subcommand. (epic 05.1)
+- Plain `multisearch` with `--output by_query` or `by_collection` no longer prints `No results found.` under a header that counts results. The empty check read the blended list, which a grouped format leaves empty; it now reads the total. (epic 05.1)
 
 ### Coverage gate
 

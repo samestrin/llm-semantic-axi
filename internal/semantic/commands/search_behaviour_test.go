@@ -130,7 +130,7 @@ func TestSearchReportsNoResultsRatherThanNothing(t *testing.T) {
 		}
 	})
 
-	if !strings.Contains(out, "No results found.") {
+	if !strings.Contains(out, "No results found for") {
 		t.Errorf("an empty result set printed %q", out)
 	}
 }
@@ -249,7 +249,7 @@ func sampleSearchResult() semantic.SearchResult {
 // TestOutputTextRendersRelevanceAndSignature pins the human result block.
 func TestOutputTextRendersRelevanceAndSignature(t *testing.T) {
 	out := captureStdout(t, func() {
-		if err := outputText([]semantic.SearchResult{sampleSearchResult()}); err != nil {
+		if err := outputText("q", []semantic.SearchResult{sampleSearchResult()}); err != nil {
 			t.Fatalf("outputText: %v", err)
 		}
 	})
@@ -272,7 +272,7 @@ func TestOutputTextPrefersThePreviewOverTheSignature(t *testing.T) {
 	r.Preview = "validates a bearer token"
 
 	out := captureStdout(t, func() {
-		if err := outputText([]semantic.SearchResult{r}); err != nil {
+		if err := outputText("q", []semantic.SearchResult{r}); err != nil {
 			t.Fatalf("outputText: %v", err)
 		}
 	})

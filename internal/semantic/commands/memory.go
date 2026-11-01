@@ -386,12 +386,20 @@ func runMemorySearch(ctx context.Context, opts memorySearchOpts) error {
 
 	// Output results
 	if opts.jsonOutput || opts.minOutput || GlobalAXIOutput {
+		if GlobalAXIOutput {
+			return emitStdout(axiResultList(opts.query, memoryRows(results, opts.minOutput), len(results)))
+		}
 		return outputMemoryJSON(results, opts.minOutput)
 	}
-	return outputMemoryText(results)
+	return outputMemoryText(opts.query, results)
 }
 
 func outputMemoryJSON(results []semantic.MemorySearchResult, minimal bool) error {
+	return emitStdout(memoryRows(results, minimal))
+}
+
+// memoryRows is the result list --json, --min and --axi print.
+func memoryRows(results []semantic.MemorySearchResult, minimal bool) any {
 	if minimal {
 		minResults := make([]map[string]interface{}, len(results))
 		for i, r := range results {
@@ -401,17 +409,19 @@ func outputMemoryJSON(results []semantic.MemorySearchResult, minimal bool) error
 				"s":  r.Score,
 			}
 		}
-		return emitStdout(minResults)
+		return minResults
 	}
 
-	return emitStdout(results)
+	return results
 }
 
-func outputMemoryText(results []semantic.MemorySearchResult) error {
+func outputMemoryText(query string, results []semantic.MemorySearchResult) error {
 	if len(results) == 0 {
-		fmt.Println("No results found.")
+		fmt.Printf("%s (0 results).\n", noResultsFor(query))
 		return nil
 	}
+
+	fmt.Printf("%s for %q\n\n", resultCount(len(results)), query)
 
 	for i, r := range results {
 		fmt.Printf("%d. [%s] Score: %.4f\n", i+1, r.Entry.ID, r.Score)

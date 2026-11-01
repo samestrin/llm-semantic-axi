@@ -191,7 +191,7 @@ func TestMultisearchTextReportsAnEmptyResultSet(t *testing.T) {
 	if !strings.Contains(out, "Multisearch: 1 queries, 0 results") {
 		t.Errorf("the header is wrong:\n%s", out)
 	}
-	if !strings.Contains(out, "No results found.") {
+	if !strings.Contains(out, "No results found for") {
 		t.Errorf("an empty result set printed %q", out)
 	}
 }

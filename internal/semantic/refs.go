@@ -58,4 +58,17 @@ type RefStorage interface {
 	// symbol name. Each edge carries the location of the chunk it points at,
 	// which is empty for a reference to something outside the index.
 	GetRefsByName(ctx context.Context, name string) ([]RefEdge, error)
+
+	// SymbolLanguages reports each language a chunk with this name is indexed
+	// in, and whether the index holds any edge leaving a chunk of that
+	// language. It is what tells an empty callers or refs answer apart: no
+	// chunk means the symbol is not indexed, and a language with no edges at
+	// all means it was never indexed for edges, so empty does not mean none.
+	SymbolLanguages(ctx context.Context, name string) ([]SymbolLanguage, error)
+}
+
+// SymbolLanguage is one language a symbol is indexed in.
+type SymbolLanguage struct {
+	Language string
+	HasEdges bool
 }

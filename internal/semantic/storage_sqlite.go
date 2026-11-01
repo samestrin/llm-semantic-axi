@@ -314,6 +314,18 @@ func (s *SQLiteStorage) GetRefsByName(ctx context.Context, name string) ([]RefEd
 	return getRefsByNameSQL(ctx, s.db, name)
 }
 
+// SymbolLanguages reports the languages a symbol is indexed in.
+func (s *SQLiteStorage) SymbolLanguages(ctx context.Context, name string) ([]SymbolLanguage, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.closed {
+		return nil, ErrStorageClosed
+	}
+
+	return symbolLanguagesSQL(ctx, s.db, name)
+}
+
 // migrateDomainColumn adds domain column to existing databases if missing.
 func (s *SQLiteStorage) migrateDomainColumn() error {
 	// Check if column exists
