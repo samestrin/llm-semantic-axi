@@ -26,6 +26,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- `index-status` with no index now returns a "semantic index not found" error and exits non-zero in plain, `--json` and `--axi` modes. It previously printed a notice (or `{"error":"index not found","indexed":false}`) and exited 0. (epic 05)
 - go-axi moves from **v0.1.2** to **v0.3.0**.
 - Eleven direct dependencies that only `internal/support` and `internal/filesystem` used are dropped: `BurntSushi/toml`, `html-to-markdown`, `goquery`, `cascadia`, `expr`, `go-gitignore`, `go-diff`, `gjson`, `sjson`, `match`, `pretty`. Thirteen direct requires remain.
 - Both binaries now report the version they were built from. `version` and `commit` in `cmd/llm-semantic`, and `serverVersion` in `cmd/llm-semantic-mcp`, are stamped by `-X` at build time instead of being hardcoded to `1.5.0` and `1.6.0`.

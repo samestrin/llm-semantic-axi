@@ -42,18 +42,9 @@ func indexStatusCmd() *cobra.Command {
 func runIndexStatus(ctx context.Context, jsonOutput bool) error {
 	indexPath := findIndexPath()
 	if indexPath == "" && storageType != "qdrant" {
-		if jsonOutput || GlobalAXIOutput {
-			// indent=false: this branch has always emitted COMPACT json,
-			// unlike the 21 sites that call SetIndent. Indenting it here would
-			// silently reformat --json output.
-			return emitJSON(os.Stdout, map[string]interface{}{
-				"error":   "index not found",
-				"indexed": false,
-			}, false)
-		}
-		fmt.Println("Semantic index not found.")
-		fmt.Println("Run 'llm-semantic index' to create one.")
-		return nil
+		// An error, not a printed notice: exiting 0 here told a script that
+		// the status check succeeded when there was no index to check.
+		return semantic.ErrIndexNotFound()
 	}
 
 	// For Qdrant, we need to probe the embedder to get dimensions
