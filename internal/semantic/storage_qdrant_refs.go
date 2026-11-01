@@ -43,3 +43,8 @@ func (s *QdrantStorage) GetCallersByName(ctx context.Context, name string) ([]Re
 func (s *QdrantStorage) GetRefsByName(ctx context.Context, name string) ([]RefEdge, error) {
 	return s.parallelFTS.GetRefsByName(ctx, name)
 }
+
+// SymbolLanguages reports the languages a symbol is indexed in.
+func (s *QdrantStorage) SymbolLanguages(ctx context.Context, name string) ([]SymbolLanguage, error) {
+	return s.parallelFTS.SymbolLanguages(ctx, name)
+}

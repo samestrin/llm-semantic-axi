@@ -224,6 +224,38 @@ func getRefsByNameSQL(ctx context.Context, db *sql.DB, name string) ([]RefEdge, 
 	`, name)
 }
 
+// symbolLanguagesSQL returns the languages chunks with this name are indexed
+// in, each with whether any edge leaves a chunk of that language.
+//
+// Edge support is read from the index rather than from a list of chunkers that
+// record edges, so an index built before a language gained edges still reports
+// that language as not indexed for edges.
+func symbolLanguagesSQL(ctx context.Context, db *sql.DB, name string) ([]SymbolLanguage, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT COALESCE(c.language, ''),
+		       EXISTS (SELECT 1 FROM chunk_refs r JOIN chunks e ON e.id = r.chunk_id
+		               WHERE COALESCE(e.language, '') = COALESCE(c.language, ''))
+		FROM chunks c
+		WHERE c.name = ?
+		GROUP BY COALESCE(c.language, '')
+		ORDER BY 1
+	`, name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var langs []SymbolLanguage
+	for rows.Next() {
+		var l SymbolLanguage
+		if err := rows.Scan(&l.Language, &l.HasEdges); err != nil {
+			return nil, err
+		}
+		langs = append(langs, l)
+	}
+	return langs, rows.Err()
+}
+
 // resolveRefsSQL links stored references to the chunks they name.
 //
 // Two rules make the result trustworthy. A reference whose target chunk has

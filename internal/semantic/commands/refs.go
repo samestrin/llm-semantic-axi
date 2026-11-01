@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/samestrin/llm-semantic-axi/internal/semantic"
 	"github.com/spf13/cobra"
@@ -79,7 +80,12 @@ func runCallers(ctx context.Context, symbol string, jsonOutput, minOutput bool) 
 		return fmt.Errorf("failed to look up callers of %q: %w", symbol, err)
 	}
 
-	return formatCallers(os.Stdout, symbol, edges, jsonOutput, minOutput)
+	zero, err := diagnoseZeroEdges(ctx, rs, symbol, "callers of", len(edges))
+	if err != nil {
+		return err
+	}
+
+	return formatCallers(os.Stdout, symbol, edges, zero, jsonOutput, minOutput)
 }
 
 func runRefs(ctx context.Context, symbol string, jsonOutput, minOutput bool) error {
@@ -94,7 +100,74 @@ func runRefs(ctx context.Context, symbol string, jsonOutput, minOutput bool) err
 		return fmt.Errorf("failed to look up references from %q: %w", symbol, err)
 	}
 
-	return formatRefs(os.Stdout, symbol, edges, jsonOutput, minOutput)
+	zero, err := diagnoseZeroEdges(ctx, rs, symbol, "references from", len(edges))
+	if err != nil {
+		return err
+	}
+
+	return formatRefs(os.Stdout, symbol, edges, zero, jsonOutput, minOutput)
+}
+
+// zeroEdges says what an empty callers or refs answer means. Without it the
+// three cases read the same: the symbol is not indexed, it is indexed in a
+// language the index records no edges for, or it genuinely has none recorded.
+// Only the last one means "none exist".
+type zeroEdges struct {
+	Status  string
+	Message string
+}
+
+const (
+	zeroSymbolNotIndexed   = "symbol_not_indexed"
+	zeroNotIndexedForEdges = "not_indexed_for_edges"
+	zeroNoneRecorded       = "none_recorded"
+)
+
+// diagnoseZeroEdges looks up the chunks named symbol when an answer came back
+// empty, and returns nil when it did not. noun reads "callers of" or
+// "references from".
+func diagnoseZeroEdges(ctx context.Context, rs semantic.RefStorage, symbol, noun string, count int) (*zeroEdges, error) {
+	if count > 0 {
+		return nil, nil
+	}
+
+	langs, err := rs.SymbolLanguages(ctx, symbol)
+	if err != nil {
+		return nil, fmt.Errorf("failed to look up %s: %w", symbol, err)
+	}
+	if len(langs) == 0 {
+		return &zeroEdges{
+			Status:  zeroSymbolNotIndexed,
+			Message: fmt.Sprintf("No %s %s: symbol not indexed, no chunk is named %s", noun, symbol, symbol),
+		}, nil
+	}
+
+	var withEdges, without []string
+	for _, l := range langs {
+		name := l.Language
+		if name == "" {
+			name = "unknown language"
+		}
+		if l.HasEdges {
+			withEdges = append(withEdges, name)
+		} else {
+			without = append(without, name)
+		}
+	}
+
+	if len(withEdges) == 0 {
+		return &zeroEdges{
+			Status: zeroNotIndexedForEdges,
+			Message: fmt.Sprintf("No %s %s: not indexed for edges (%s is indexed as %s, and the index records no edges for it), so this does not mean none exist",
+				noun, symbol, symbol, strings.Join(without, ", ")),
+		}, nil
+	}
+
+	msg := fmt.Sprintf("No %s %s recorded in the call graph", noun, symbol)
+	if len(without) > 0 {
+		msg += fmt.Sprintf("; its %s chunks are not indexed for edges", strings.Join(without, ", "))
+	}
+	return &zeroEdges{Status: zeroNoneRecorded, Message: msg}, nil
 }
 
 // openRefStorage opens the configured backend and returns its call graph view,
@@ -132,12 +205,19 @@ func openRefStorage(ctx context.Context) (semantic.RefStorage, func(), error) {
 	return rs, func() { storage.Close() }, nil
 }
 
-func formatCallers(w io.Writer, symbol string, edges []semantic.RefEdge, jsonOutput, minOutput bool) error {
+// formatCallers prints the callers of symbol. zero is the diagnosis of an
+// empty answer; with none, the empty text can only say the symbol may not be
+// indexed.
+func formatCallers(w io.Writer, symbol string, edges []semantic.RefEdge, zero *zeroEdges, jsonOutput, minOutput bool) error {
 	if jsonOutput || minOutput || GlobalAXIOutput {
-		return writeCallersJSON(w, symbol, edges, minOutput)
+		return writeCallersJSON(w, symbol, edges, zero, minOutput)
 	}
 
 	if len(edges) == 0 {
+		if zero != nil {
+			fmt.Fprintf(w, "%s (0 callers).\n", zero.Message)
+			return nil
+		}
 		fmt.Fprintf(w, "No callers of %s (the symbol may not be indexed)\n", symbol)
 		return nil
 	}
@@ -149,7 +229,7 @@ func formatCallers(w io.Writer, symbol string, edges []semantic.RefEdge, jsonOut
 	return nil
 }
 
-func writeCallersJSON(w io.Writer, symbol string, edges []semantic.RefEdge, minimal bool) error {
+func writeCallersJSON(w io.Writer, symbol string, edges []semantic.RefEdge, zero *zeroEdges, minimal bool) error {
 	callers := make([]map[string]interface{}, 0, len(edges))
 	for _, e := range edges {
 		entry := map[string]interface{}{
@@ -164,11 +244,13 @@ func writeCallersJSON(w io.Writer, symbol string, edges []semantic.RefEdge, mini
 		callers = append(callers, entry)
 	}
 
-	return emitJSON(w, map[string]interface{}{
+	payload := map[string]interface{}{
 		"symbol":  symbol,
 		"count":   len(callers),
 		"callers": callers,
-	}, true)
+	}
+	addZeroEdges(payload, zero)
+	return emitJSON(w, payload, true)
 }
 
 // collapseRefEdges reports each referenced name once. A method call records
@@ -194,14 +276,19 @@ func collapseRefEdges(edges []semantic.RefEdge) []semantic.RefEdge {
 	return out
 }
 
-func formatRefs(w io.Writer, symbol string, edges []semantic.RefEdge, jsonOutput, minOutput bool) error {
+// formatRefs prints the references from symbol; zero is as for formatCallers.
+func formatRefs(w io.Writer, symbol string, edges []semantic.RefEdge, zero *zeroEdges, jsonOutput, minOutput bool) error {
 	edges = collapseRefEdges(edges)
 
 	if jsonOutput || minOutput || GlobalAXIOutput {
-		return writeRefsJSON(w, symbol, edges, minOutput)
+		return writeRefsJSON(w, symbol, edges, zero, minOutput)
 	}
 
 	if len(edges) == 0 {
+		if zero != nil {
+			fmt.Fprintf(w, "%s (0 references).\n", zero.Message)
+			return nil
+		}
 		fmt.Fprintf(w, "No references from %s (the symbol may not be indexed)\n", symbol)
 		return nil
 	}
@@ -217,7 +304,7 @@ func formatRefs(w io.Writer, symbol string, edges []semantic.RefEdge, jsonOutput
 	return nil
 }
 
-func writeRefsJSON(w io.Writer, symbol string, edges []semantic.RefEdge, minimal bool) error {
+func writeRefsJSON(w io.Writer, symbol string, edges []semantic.RefEdge, zero *zeroEdges, minimal bool) error {
 	refs := make([]map[string]interface{}, 0, len(edges))
 	for _, e := range edges {
 		entry := map[string]interface{}{
@@ -235,9 +322,22 @@ func writeRefsJSON(w io.Writer, symbol string, edges []semantic.RefEdge, minimal
 		refs = append(refs, entry)
 	}
 
-	return emitJSON(w, map[string]interface{}{
+	payload := map[string]interface{}{
 		"symbol":     symbol,
 		"count":      len(refs),
 		"references": refs,
-	}, true)
+	}
+	addZeroEdges(payload, zero)
+	return emitJSON(w, payload, true)
+}
+
+// addZeroEdges puts the diagnosis of an empty answer into --axi output, where
+// an agent can branch on the status. --json keeps its schema (board decision,
+// 2026-10-31), so it gains no key.
+func addZeroEdges(payload map[string]interface{}, zero *zeroEdges) {
+	if zero == nil || !GlobalAXIOutput {
+		return
+	}
+	payload["status"] = zero.Status
+	payload["message"] = zero.Message
 }

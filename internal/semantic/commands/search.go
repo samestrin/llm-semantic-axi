@@ -236,13 +236,54 @@ func runSearch(ctx context.Context, query string, opts searchOpts) error {
 	}
 
 	// Output results
+	query = strings.TrimSpace(query)
 	if opts.jsonOutput || opts.minOutput || GlobalAXIOutput {
+		if GlobalAXIOutput {
+			return emitStdout(axiResultList(query, searchRows(results, opts.minOutput), len(results)))
+		}
 		return outputJSON(results, opts.minOutput)
 	}
-	return outputText(results)
+	return outputText(query, results)
+}
+
+// resultCount reads "1 result" or "N results".
+func resultCount(n int) string {
+	if n == 1 {
+		return "1 result"
+	}
+	return fmt.Sprintf("%d results", n)
+}
+
+// noResultsFor is the zero-result sentence the search family shares, so that
+// plain and --axi say the same thing.
+func noResultsFor(query string) string {
+	return fmt.Sprintf("No results found for %q", query)
+}
+
+// axiResultList wraps a result list for --axi with its total, and with a
+// message when it is empty: a bare empty list reads as nothing at all, not as
+// a search that ran and matched nothing. --json keeps its bare array (board
+// decision, 2026-10-31), so this is --axi only.
+func axiResultList(query string, rows any, total int) map[string]any {
+	payload := map[string]any{
+		"query":   query,
+		"total":   total,
+		"results": rows,
+	}
+	if total == 0 {
+		// An empty list, not the null --json prints for a nil slice.
+		payload["results"] = []any{}
+		payload["message"] = noResultsFor(query) + "."
+	}
+	return payload
 }
 
 func outputJSON(results []semantic.SearchResult, minimal bool) error {
+	return emitStdout(searchRows(results, minimal))
+}
+
+// searchRows is the result list --json, --min and --axi print.
+func searchRows(results []semantic.SearchResult, minimal bool) any {
 	if minimal {
 		minResults := make([]map[string]interface{}, len(results))
 		for i, r := range results {
@@ -261,17 +302,19 @@ func outputJSON(results []semantic.SearchResult, minimal bool) error {
 				minResults[i]["pr"] = r.Preview
 			}
 		}
-		return emitStdout(minResults)
+		return minResults
 	}
 
-	return emitStdout(results)
+	return results
 }
 
-func outputText(results []semantic.SearchResult) error {
+func outputText(query string, results []semantic.SearchResult) error {
 	if len(results) == 0 {
-		fmt.Println("No results found.")
+		fmt.Printf("%s (0 results).\n", noResultsFor(query))
 		return nil
 	}
+
+	fmt.Printf("%s for %q\n\n", resultCount(len(results)), query)
 
 	for i, r := range results {
 		// Format relevance label

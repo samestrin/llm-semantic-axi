@@ -384,11 +384,11 @@ func TestMemorySearchWithoutAnIndexPointsAtTheFix(t *testing.T) {
 // printing nothing at all reads as a crash.
 func TestOutputMemoryTextReportsAnEmptyResultSet(t *testing.T) {
 	out := captureStdout(t, func() {
-		if err := outputMemoryText(nil); err != nil {
+		if err := outputMemoryText("q", nil); err != nil {
 			t.Fatalf("outputMemoryText: %v", err)
 		}
 	})
-	if !strings.Contains(out, "No results found.") {
+	if !strings.Contains(out, "No results found for") {
 		t.Errorf("empty results printed %q, want an explicit message", out)
 	}
 }
@@ -405,12 +405,12 @@ func TestOutputMemoryTextListsTagsOnlyWhenPresent(t *testing.T) {
 	}}
 
 	withTags := captureStdout(t, func() {
-		if err := outputMemoryText(tagged); err != nil {
+		if err := outputMemoryText("q", tagged); err != nil {
 			t.Fatalf("outputMemoryText: %v", err)
 		}
 	})
 	withoutTags := captureStdout(t, func() {
-		if err := outputMemoryText(untagged); err != nil {
+		if err := outputMemoryText("q", untagged); err != nil {
 			t.Fatalf("outputMemoryText: %v", err)
 		}
 	})

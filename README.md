@@ -102,6 +102,8 @@ Every extension `RegisterAllChunkers` registers, and what indexes it. A test (`T
 
 `callers` and `refs` read call edges from the index, and only the Go chunker emits them (see the table above). **An empty `callers` result in a Python, JavaScript or any other non-Go file means "not indexed for edges", not "no callers."** Do not read it as proof.
 
+The commands say which case an empty answer is, in plain and `--axi` output (`--axi` adds a `status` field): `symbol not indexed` when no chunk carries the name, `not indexed for edges` when the symbol is indexed only in languages the index holds no edges for, and `recorded in the call graph` only when an empty answer is genuine. `--json` keeps its old shape and does not carry this.
+
 ## For integrators
 
 Tools that read `llm-semantic`'s data directly (such as [atcr](https://github.com/samestrin/atcr)) should build against the published storage contract: [docs/storage-contract.md](docs/storage-contract.md). It is `contract_version: 1` and covers the Qdrant store only — the five point kinds (chunks, `file_hash` bookkeeping, calibration metadata, memory entries, retrieval logs), their payload keys and value shapes, and the filter rule that chunks are exactly the points carrying a `chunk_id` payload key. The default sqlite file (`.index/semantic.db`) is an internal implementation detail and is not part of the contract.

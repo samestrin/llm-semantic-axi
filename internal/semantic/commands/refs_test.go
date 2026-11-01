@@ -57,7 +57,7 @@ func TestFormatCallers_Human(t *testing.T) {
 	var buf bytes.Buffer
 	edges := sampleEdges()[:1]
 
-	if err := formatCallers(&buf, "Process", edges, false, false); err != nil {
+	if err := formatCallers(&buf, "Process", edges, nil, false, false); err != nil {
 		t.Fatalf("formatCallers: %v", err)
 	}
 
@@ -72,7 +72,7 @@ func TestFormatCallers_Human(t *testing.T) {
 func TestFormatCallers_EmptyIsNotAnError(t *testing.T) {
 	var buf bytes.Buffer
 
-	if err := formatCallers(&buf, "Nobody", nil, false, false); err != nil {
+	if err := formatCallers(&buf, "Nobody", nil, nil, false, false); err != nil {
 		t.Fatalf("formatCallers with no results must not error: %v", err)
 	}
 
@@ -87,7 +87,7 @@ func TestFormatCallers_EmptyIsNotAnError(t *testing.T) {
 
 func TestFormatCallers_JSON(t *testing.T) {
 	var buf bytes.Buffer
-	if err := formatCallers(&buf, "Process", sampleEdges()[:1], true, false); err != nil {
+	if err := formatCallers(&buf, "Process", sampleEdges()[:1], nil, true, false); err != nil {
 		t.Fatalf("formatCallers: %v", err)
 	}
 
@@ -121,7 +121,7 @@ func TestFormatCallers_JSON(t *testing.T) {
 
 func TestFormatCallers_MinDropsDetail(t *testing.T) {
 	var buf bytes.Buffer
-	if err := formatCallers(&buf, "Process", sampleEdges()[:1], false, true); err != nil {
+	if err := formatCallers(&buf, "Process", sampleEdges()[:1], nil, false, true); err != nil {
 		t.Fatalf("formatCallers: %v", err)
 	}
 
@@ -145,7 +145,7 @@ func TestFormatCallers_MinDropsDetail(t *testing.T) {
 
 func TestFormatRefs_MarksExternalReferences(t *testing.T) {
 	var buf bytes.Buffer
-	if err := formatRefs(&buf, "Run", sampleEdges(), false, false); err != nil {
+	if err := formatRefs(&buf, "Run", sampleEdges(), nil, false, false); err != nil {
 		t.Fatalf("formatRefs: %v", err)
 	}
 
@@ -163,7 +163,7 @@ func TestFormatRefs_MarksExternalReferences(t *testing.T) {
 
 func TestFormatRefs_JSONFlagsResolution(t *testing.T) {
 	var buf bytes.Buffer
-	if err := formatRefs(&buf, "Run", sampleEdges(), true, false); err != nil {
+	if err := formatRefs(&buf, "Run", sampleEdges(), nil, true, false); err != nil {
 		t.Fatalf("formatRefs: %v", err)
 	}
 
@@ -197,7 +197,7 @@ func TestFormatRefs_JSONFlagsResolution(t *testing.T) {
 
 func TestFormatRefs_EmptyIsNotAnError(t *testing.T) {
 	var buf bytes.Buffer
-	if err := formatRefs(&buf, "Nobody", nil, false, false); err != nil {
+	if err := formatRefs(&buf, "Nobody", nil, nil, false, false); err != nil {
 		t.Fatalf("formatRefs with no results must not error: %v", err)
 	}
 	if !strings.Contains(buf.String(), "No references from Nobody") {
@@ -229,7 +229,7 @@ func TestFormatRefs_CollapsesDuplicateEdgeKinds(t *testing.T) {
 	}
 
 	var buf bytes.Buffer
-	if err := formatRefs(&buf, "Run", edges, true, false); err != nil {
+	if err := formatRefs(&buf, "Run", edges, nil, true, false); err != nil {
 		t.Fatalf("formatRefs: %v", err)
 	}
 
