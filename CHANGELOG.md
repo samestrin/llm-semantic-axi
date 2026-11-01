@@ -34,6 +34,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Both binaries now report the version they were built from. `version` and `commit` in `cmd/llm-semantic`, and `serverVersion` in `cmd/llm-semantic-mcp`, are stamped by `-X` at build time instead of being hardcoded to `1.5.0` and `1.6.0`.
 - `serverVersion` changed from a `const` to a `var`. `ldflags -X` rewrites a symbol, and a const has no symbol to rewrite, so the hardcoded value would have silently outlived every tag.
 
+### Fixed
+
+- With `--axi`, a failed command now prints its error as TOON (`error: true`, `message: ...`) on stdout and still exits non-zero. Before this it printed a plain `Error: ...` on stderr and left stdout empty, because nothing passed `--axi` to the error formatter. This covers errors from the root command's config checks as well as from the subcommand. (epic 05.1)
+
 ### Coverage gate
 
 CI fails below 80% total coverage rather than printing a percentage and moving on. The sibling repo only echoes the number, which is how its coverage drifted unobserved.
