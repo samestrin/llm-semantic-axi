@@ -538,7 +538,7 @@ func initSearchComponents(ctx context.Context, createStorageFn func(indexPath st
 	if storageType == "" || storageType == "sqlite" {
 		indexPath = findIndexPath()
 		if indexPath == "" {
-			return nil, nil, fmt.Errorf("semantic index not found. Run 'llm-semantic index' first")
+			return nil, nil, withHelp(fmt.Errorf("semantic index not found. Run 'llm-semantic index' first"), indexMissingHelp...)
 		}
 	}
 

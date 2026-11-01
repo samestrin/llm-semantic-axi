@@ -50,3 +50,25 @@ func emitJSON(w io.Writer, v any, indent bool) error {
 func emitStdout(v any) error {
 	return emitJSON(os.Stdout, v, true)
 }
+
+// helpError carries --axi next-step suggestions alongside an error, without
+// changing its message, so plain and --json error output stay as they were.
+type helpError struct {
+	err  error
+	help []string
+}
+
+func (e *helpError) Error() string     { return e.err.Error() }
+func (e *helpError) Unwrap() error     { return e.err }
+func (e *helpError) AXIHelp() []string { return e.help }
+
+// withHelp attaches --axi help to err.
+func withHelp(err error, help ...string) error {
+	return &helpError{err: err, help: help}
+}
+
+// indexMissingHelp is the next step when no index exists.
+var indexMissingHelp = []string{
+	"Run `llm-semantic index <path>` to build the index, then repeat this command",
+	"Run `llm-semantic index-status` to check which index this directory resolves to",
+}

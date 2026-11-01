@@ -155,7 +155,7 @@ func noMultisearchResults(queries []string) string {
 
 func outputMultisearchJSON(queries []string, result *semantic.MultisearchResult, minimal bool) error {
 	payload := multisearchPayload(result, minimal)
-	if !GlobalAXIOutput || result.TotalResults != 0 {
+	if !GlobalAXIOutput {
 		return emitStdout(payload)
 	}
 
@@ -170,7 +170,10 @@ func outputMultisearchJSON(queries []string, result *semantic.MultisearchResult,
 	if err := json.Unmarshal(b, &withMessage); err != nil {
 		return err
 	}
-	withMessage["message"] = noMultisearchResults(queries)
+	if result.TotalResults == 0 {
+		withMessage["message"] = noMultisearchResults(queries)
+	}
+	withMessage["help"] = resultHelp(result.TotalResults)
 	return emitStdout(withMessage)
 }
 
