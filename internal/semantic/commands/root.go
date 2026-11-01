@@ -198,6 +198,7 @@ Supports any OpenAI-compatible embedding API (TEI, Ollama, vLLM, OpenAI, Azure, 
 	rootCmd.AddCommand(collectionCmd())
 	rootCmd.AddCommand(callersCmd())
 	rootCmd.AddCommand(refsCmd())
+	rootCmd.AddCommand(setupCmd())
 
 	return rootCmd
 }
