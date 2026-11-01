@@ -253,3 +253,65 @@ func TestSetupCmdRegistered(t *testing.T) {
 		t.Error("dry run wrote .claude")
 	}
 }
+
+// TestSetupRefusesNullSettings defends against the legal JSON value null,
+// which decodes to a nil map and used to panic on the first assignment.
+func TestSetupRefusesNullSettings(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, ".claude", "settings.json")
+	os.MkdirAll(filepath.Dir(p), 0o755)
+	os.WriteFile(p, []byte("null"), 0o644)
+	if err := runSetup(&bytes.Buffer{}, dir, false); err == nil {
+		t.Fatal("expected an error for null settings")
+	}
+	if got, _ := os.ReadFile(p); string(got) != "null" {
+		t.Errorf("file modified: %s", got)
+	}
+}
+
+// TestSetupMergeKeepsLargeIntegers defends "other keys survive" for numbers
+// beyond float64 precision, which a plain decode silently rounds.
+func TestSetupMergeKeepsLargeIntegers(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, ".claude", "settings.json")
+	os.MkdirAll(filepath.Dir(p), 0o755)
+	os.WriteFile(p, []byte(`{"someId": 9007199254740993}`), 0o644)
+	if err := runSetup(&bytes.Buffer{}, dir, false); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := os.ReadFile(p)
+	if !strings.Contains(string(got), "9007199254740993") {
+		t.Errorf("large integer was rewritten:\n%s", got)
+	}
+}
+
+// TestSetupHonoursJSONAndAXI defends the persistent --json/--axi flags: a
+// machine consumer must get parseable output, not the plain-text lines.
+func TestSetupHonoursJSONAndAXI(t *testing.T) {
+	for _, mode := range []string{"json", "axi"} {
+		dir := newWorkspace(t)
+		root := RootCmd()
+		root.SetArgs([]string{"setup", "--dry-run", "--" + mode})
+		out := captureStdout(t, func() {
+			if err := root.Execute(); err != nil {
+				t.Fatalf("setup --%s: %v", mode, err)
+			}
+		})
+		if strings.Contains(out, "would write .claude") {
+			t.Errorf("--%s printed plain text:\n%s", mode, out)
+		}
+		if !strings.Contains(out, "would_write") {
+			t.Errorf("--%s output lacks the status:\n%s", mode, out)
+		}
+		if mode == "json" {
+			var v []map[string]string
+			if err := json.Unmarshal([]byte(out), &v); err != nil || len(v) != 2 {
+				t.Errorf("not a 2-element JSON array: %v\n%s", err, out)
+			}
+		}
+		if _, err := os.Stat(filepath.Join(dir, ".claude")); !os.IsNotExist(err) {
+			t.Error("dry run wrote .claude")
+		}
+		GlobalAXIOutput, GlobalJSONOutput = false, false
+	}
+}

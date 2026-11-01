@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -79,13 +80,16 @@ func runSetup(w io.Writer, dir string, dryRun bool) error {
 	skill := setupAction{path: skillRel, content: []byte(setupSkillContent)}
 	skill.changed = !bytes.Equal(existing, skill.content)
 
+	jsonMode := GlobalJSONOutput || GlobalAXIOutput
+	var results []map[string]string
 	for _, a := range []setupAction{settings, skill} {
+		status := "unchanged"
 		switch {
 		case !a.changed:
-			fmt.Fprintf(w, "unchanged %s\n", a.path)
 		case dryRun:
-			fmt.Fprintf(w, "would write %s\n", a.path)
+			status = "would_write"
 		default:
+			status = "wrote"
 			full := filepath.Join(dir, a.path)
 			if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
 				return err
@@ -93,8 +97,15 @@ func runSetup(w io.Writer, dir string, dryRun bool) error {
 			if err := os.WriteFile(full, a.content, 0o644); err != nil {
 				return fmt.Errorf("write %s: %w", a.path, err)
 			}
-			fmt.Fprintf(w, "wrote %s\n", a.path)
 		}
+		if jsonMode {
+			results = append(results, map[string]string{"path": a.path, "status": status})
+		} else {
+			fmt.Fprintf(w, "%s %s\n", strings.ReplaceAll(status, "_", " "), a.path)
+		}
+	}
+	if jsonMode {
+		return emitJSON(w, results, true)
 	}
 	return nil
 }
@@ -106,8 +117,14 @@ func planSettings(path string) (setupAction, error) {
 	raw, err := os.ReadFile(path)
 	switch {
 	case err == nil:
-		if err := json.Unmarshal(raw, &root); err != nil {
+		// UseNumber keeps numbers verbatim; float64 would round large ones.
+		dec := json.NewDecoder(bytes.NewReader(raw))
+		dec.UseNumber()
+		if err := dec.Decode(&root); err != nil {
 			return setupAction{}, fmt.Errorf("%s is not a JSON object, refusing to overwrite: %w", path, err)
+		}
+		if root == nil { // the JSON value null
+			return setupAction{}, fmt.Errorf("%s is null, not a JSON object, refusing to overwrite", path)
 		}
 	case !os.IsNotExist(err):
 		return setupAction{}, fmt.Errorf("read %s: %w", path, err)
