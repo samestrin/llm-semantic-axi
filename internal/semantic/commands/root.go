@@ -68,6 +68,34 @@ func getDefaultRerankerModel() string {
 	return "Qwen/Qwen3-Reranker-0.6B"
 }
 
+// rootDescription is the one-sentence summary a bare run prints.
+const rootDescription = "llm-semantic: semantic code search over a local index."
+
+// executableDisplayPath returns the running binary's path with the home
+// directory shortened to ~. It falls back to os.Args[0] if the path is unknown.
+func executableDisplayPath() string {
+	exe, err := os.Executable()
+	if err != nil {
+		exe = os.Args[0]
+	}
+	home, _ := os.UserHomeDir()
+	return tildePath(exe, home)
+}
+
+// tildePath replaces a leading home directory with ~.
+func tildePath(path, home string) string {
+	if home == "" {
+		return path
+	}
+	if path == home {
+		return "~"
+	}
+	if strings.HasPrefix(path, home+string(os.PathSeparator)) {
+		return "~" + path[len(home):]
+	}
+	return path
+}
+
 // RootCmd returns the root command for llm-semantic
 func RootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
@@ -77,6 +105,18 @@ func RootCmd() *cobra.Command {
 Supports any OpenAI-compatible embedding API (TEI, Ollama, vLLM, OpenAI, Azure, etc.)`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		// A bare run shows content, not help: the state of the index for this
+		// directory. --help and unknown subcommands are untouched.
+		RunE: func(cmd *cobra.Command, args []string) error {
+			jsonMode := GlobalJSONOutput || GlobalAXIOutput
+			if !jsonMode {
+				fmt.Printf("%s\n", rootDescription)
+				fmt.Printf("Executable: %s\n\n", executableDisplayPath())
+			}
+			// Same handling as index-status, so a missing index is an error
+			// and a non-zero exit here too, not a friendly exit 0.
+			return runIndexStatus(cmd.Context(), GlobalJSONOutput)
+		},
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			// Sync local command flags to global vars for error handling
 			if f := cmd.Flag("json"); f != nil && f.Changed {

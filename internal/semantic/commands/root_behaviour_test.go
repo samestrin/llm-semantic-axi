@@ -411,3 +411,67 @@ func TestRootCmdPromotesALocalJSONFlagToTheGlobal(t *testing.T) {
 		t.Error("a subcommand's local --json was not promoted to the global flag")
 	}
 }
+
+// TestBareRunShowsStatusPathAndDescription defends the content-first rule: a
+// no-argument run prints the index status for this directory, the executable
+// path and a one-line description rather than help, and a missing index is
+// still a non-zero error (T2) rather than a friendly exit 0.
+func TestBareRunShowsStatusPathAndDescription(t *testing.T) {
+	t.Run("with index", func(t *testing.T) {
+		indexedWorkspace(t)
+		var runErr error
+		out := captureStdout(t, func() { _, runErr = executeCommand(RootCmd()) })
+		if runErr != nil {
+			t.Fatalf("bare run: %v", runErr)
+		}
+		for _, want := range []string{rootDescription, "Executable: ", "Semantic Index Status", "Files indexed:"} {
+			if !strings.Contains(out, want) {
+				t.Errorf("output missing %q:\n%s", want, out)
+			}
+		}
+		if strings.Contains(out, "Available Commands") {
+			t.Errorf("bare run printed help:\n%s", out)
+		}
+	})
+	t.Run("without index", func(t *testing.T) {
+		newWorkspace(t)
+		var runErr error
+		out := captureStdout(t, func() { _, runErr = executeCommand(RootCmd()) })
+		if runErr == nil {
+			t.Fatal("bare run with no index returned nil; it would exit 0")
+		}
+		if !strings.Contains(runErr.Error(), "index not found") {
+			t.Errorf("err = %v", runErr)
+		}
+		if !strings.Contains(out, rootDescription) || !strings.Contains(out, "Executable: ") {
+			t.Errorf("description/path lines missing:\n%s", out)
+		}
+	})
+	t.Run("help unchanged", func(t *testing.T) {
+		newWorkspace(t)
+		out, err := executeCommand(RootCmd(), "--help")
+		if err != nil {
+			t.Fatalf("--help: %v", err)
+		}
+		if !strings.Contains(out, "Available Commands") {
+			t.Errorf("--help did not print help:\n%s", out)
+		}
+	})
+}
+
+// TestTildePath: the home directory must collapse to ~, but only on a path
+// boundary (/home/bob must not match /home/bobby).
+func TestTildePath(t *testing.T) {
+	cases := []struct{ path, home, want string }{
+		{"/home/bob/bin/x", "/home/bob", "~/bin/x"},
+		{"/home/bobby/bin/x", "/home/bob", "/home/bobby/bin/x"},
+		{"/usr/bin/x", "/home/bob", "/usr/bin/x"},
+		{"/usr/bin/x", "", "/usr/bin/x"},
+		{"/home/bob", "/home/bob", "~"},
+	}
+	for _, c := range cases {
+		if got := tildePath(c.path, c.home); got != c.want {
+			t.Errorf("tildePath(%q,%q)=%q want %q", c.path, c.home, got, c.want)
+		}
+	}
+}
