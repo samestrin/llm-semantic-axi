@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
@@ -447,6 +448,29 @@ func TestBareRunShowsStatusPathAndDescription(t *testing.T) {
 			t.Errorf("description/path lines missing:\n%s", out)
 		}
 	})
+	// The description/path lines must not precede a machine-readable payload.
+	for _, flag := range []string{"--json", "--axi"} {
+		t.Run("structured "+flag, func(t *testing.T) {
+			indexedWorkspace(t)
+			t.Cleanup(func() { GlobalAXIOutput = false; GlobalJSONOutput = false })
+			var runErr error
+			out := captureStdout(t, func() { _, runErr = executeCommand(RootCmd(), flag) })
+			if runErr != nil {
+				t.Fatalf("bare run %s: %v", flag, runErr)
+			}
+			if strings.Contains(out, rootDescription) || strings.Contains(out, "Executable:") {
+				t.Errorf("%s output carries human header lines:\n%s", flag, out)
+			}
+			if flag == "--json" {
+				var p map[string]any
+				if err := json.Unmarshal([]byte(out), &p); err != nil {
+					t.Fatalf("not JSON: %v (%q)", err, out)
+				}
+			} else if !strings.Contains(out, "files_indexed") {
+				t.Errorf("no status payload:\n%s", out)
+			}
+		})
+	}
 	t.Run("help unchanged", func(t *testing.T) {
 		newWorkspace(t)
 		out, err := executeCommand(RootCmd(), "--help")
