@@ -313,16 +313,22 @@ func resultHelp(total int) []string {
 // before cutting it with a size hint.
 const axiContentLimit = 200
 
+// axiCut cuts s at axiContentLimit characters and says how much was left out.
+func axiCut(s string) string {
+	runes := []rune(s)
+	if len(runes) <= axiContentLimit {
+		return s
+	}
+	return fmt.Sprintf("%s… (%d more chars, use --full for all)", string(runes[:axiContentLimit]), len(runes)-axiContentLimit)
+}
+
 // axiSearchRows is the default --axi row: location, name, score and a content
 // excerpt. The rest of the chunk (id, hash, language, line range) is what
 // --full is for. Content that is cut says how much was left out.
 func axiSearchRows(results []semantic.SearchResult) []map[string]any {
 	rows := make([]map[string]any, len(results))
 	for i, r := range results {
-		content := r.Chunk.Content
-		if runes := []rune(content); len(runes) > axiContentLimit {
-			content = fmt.Sprintf("%s… (%d more chars, use --full for all)", string(runes[:axiContentLimit]), len(runes)-axiContentLimit)
-		}
+		content := axiCut(r.Chunk.Content)
 		rows[i] = map[string]any{
 			"file":    fmt.Sprintf("%s:%d", r.Chunk.FilePath, r.Chunk.StartLine),
 			"name":    r.Chunk.Name,

@@ -214,6 +214,7 @@ func memorySearchCmd() *cobra.Command {
 		status        string
 		jsonOutput    bool
 		minOutput     bool
+		full          bool
 		decay         bool
 		decayHalfLife float64
 		hybrid        bool
@@ -238,6 +239,7 @@ Example:
 				status:        status,
 				jsonOutput:    jsonOutput,
 				minOutput:     minOutput,
+				full:          full,
 				decay:         decay,
 				decayHalfLife: decayHalfLife,
 				hybrid:        hybrid,
@@ -251,6 +253,7 @@ Example:
 	cmd.Flags().StringVar(&status, "status", "", "Filter by status (pending, promoted)")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output results as JSON")
 	cmd.Flags().BoolVar(&minOutput, "min", false, "Output minimal JSON format")
+	cmd.Flags().BoolVar(&full, "full", false, "With --axi, return every field and the whole text of each memory")
 	cmd.Flags().BoolVar(&decay, "decay", false, "Apply temporal decay (recent memories score higher)")
 	cmd.Flags().Float64Var(&decayHalfLife, "decay-half-life", 90.0, "Decay half-life in days (default: 90)")
 	cmd.Flags().BoolVar(&hybrid, "hybrid", false, "Enable hybrid search (dense + lexical BM25 with RRF fusion)")
@@ -266,6 +269,7 @@ type memorySearchOpts struct {
 	status        string
 	jsonOutput    bool
 	minOutput     bool
+	full          bool
 	decay         bool
 	decayHalfLife float64
 	hybrid        bool
@@ -387,11 +391,35 @@ func runMemorySearch(ctx context.Context, opts memorySearchOpts) error {
 	// Output results
 	if opts.jsonOutput || opts.minOutput || GlobalAXIOutput {
 		if GlobalAXIOutput {
-			return emitStdout(axiResultList(opts.query, memoryRows(results, opts.minOutput), len(results), memoryResultHelp(len(results))))
+			var rows any
+			switch {
+			case opts.full:
+				rows = results
+			case opts.minOutput:
+				rows = memoryRows(results, true)
+			default:
+				rows = axiMemoryRows(results)
+			}
+			return emitStdout(axiResultList(opts.query, rows, len(results), memoryResultHelp(len(results))))
 		}
 		return outputMemoryJSON(results, opts.minOutput)
 	}
 	return outputMemoryText(opts.query, results)
+}
+
+// axiMemoryRows is the default --axi memory row: id, question, score and the
+// answer cut with a size hint. --full restores the whole entry.
+func axiMemoryRows(results []semantic.MemorySearchResult) []map[string]any {
+	rows := make([]map[string]any, len(results))
+	for i, r := range results {
+		rows[i] = map[string]any{
+			"id":       r.Entry.ID,
+			"question": axiCut(r.Entry.Question),
+			"score":    r.Score,
+			"answer":   axiCut(r.Entry.Answer),
+		}
+	}
+	return rows
 }
 
 func outputMemoryJSON(results []semantic.MemorySearchResult, minimal bool) error {
