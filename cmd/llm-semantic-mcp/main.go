@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -23,11 +24,19 @@ const (
 var serverVersion = "dev"
 
 func main() {
+	os.Exit(run(context.Background(), &mcp.StdioTransport{}, os.Stderr))
+}
+
+// run is the whole server: it checks the CLI is installed, registers every
+// tool, serves MCP on transport until the session ends, and returns the
+// process exit code. It is split from main() so a test can drive a full
+// session and read the exit decision without os.Exit ending the test binary.
+func run(ctx context.Context, transport mcp.Transport, stderr io.Writer) int {
 	// Verify llm-semantic binary exists
 	if _, err := os.Stat(mcpserver.BinaryPath); os.IsNotExist(err) {
-		fmt.Fprintf(os.Stderr, "ERROR: llm-semantic binary not found at %s\n", mcpserver.BinaryPath)
-		fmt.Fprintf(os.Stderr, "Please ensure llm-semantic is installed and accessible.\n")
-		os.Exit(1)
+		fmt.Fprintf(stderr, "ERROR: llm-semantic binary not found at %s\n", mcpserver.BinaryPath)
+		fmt.Fprintf(stderr, "Please ensure llm-semantic is installed and accessible.\n")
+		return 1
 	}
 
 	// Create MCP server using official SDK
@@ -80,11 +89,12 @@ func main() {
 	}
 
 	// Log startup
-	fmt.Fprintf(os.Stderr, "%s v%s started with %d tools\n", serverName, serverVersion, len(tools))
+	fmt.Fprintf(stderr, "%s v%s started with %d tools\n", serverName, serverVersion, len(tools))
 
-	// Run server on stdio
-	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
-		fmt.Fprintf(os.Stderr, "Server error: %v\n", err)
-		os.Exit(1)
+	// Serve until the session ends
+	if err := server.Run(ctx, transport); err != nil {
+		fmt.Fprintf(stderr, "Server error: %v\n", err)
+		return 1
 	}
+	return 0
 }
