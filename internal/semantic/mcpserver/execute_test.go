@@ -140,10 +140,10 @@ func TestExecuteHandler_StripsTheToolPrefixAndPassesTheSubcommand(t *testing.T) 
 	}
 }
 
-func TestExecuteHandler_AlwaysAppendsJSONAndMin(t *testing.T) {
-	// The MCP server parses the CLI's output, so the machine-readable,
-	// token-optimized mode is not optional. Both flags are added once and only
-	// once, even when a builder already supplied them.
+func TestExecuteHandler_AlwaysAppendsAXI(t *testing.T) {
+	// The MCP server returns the CLI's output to the model, so it asks for AXI
+	// (TOON). --axi is added once and only once, and the old --json/--min pair
+	// must not come back: it would select a different output format.
 	script, argvLog := fakeBinary(t, "exit 0")
 	useFakeBinary(t, script)
 
@@ -154,15 +154,21 @@ func TestExecuteHandler_AlwaysAppendsJSONAndMin(t *testing.T) {
 	}
 
 	argv := recordedArgv(t, argvLog)
-	for _, flag := range []string{"--json", "--min"} {
+	count := func(flag string) int {
 		n := 0
 		for _, a := range argv {
 			if a == flag {
 				n++
 			}
 		}
-		if n != 1 {
-			t.Errorf("%s appears %d times, want exactly 1: %v", flag, n, argv)
+		return n
+	}
+	if n := count("--axi"); n != 1 {
+		t.Errorf("--axi appears %d times, want exactly 1: %v", n, argv)
+	}
+	for _, flag := range []string{"--json", "--min"} {
+		if n := count(flag); n != 0 {
+			t.Errorf("%s appears %d times, want 0: %v", flag, n, argv)
 		}
 	}
 }

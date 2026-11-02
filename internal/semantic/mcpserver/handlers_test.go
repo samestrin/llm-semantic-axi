@@ -1044,7 +1044,7 @@ func TestBuildSearchArgs_Basic(t *testing.T) {
 }
 
 func TestBuildSearchArgs_MinFlagAddedGlobally(t *testing.T) {
-	// Note: --min is added globally by ExecuteHandler, not by buildSearchArgs
+	// Note: --axi is added globally by ExecuteHandler, not by buildSearchArgs
 	// This test verifies buildSearchArgs does NOT duplicate it
 	args := map[string]interface{}{
 		"query": "test",
@@ -1058,7 +1058,7 @@ func TestBuildSearchArgs_MinFlagAddedGlobally(t *testing.T) {
 			count++
 		}
 	}
-	// buildSearchArgs should NOT add --min (ExecuteHandler adds it globally)
+	// buildSearchArgs should NOT add --min
 	if count > 0 {
 		t.Errorf("buildSearchArgs() should not add --min (added globally), but found %d instances", count)
 	}

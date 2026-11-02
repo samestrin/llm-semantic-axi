@@ -194,21 +194,15 @@ func ExecuteHandler(toolName string, args map[string]interface{}) (string, error
 		return "", err
 	}
 
-	// Add --json and --min flags for machine-parseable, token-optimized output
-	// Check for existing flags to avoid duplication
-	hasJSON, hasMin := false, false
+	// Add --axi so the CLI emits TOON for the model; skip if already present
+	hasAXI := false
 	for _, arg := range cmdArgs {
-		if arg == "--json" {
-			hasJSON = true
-		} else if arg == "--min" {
-			hasMin = true
+		if arg == "--axi" {
+			hasAXI = true
 		}
 	}
-	if !hasJSON {
-		cmdArgs = append(cmdArgs, "--json")
-	}
-	if !hasMin {
-		cmdArgs = append(cmdArgs, "--min")
+	if !hasAXI {
+		cmdArgs = append(cmdArgs, "--axi")
 	}
 
 	// Forward current env vars as explicit flags to ensure subprocess gets fresh values
@@ -356,7 +350,7 @@ func buildSearchArgs(args map[string]interface{}) []string {
 	if pathFilter, ok := args["path"].(string); ok && pathFilter != "" {
 		cmdArgs = append(cmdArgs, "--path", pathFilter)
 	}
-	// Note: --min is already added globally by ExecuteHandler, no need to add here
+	// Note: --axi is already added globally by ExecuteHandler, no need to add here
 	if storage, ok := args["storage"].(string); ok && storage != "" {
 		cmdArgs = append(cmdArgs, "--storage", storage)
 	}
