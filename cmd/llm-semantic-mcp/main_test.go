@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -14,12 +17,12 @@ import (
 	"github.com/samestrin/llm-semantic-axi/internal/semantic/mcpserver"
 )
 
-// main() is the whole server: it checks the CLI is installed, registers every
-// tool definition behind one closure, and serves MCP over stdio. It is driven
-// here end to end by pointing mcpserver.BinaryPath at a fake CLI, swapping
-// os.Stdin/os.Stdout for pipes, and connecting a real MCP client to the other
-// ends. Closing the client's transport gives the server EOF, which is how
-// main() returns instead of blocking forever.
+// run() is the whole server: it checks the CLI is installed, registers every
+// tool definition behind one closure, and serves MCP until the session ends.
+// It is driven here end to end by pointing mcpserver.BinaryPath at a fake CLI
+// and connecting a real MCP client to the other ends of two pipes. Because
+// run() returns an exit code instead of calling os.Exit, every test can end
+// its session and read what the process would have exited with.
 
 // fakeCLI writes an executable stand-in for llm-semantic that echoes payload,
 // and points mcpserver.BinaryPath at it for the duration of the test.
@@ -37,9 +40,34 @@ func fakeCLI(t *testing.T, payload string) {
 	t.Cleanup(func() { mcpserver.BinaryPath = original })
 }
 
-// startServer runs main() against piped stdio and returns a connected client
-// session. The session is closed and main()'s return is awaited on cleanup.
-func startServer(t *testing.T) *mcp.ClientSession {
+// server is one run() of the MCP server, connected to a client session.
+type server struct {
+	session *mcp.ClientSession
+	// clientWrite is the client's end of the server's input pipe, exposed so a
+	// test can write raw bytes to the server or close the pipe directly.
+	clientWrite *os.File
+	done        chan struct{}
+	code        int
+	stderr      bytes.Buffer
+}
+
+// wait blocks until run() returns, then reports its exit code and stderr.
+// Reading code and stderr only after done is closed is what makes them safe
+// to read without a lock.
+func (s *server) wait(t *testing.T) (int, string) {
+	t.Helper()
+	select {
+	case <-s.done:
+		return s.code, s.stderr.String()
+	case <-time.After(10 * time.Second):
+		t.Fatal("run() did not return after the client went away")
+		return 0, ""
+	}
+}
+
+// launch runs run() on a pair of pipes and returns the server with its input
+// pipe's write end. It does not connect a client.
+func launch(t *testing.T) (*server, *os.File, *os.File) {
 	t.Helper()
 
 	stdinR, stdinW, err := os.Pipe()
@@ -50,15 +78,28 @@ func startServer(t *testing.T) *mcp.ClientSession {
 	if err != nil {
 		t.Fatalf("Pipe: %v", err)
 	}
+	t.Cleanup(func() {
+		for _, f := range []*os.File{stdinR, stdinW, stdoutR, stdoutW} {
+			_ = f.Close()
+		}
+	})
 
-	realStdin, realStdout := os.Stdin, os.Stdout
-	os.Stdin, os.Stdout = stdinR, stdoutW
-
-	returned := make(chan struct{})
+	srv := &server{clientWrite: stdinW, done: make(chan struct{})}
 	go func() {
-		defer close(returned)
-		main()
+		defer close(srv.done)
+		srv.code = run(context.Background(), &mcp.IOTransport{Reader: stdinR, Writer: stdoutW}, &srv.stderr)
 	}()
+	return srv, stdoutR, stdinW
+}
+
+// startServer runs the server and returns it with a connected client session.
+// On cleanup the session is closed and run() must return 0: every test that
+// uses this helper therefore also checks that a normal disconnect is a clean
+// exit, which is the shutdown the server previously turned into exit 1.
+func startServer(t *testing.T) *server {
+	t.Helper()
+
+	srv, stdoutR, stdinW := launch(t)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	t.Cleanup(cancel)
@@ -66,36 +107,17 @@ func startServer(t *testing.T) *mcp.ClientSession {
 	client := mcp.NewClient(&mcp.Implementation{Name: "test-client", Version: "1"}, nil)
 	session, err := client.Connect(ctx, &mcp.IOTransport{Reader: stdoutR, Writer: stdinW}, nil)
 	if err != nil {
-		os.Stdin, os.Stdout = realStdin, realStdout
 		t.Fatalf("Connect: %v", err)
 	}
+	srv.session = session
 
-	// NOTHING here is closed — not the session, not either pipe — and main()'s
-	// return is not awaited. That looks careless and is the opposite.
-	//
-	// main() treats ANY error from server.Run as fatal and calls os.Exit(1).
-	// Every possible teardown produces one: closing the client session or the
-	// write end gives the server "server is closing: EOF", and closing a read
-	// end gives it "read |0: file already closed". os.Exit from this goroutine
-	// takes the whole test binary down with it, so there is no shutdown
-	// sequence that leaves the process alive. Both variants were measured, and
-	// both failed.
-	//
-	// It raced locally and lost in CI: on Linux the server reached os.Exit
-	// before the test finished and the package failed in 0.026s. Exiting 1 on a
-	// normal client disconnect is a real defect, filed in the debt record. This
-	// test parks the server instead of pretending the behaviour is correct.
-	//
-	// The cost is a leaked goroutine and four descriptors per test, reclaimed
-	// when the test binary exits. Nothing is lost from the assertions:
-	// registration, the stamped version, the tool call, the tool-error shape
-	// and the schema round trip all happen while the session is live.
 	t.Cleanup(func() {
-		os.Stdin, os.Stdout = realStdin, realStdout
+		_ = session.Close()
+		if code, stderr := srv.wait(t); code != 0 {
+			t.Errorf("run() = %d after the client disconnected, want 0; stderr:\n%s", code, stderr)
+		}
 	})
-	_ = returned
-
-	return session
+	return srv
 }
 
 func TestServer_AdvertisesEveryToolDefinition(t *testing.T) {
@@ -103,7 +125,7 @@ func TestServer_AdvertisesEveryToolDefinition(t *testing.T) {
 	// subset — or registering them all under one shared closure that captures
 	// the wrong loop variable — is invisible until a specific tool is invoked.
 	fakeCLI(t, "{}")
-	session := startServer(t)
+	session := startServer(t).session
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -133,7 +155,7 @@ func TestServer_ReportsTheStampedVersion(t *testing.T) {
 	// it was a const with a hardcoded number inside llm-tools, which is how the
 	// reported version drifted from the tag. The client reads it at initialize.
 	fakeCLI(t, "{}")
-	session := startServer(t)
+	session := startServer(t).session
 
 	impl := session.InitializeResult().ServerInfo
 	if impl.Name != serverName {
@@ -151,7 +173,7 @@ func TestServer_ToolCallReturnsTheCLIOutput(t *testing.T) {
 	// whichever definition the loop finished on.
 	const payload = `{"chunks":12,"collection":"llm_code"}`
 	fakeCLI(t, payload)
-	session := startServer(t)
+	session := startServer(t).session
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -184,7 +206,7 @@ func TestServer_ToolFailureIsReportedAsAToolErrorNotATransportError(t *testing.T
 	// tears the session down, while a tool error lets the model read what went
 	// wrong and try something else.
 	fakeCLI(t, "{}")
-	session := startServer(t)
+	session := startServer(t).session
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -217,7 +239,7 @@ func TestServer_EveryAdvertisedSchemaSurvivesTheRoundTrip(t *testing.T) {
 	// rejected or flattened by the SDK on the way out, so this checks what the
 	// client actually receives rather than what the definitions hold.
 	fakeCLI(t, "{}")
-	session := startServer(t)
+	session := startServer(t).session
 
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -253,5 +275,139 @@ func TestServer_EveryAdvertisedSchemaSurvivesTheRoundTrip(t *testing.T) {
 		if strings.TrimSpace(tool.Description) == "" {
 			t.Errorf("tool %q arrived with no description", tool.Name)
 		}
+	}
+}
+
+func TestServer_ClientDisconnectIsACleanExit(t *testing.T) {
+	// A client hanging up is how every MCP session ends. The server used to
+	// treat the resulting "server is closing: EOF" from server.Run as fatal and
+	// exit 1, so a supervisor saw each healthy session end as a crash.
+	fakeCLI(t, "{}")
+	srv := startServer(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	if _, err := srv.session.ListTools(ctx, nil); err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+
+	if err := srv.session.Close(); err != nil {
+		t.Fatalf("session.Close: %v", err)
+	}
+	code, stderr := srv.wait(t)
+	if code != 0 {
+		t.Errorf("run() = %d after the client closed its session, want 0", code)
+	}
+	if strings.Contains(stderr, "Server error") {
+		t.Errorf("a normal disconnect was logged as a server error:\n%s", stderr)
+	}
+	if !strings.Contains(stderr, "started with") {
+		t.Errorf("stderr is missing the startup line, so the server never ran:\n%s", stderr)
+	}
+}
+
+func TestServer_ClosedInputIsACleanExit(t *testing.T) {
+	// A client process that exits without an MCP goodbye just closes the
+	// server's stdin. That is still a normal end of session, not a failure.
+	fakeCLI(t, "{}")
+	srv := startServer(t)
+
+	if err := srv.clientWrite.Close(); err != nil {
+		t.Fatalf("close the server's input: %v", err)
+	}
+	code, stderr := srv.wait(t)
+	if code != 0 {
+		t.Errorf("run() = %d after its input was closed, want 0", code)
+	}
+	if strings.Contains(stderr, "Server error") {
+		t.Errorf("a closed input was logged as a server error:\n%s", stderr)
+	}
+}
+
+func TestServer_HangUpBeforeTheReplyIsACleanExit(t *testing.T) {
+	// This is the disconnect CI caught: the client sends a request and goes
+	// away before the server answers. The server's reply then finds the read
+	// side at EOF, the SDK records "server is closing: EOF" as a write error,
+	// and server.Run returns it. Nothing failed, and the process used to exit 1.
+	// The race goes the server's way only occasionally, so it is run 20 times.
+	fakeCLI(t, "{}")
+	const initialize = `{"jsonrpc":"2.0","id":1,"method":"initialize","params":` +
+		`{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"x","version":"1"}}}` + "\n"
+
+	for i := 0; i < 20; i++ {
+		srv, stdoutR, stdinW := launch(t)
+		go func() { _, _ = io.Copy(io.Discard, stdoutR) }()
+
+		if _, err := stdinW.Write([]byte(initialize)); err != nil {
+			t.Fatalf("write initialize: %v", err)
+		}
+		if err := stdinW.Close(); err != nil {
+			t.Fatalf("close the server's input: %v", err)
+		}
+		code, stderr := srv.wait(t)
+		if code != 0 || strings.Contains(stderr, "Server error") {
+			t.Fatalf("attempt %d: run() = %d after the client hung up mid-request, want 0; stderr:\n%s", i, code, stderr)
+		}
+	}
+}
+
+func TestServer_TransportFailureStillExitsOne(t *testing.T) {
+	// The clean-exit rule must not swallow real failures. A peer that sends
+	// something that is not JSON-RPC has broken the transport, and the process
+	// has to say so with exit 1 and the reason on stderr.
+	fakeCLI(t, "{}")
+	srv, _, stdinW := launch(t)
+
+	if _, err := stdinW.Write([]byte("this is not json-rpc\n")); err != nil {
+		t.Fatalf("write garbage: %v", err)
+	}
+	code, stderr := srv.wait(t)
+	if code != 1 {
+		t.Errorf("run() = %d after a malformed message, want 1", code)
+	}
+	if !strings.Contains(stderr, "Server error") {
+		t.Errorf("a transport failure was not reported on stderr:\n%s", stderr)
+	}
+}
+
+func TestServer_MissingCLIExitsOne(t *testing.T) {
+	// Without llm-semantic every tool call would fail. The server must refuse
+	// to start, not come up advertising tools it cannot run.
+	original := mcpserver.BinaryPath
+	mcpserver.BinaryPath = filepath.Join(t.TempDir(), "no-such-llm-semantic")
+	t.Cleanup(func() { mcpserver.BinaryPath = original })
+
+	var stderr bytes.Buffer
+	code := run(context.Background(), &mcp.IOTransport{Reader: os.Stdin, Writer: os.Stdout}, &stderr)
+	if code != 1 {
+		t.Errorf("run() = %d with the CLI missing, want 1", code)
+	}
+	if !strings.Contains(stderr.String(), "llm-semantic binary not found") {
+		t.Errorf("stderr does not say the CLI is missing:\n%s", stderr.String())
+	}
+}
+
+func TestServer_InstructionsStateTheRegisteredToolCount(t *testing.T) {
+	// The instructions are the model's first description of the server. They
+	// said "4 tools" while 16 were registered, so the model was told the
+	// surface was a quarter of its real size. This reads what the client
+	// actually receives and pins it to the definitions, so it cannot drift.
+	fakeCLI(t, "{}")
+	srv := startServer(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	res, err := srv.session.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatalf("ListTools: %v", err)
+	}
+
+	instructions := srv.session.InitializeResult().Instructions
+	want := fmt.Sprintf("with %d tools", len(res.Tools))
+	if !strings.Contains(instructions, want) {
+		t.Errorf("instructions do not say %q though %d tools are registered:\n%s", want, len(res.Tools), instructions)
+	}
+	if n := len(mcpserver.GetToolDefinitions()); n != len(res.Tools) {
+		t.Errorf("GetToolDefinitions has %d tools, the client sees %d", n, len(res.Tools))
 	}
 }
