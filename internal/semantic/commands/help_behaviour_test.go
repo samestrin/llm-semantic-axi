@@ -111,3 +111,67 @@ func TestIndexStatusAXICarriesHelpJSONDoesNot(t *testing.T) {
 		t.Errorf("--axi status has no help:\n%s", ax)
 	}
 }
+
+// TestStatusHelpPointsAnEmptyIndexAtIndexing: an index holding no files or no
+// chunks is not a working one, so the help must say to build it, not to search.
+func TestStatusHelpPointsAnEmptyIndexAtIndexing(t *testing.T) {
+	withAXI(t)
+	for _, s := range []indexStatusJSON{{Indexed: true}, {Indexed: true, FilesIndexed: 3}, {Indexed: true, ChunksTotal: 3}} {
+		got, ok := withStatusHelp(s).(indexStatusAXI)
+		if !ok || len(got.Help) != 1 || !strings.Contains(got.Help[0], "llm-semantic index <path>") {
+			t.Errorf("%+v help = %+v", s, got.Help)
+		}
+	}
+	healthy := withStatusHelp(indexStatusJSON{Indexed: true, FilesIndexed: 1, ChunksTotal: 2}).(indexStatusAXI)
+	if strings.Contains(strings.Join(healthy.Help, " "), "populate") {
+		t.Errorf("healthy index told to populate: %v", healthy.Help)
+	}
+}
+
+// TestMemorySearchHelpInAXIOnly: memory search results and zero-results carry
+// help under --axi; --json keeps its bare array.
+func TestMemorySearchHelpInAXIOnly(t *testing.T) {
+	memoryWorkspace(t)
+	run := func(opts memorySearchOpts) string {
+		return captureStdout(t, func() {
+			if err := runMemorySearch(context.Background(), opts); err != nil {
+				t.Fatalf("runMemorySearch: %v", err)
+			}
+		})
+	}
+	js := run(memorySearchOpts{query: "authentication tokens", topK: 5, jsonOutput: true})
+	if strings.Contains(js, `"help"`) {
+		t.Errorf("--json has help:\n%s", js)
+	}
+	withAXI(t)
+	if out := run(memorySearchOpts{query: "authentication tokens", topK: 5}); !strings.Contains(out, "help[") || !strings.Contains(out, "browse stored entries") {
+		t.Errorf("--axi results lack help:\n%s", out)
+	}
+	if out := run(memorySearchOpts{query: "authentication", topK: 5, threshold: 0.99}); !strings.Contains(out, "help[") || !strings.Contains(out, "--threshold 0") {
+		t.Errorf("--axi zero-result lacks help:\n%s", out)
+	}
+}
+
+// TestMultisearchHelpInAXIOnly: results and zero-results carry help under
+// --axi; --json has no help key.
+func TestMultisearchHelpInAXIOnly(t *testing.T) {
+	indexedWorkspace(t)
+	queries := []string{"authenticate token", "validate"}
+	run := func(opts multisearchOpts) string {
+		return captureStdout(t, func() {
+			if err := runMultisearch(context.Background(), queries, opts); err != nil {
+				t.Fatalf("runMultisearch: %v", err)
+			}
+		})
+	}
+	if js := run(multisearchOpts{topK: 5, jsonOutput: true}); strings.Contains(js, `"help"`) {
+		t.Errorf("--json has help:\n%s", js)
+	}
+	withAXI(t)
+	if out := run(multisearchOpts{topK: 5}); !strings.Contains(out, "help[") || !strings.Contains(out, "callers") || strings.Contains(out, "message:") {
+		t.Errorf("--axi results wrong:\n%s", out)
+	}
+	if out := run(multisearchOpts{topK: 5, threshold: 0.99}); !strings.Contains(out, "help[") || !strings.Contains(out, "--threshold 0") || !strings.Contains(out, "message:") {
+		t.Errorf("--axi zero-result wrong:\n%s", out)
+	}
+}
