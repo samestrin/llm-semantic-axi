@@ -198,3 +198,41 @@ func TestJSONOutputUnchangedByAXIShaping(t *testing.T) {
 		t.Errorf("--json differs with --full:\n%s\n%s", a, b)
 	}
 }
+
+// TestAXIMinKeepsCompactShape: --min under --axi must stay the compact row it
+// has always been, not the new default; an agent that asked for --min asked
+// for the smaller form.
+func TestAXIMinKeepsCompactShape(t *testing.T) {
+	indexedWithLongFunc(t)
+	withAXI(t)
+	search := captureStdout(t, func() {
+		if err := runSearch(context.Background(), "LongFunc", searchOpts{topK: 20, minOutput: true}); err != nil {
+			t.Fatalf("runSearch: %v", err)
+		}
+	})
+	if !strings.Contains(search, "line") || strings.Contains(search, "content") || strings.Contains(search, "sample.go:") {
+		t.Errorf("search --axi --min is not the compact row:\n%s", search)
+	}
+	multi := captureStdout(t, func() {
+		if err := runMultisearch(context.Background(), []string{"LongFunc"}, multisearchOpts{topK: 20, minOutput: true}); err != nil {
+			t.Fatalf("runMultisearch: %v", err)
+		}
+	})
+	if !strings.Contains(multi, "boosted") || !strings.Contains(multi, "line") || strings.Contains(multi, "content") {
+		t.Errorf("multisearch --axi --min is not the compact payload:\n%s", multi)
+	}
+}
+
+// TestMemoryAXIMinKeepsCompactShape: same guard for memory search.
+func TestMemoryAXIMinKeepsCompactShape(t *testing.T) {
+	memoryWorkspace(t)
+	withAXI(t)
+	out := captureStdout(t, func() {
+		if err := runMemorySearch(context.Background(), memorySearchOpts{query: "authentication tokens", topK: 5, minOutput: true}); err != nil {
+			t.Fatalf("runMemorySearch: %v", err)
+		}
+	})
+	if !strings.Contains(out, "mem-auth") || strings.Contains(out, "answer") || strings.Contains(out, "question") {
+		t.Errorf("memory search --axi --min is not the compact row:\n%s", out)
+	}
+}
