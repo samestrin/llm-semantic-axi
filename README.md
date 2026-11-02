@@ -93,6 +93,8 @@ Where `llm-semantic` stands against the ten principles on [axi.md](https://axi.m
 | 9 | Contextual disclosure (`help[]` next steps) | Met | `--axi` output of the search family, `memory search`, `multisearch` and `index-status` carries a `help` list of suggested next steps, as does the missing-index error. |
 | 10 | Consistent `--help` on every subcommand | Met | `--help` exits 0 on all subcommands. |
 
+Scope note for rows 2-5: they are met in `--axi` (and plain, where the note says so). `--json` keeps its pre-05.1 schema by board decision (2026-10-31) — full fields, untruncated content, and a bare result array without `total` or a zero-result message — so the machine-readable JSON mode does not meet principles 2-5 and is a standing exception with that reason.
+
 ## Languages
 
 Every extension `RegisterAllChunkers` registers, and what indexes it. A test (`TestReadmeLanguageTable_MatchesRegisteredExtensions`) fails when this table and the registered extensions disagree.
