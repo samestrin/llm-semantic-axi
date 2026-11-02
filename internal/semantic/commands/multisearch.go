@@ -136,6 +136,10 @@ func runMultisearch(ctx context.Context, queries []string, opts multisearchOpts)
 	if err != nil {
 		return fmt.Errorf("multisearch failed: %w", err)
 	}
+	indexEmpty, err := zeroResultsIndexEmpty(ctx, components.Storage, result.TotalResults)
+	if err != nil {
+		return err
+	}
 
 	// Apply output format if specified
 	if opts.outputFormat != "" && opts.outputFormat != semantic.OutputBlended {
@@ -144,9 +148,9 @@ func runMultisearch(ctx context.Context, queries []string, opts multisearchOpts)
 
 	// Output results
 	if opts.jsonOutput || opts.minOutput || GlobalAXIOutput {
-		return outputMultisearchJSON(queries, result, opts.minOutput, opts.full)
+		return outputMultisearchJSON(queries, result, opts.minOutput, opts.full, indexEmpty)
 	}
-	return outputMultisearchText(queries, result)
+	return outputMultisearchText(queries, result, indexEmpty)
 }
 
 // noMultisearchResults is the zero-result sentence for plain and --axi.
@@ -157,7 +161,7 @@ func noMultisearchResults(queries []string) string {
 	return fmt.Sprintf("No results found for any of the %d queries.", len(queries))
 }
 
-func outputMultisearchJSON(queries []string, result *semantic.MultisearchResult, minimal, full bool) error {
+func outputMultisearchJSON(queries []string, result *semantic.MultisearchResult, minimal, full, indexEmpty bool) error {
 	payload := multisearchPayload(result, minimal)
 	if GlobalAXIOutput && !minimal && !full {
 		payload = multisearchAXIPayload(result)
@@ -177,10 +181,11 @@ func outputMultisearchJSON(queries []string, result *semantic.MultisearchResult,
 	if err := json.Unmarshal(b, &withMessage); err != nil {
 		return err
 	}
+	withMessage["help"] = resultHelp(result.TotalResults)
 	if result.TotalResults == 0 {
 		withMessage["message"] = noMultisearchResults(queries)
+		markZeroResults(withMessage, indexEmpty)
 	}
-	withMessage["help"] = resultHelp(result.TotalResults)
 	return emitStdout(withMessage)
 }
 
@@ -295,12 +300,16 @@ func multisearchPayload(result *semantic.MultisearchResult, minimal bool) any {
 	return result
 }
 
-func outputMultisearchText(queries []string, result *semantic.MultisearchResult) error {
+func outputMultisearchText(queries []string, result *semantic.MultisearchResult, indexEmpty bool) error {
 	fmt.Printf("Multisearch: %d queries, %d results\n\n", result.TotalQueries, result.TotalResults)
 
 	// The total, not the blended list: a grouped format leaves that list
 	// empty by design, and checking it printed "No results found." under a
 	// header that counted results.
+	if indexEmpty {
+		fmt.Println(emptyIndexMessage)
+		return nil
+	}
 	if result.TotalResults == 0 {
 		fmt.Println(noMultisearchResults(queries))
 		return nil

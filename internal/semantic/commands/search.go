@@ -238,6 +238,10 @@ func runSearch(ctx context.Context, query string, opts searchOpts) error {
 	if err != nil {
 		return fmt.Errorf("search failed: %w", err)
 	}
+	indexEmpty, err := zeroResultsIndexEmpty(ctx, components.Storage, len(results))
+	if err != nil {
+		return err
+	}
 
 	// Output results
 	query = strings.TrimSpace(query)
@@ -253,9 +257,17 @@ func runSearch(ctx context.Context, query string, opts searchOpts) error {
 			default:
 				rows = axiSearchRows(results)
 			}
-			return emitStdout(axiResultList(query, rows, len(results), resultHelp(len(results))))
+			payload := axiResultList(query, rows, len(results), resultHelp(len(results)))
+			if len(results) == 0 {
+				markZeroResults(payload, indexEmpty)
+			}
+			return emitStdout(payload)
 		}
 		return outputJSON(results, opts.minOutput)
+	}
+	if indexEmpty {
+		fmt.Println(emptyIndexMessage)
+		return nil
 	}
 	return outputText(query, results)
 }
@@ -554,7 +566,37 @@ Returns ranked results based on semantic similarity.`, profileName, profileName)
 	return cmd
 }
 
-// indexIsEmpty reports whether the index holds no chunks.
+// indexIsEmpty reports whether the index holds no chunks. A search over such an
+// index searched nothing, which is not the same answer as matching nothing.
 func indexIsEmpty(ctx context.Context, storage semantic.Storage) (bool, error) {
-	return false, nil
+	stats, err := storage.Stats(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to read index stats: %w", err)
+	}
+	return stats.ChunksTotal == 0, nil
+}
+
+// zeroResultsIndexEmpty checks an empty answer: true when the index itself is
+// empty. A non-empty answer is not checked.
+func zeroResultsIndexEmpty(ctx context.Context, storage semantic.Storage, total int) (bool, error) {
+	if total > 0 {
+		return false, nil
+	}
+	return indexIsEmpty(ctx, storage)
+}
+
+// emptyIndexMessage is the sentence the search family prints over an index
+// that holds no chunks, in plain and --axi alike.
+const emptyIndexMessage = "The index is empty (0 chunks), so nothing was searched. Run `llm-semantic index <path>` to build it."
+
+// markZeroResults gives an empty --axi answer a status an agent can branch on:
+// index_empty when there was nothing to search, no_match otherwise.
+func markZeroResults(payload map[string]any, indexEmpty bool) {
+	if indexEmpty {
+		payload["status"] = "index_empty"
+		payload["message"] = emptyIndexMessage
+		payload["help"] = indexMissingHelp
+		return
+	}
+	payload["status"] = "no_match"
 }
