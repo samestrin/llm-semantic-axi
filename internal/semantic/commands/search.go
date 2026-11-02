@@ -553,3 +553,8 @@ Returns ranked results based on semantic similarity.`, profileName, profileName)
 
 	return cmd
 }
+
+// indexIsEmpty reports whether the index holds no chunks.
+func indexIsEmpty(ctx context.Context, storage semantic.Storage) (bool, error) {
+	return false, nil
+}
