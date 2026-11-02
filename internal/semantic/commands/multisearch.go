@@ -21,6 +21,7 @@ func multisearchCmd() *cobra.Command {
 		outputFormat string
 		jsonOutput   bool
 		minOutput    bool
+		full         bool
 	)
 
 	cmd := &cobra.Command{
@@ -78,6 +79,7 @@ Examples:
 				outputFormat: semantic.OutputFormat(outputFormat),
 				jsonOutput:   jsonOutput,
 				minOutput:    minOutput,
+				full:         full,
 			})
 		},
 	}
@@ -90,6 +92,7 @@ Examples:
 	cmd.Flags().StringVar(&outputFormat, "output", "", "Output format: blended (default), by_query, by_collection")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output results as JSON")
 	cmd.Flags().BoolVar(&minOutput, "min", false, "Output minimal JSON format")
+	cmd.Flags().BoolVar(&full, "full", false, "With --axi, return every field and the whole content of each result")
 
 	return cmd
 }
@@ -103,6 +106,7 @@ type multisearchOpts struct {
 	outputFormat semantic.OutputFormat
 	jsonOutput   bool
 	minOutput    bool
+	full         bool
 }
 
 func runMultisearch(ctx context.Context, queries []string, opts multisearchOpts) error {
@@ -140,7 +144,7 @@ func runMultisearch(ctx context.Context, queries []string, opts multisearchOpts)
 
 	// Output results
 	if opts.jsonOutput || opts.minOutput || GlobalAXIOutput {
-		return outputMultisearchJSON(queries, result, opts.minOutput)
+		return outputMultisearchJSON(queries, result, opts.minOutput, opts.full)
 	}
 	return outputMultisearchText(queries, result)
 }
@@ -153,8 +157,11 @@ func noMultisearchResults(queries []string) string {
 	return fmt.Sprintf("No results found for any of the %d queries.", len(queries))
 }
 
-func outputMultisearchJSON(queries []string, result *semantic.MultisearchResult, minimal bool) error {
+func outputMultisearchJSON(queries []string, result *semantic.MultisearchResult, minimal, full bool) error {
 	payload := multisearchPayload(result, minimal)
+	if GlobalAXIOutput && !minimal && !full {
+		payload = multisearchAXIPayload(result)
+	}
 	if !GlobalAXIOutput {
 		return emitStdout(payload)
 	}
@@ -175,6 +182,50 @@ func outputMultisearchJSON(queries []string, result *semantic.MultisearchResult,
 	}
 	withMessage["help"] = resultHelp(result.TotalResults)
 	return emitStdout(withMessage)
+}
+
+// multisearchAXIPayload is the default --axi multisearch body: the totals
+// --json carries, with each hit cut to file, name, score and content. score is
+// the boosted score, the one the list is ranked by. --full keeps the raw result.
+func multisearchAXIPayload(result *semantic.MultisearchResult) map[string]any {
+	rows := func(rs []semantic.EnhancedResult) []map[string]any {
+		out := make([]map[string]any, len(rs))
+		for i, r := range rs {
+			out[i] = map[string]any{
+				"file":    fmt.Sprintf("%s:%d", r.Chunk.FilePath, r.Chunk.StartLine),
+				"name":    r.Chunk.Name,
+				"score":   r.BoostedScore,
+				"content": axiCut(r.Chunk.Content),
+			}
+		}
+		return out
+	}
+	payload := map[string]any{
+		"total_queries":   result.TotalQueries,
+		"total_results":   result.TotalResults,
+		"queries_matched": result.QueriesMatched,
+	}
+	if result.Format != "" {
+		payload["format"] = result.Format
+	}
+	if result.Results != nil {
+		payload["results"] = rows(result.Results)
+	}
+	if result.ByQuery != nil {
+		g := map[string][]map[string]any{}
+		for k, v := range result.ByQuery {
+			g[k] = rows(v)
+		}
+		payload["by_query"] = g
+	}
+	if result.ByCollection != nil {
+		g := map[string][]map[string]any{}
+		for k, v := range result.ByCollection {
+			g[k] = rows(v)
+		}
+		payload["by_collection"] = g
+	}
+	return payload
 }
 
 // multisearchPayload is what --json and --min print.
