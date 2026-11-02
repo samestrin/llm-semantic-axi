@@ -22,6 +22,31 @@ type indexStatusJSON struct {
 	Calibration  *semantic.CalibrationMetadata `json:"calibration,omitempty"` // Optional
 }
 
+// indexStatusAXI is the --axi form of the status: the same fields plus help.
+// --json keeps indexStatusJSON.
+type indexStatusAXI struct {
+	indexStatusJSON
+	Help []string `json:"help,omitempty"`
+}
+
+// withStatusHelp adds next steps to the --axi status. An index with no files
+// or chunks is not a working one, so it is pointed at indexing, not search.
+func withStatusHelp(s indexStatusJSON) any {
+	if !GlobalAXIOutput {
+		return s
+	}
+	out := indexStatusAXI{indexStatusJSON: s}
+	if s.FilesIndexed == 0 || s.ChunksTotal == 0 {
+		out.Help = []string{"The index is empty. Run `llm-semantic index <path>` to populate it"}
+	} else {
+		out.Help = []string{
+			"Run `llm-semantic search \"<query>\"` to search the index",
+			"Run `llm-semantic index-update` to pick up changed files",
+		}
+	}
+	return out
+}
+
 func indexStatusCmd() *cobra.Command {
 	var jsonOutput bool
 
@@ -44,7 +69,7 @@ func runIndexStatus(ctx context.Context, jsonOutput bool) error {
 	if indexPath == "" && storageType != "qdrant" {
 		// An error, not a printed notice: exiting 0 here told a script that
 		// the status check succeeded when there was no index to check.
-		return semantic.ErrIndexNotFound()
+		return withHelp(semantic.ErrIndexNotFound(), indexMissingHelp...)
 	}
 
 	// For Qdrant, we need to probe the embedder to get dimensions
@@ -122,7 +147,7 @@ func runIndexStatus(ctx context.Context, jsonOutput bool) error {
 		} else {
 			result.Path = indexPath
 		}
-		return emitStdout(result)
+		return emitStdout(withStatusHelp(result))
 	}
 
 	fmt.Printf("Semantic Index Status\n")

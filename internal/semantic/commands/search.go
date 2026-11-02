@@ -239,7 +239,7 @@ func runSearch(ctx context.Context, query string, opts searchOpts) error {
 	query = strings.TrimSpace(query)
 	if opts.jsonOutput || opts.minOutput || GlobalAXIOutput {
 		if GlobalAXIOutput {
-			return emitStdout(axiResultList(query, searchRows(results, opts.minOutput), len(results)))
+			return emitStdout(axiResultList(query, searchRows(results, opts.minOutput), len(results), resultHelp(len(results))))
 		}
 		return outputJSON(results, opts.minOutput)
 	}
@@ -264,11 +264,12 @@ func noResultsFor(query string) string {
 // message when it is empty: a bare empty list reads as nothing at all, not as
 // a search that ran and matched nothing. --json keeps its bare array (board
 // decision, 2026-10-31), so this is --axi only.
-func axiResultList(query string, rows any, total int) map[string]any {
+func axiResultList(query string, rows any, total int, help []string) map[string]any {
 	payload := map[string]any{
 		"query":   query,
 		"total":   total,
 		"results": rows,
+		"help":    help,
 	}
 	if total == 0 {
 		// An empty list, not the null --json prints for a nil slice.
@@ -276,6 +277,22 @@ func axiResultList(query string, rows any, total int) map[string]any {
 		payload["message"] = noResultsFor(query) + "."
 	}
 	return payload
+}
+
+// resultHelp is the --axi next-step list for a search: where to go from a hit,
+// or how to widen a search that matched nothing.
+func resultHelp(total int) []string {
+	if total == 0 {
+		return []string{
+			"Lower the cutoff with `--threshold 0` and drop `--type` or `--path` filters",
+			"Try `--hybrid` to add lexical matching to the vector search",
+			"Run `llm-semantic index-status` to confirm the index holds the files you expect",
+		}
+	}
+	return []string{
+		"Run `llm-semantic callers <name>` or `llm-semantic refs <name>` on a result to see its call sites (Go only)",
+		"Narrow with `--path <prefix>` or `--type <kind>`, or raise `--top` for more results",
+	}
 }
 
 func outputJSON(results []semantic.SearchResult, minimal bool) error {
