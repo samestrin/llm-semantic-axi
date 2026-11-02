@@ -76,6 +76,23 @@ Any OpenAI-compatible embedding endpoint works — TEI, Ollama, vLLM, OpenAI, Az
 
 TOON encoding goes through [go-axi](https://github.com/samestrin/go-axi), which guards against the failure mode the raw codec has: a type it cannot encode does not error, it emits **empty output**, and a command then silently prints nothing.
 
+## AXI conformance
+
+Where `llm-semantic` stands against the ten principles on [axi.md](https://axi.md). This table is the current record; `docs/axi-audit.md` is the snapshot it replaced.
+
+| # | Principle | Status | Notes |
+|---|---|---|---|
+| 1 | Token-efficient output (TOON) | Met | `--axi` is a persistent flag on every command; the MCP server runs the CLI with `--axi` too. |
+| 2 | Minimal default schemas (3-4 fields per item) | Met | `--axi` search rows carry four fields (`file` as `path:line`, `name`, `score`, `content`); `memory search` carries `id`, `question`, `score`, `answer`. `--full` opts back into every field. |
+| 3 | Content truncation with a size hint and `--full` | Met | `--axi` cuts content over 200 characters and says how many were left out. `--full` returns the whole text. |
+| 4 | Pre-computed aggregates, always a total | Met | The search family states its total (`N results for "query"` plain, `total` in `--axi`); `multisearch` reports `total_queries` and `total_results`. |
+| 5 | Definitive empty states | Met | An empty search says it found nothing in plain and `--axi` (`message`). `callers`/`refs` distinguish `symbol not indexed`, `not indexed for edges` and a genuine empty answer (see "Known limit" above). |
+| 6 | Structured errors on stdout, exit 0/1, idempotent, never prompt | **Exception** (two) | a) A malformed invocation exits 2 and plain-mode errors go to stderr — a deliberate go-axi convention, kept so a usage mistake reads differently from a command failure. b) `collection delete` without `--force` and `memory stats --prune` without `--yes` still prompt, and a declined prompt exits 0. That is a known gap, tracked as technical debt. Everything else prints structured errors on stdout (`error: true` in `--json`, TOON in `--axi`) and exits 0/1. |
+| 7 | Ambient context (`setup` command, Agent Skill) | Met | `llm-semantic setup` writes a SessionStart hook and an Agent Skill into the project's `.claude/` (see Usage). |
+| 8 | Content first (no-argument run shows live data) | Met | A bare `llm-semantic` prints a description, the executable path (home as `~`) and the index status for the current directory. |
+| 9 | Contextual disclosure (`help[]` next steps) | Met | `--axi` output of the search family, `memory search`, `multisearch` and `index-status` carries a `help` list of suggested next steps, as does the missing-index error. |
+| 10 | Consistent `--help` on every subcommand | Met | `--help` exits 0 on all subcommands. |
+
 ## Languages
 
 Every extension `RegisterAllChunkers` registers, and what indexes it. A test (`TestReadmeLanguageTable_MatchesRegisteredExtensions`) fails when this table and the registered extensions disagree.

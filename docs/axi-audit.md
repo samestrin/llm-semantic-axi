@@ -2,7 +2,7 @@
 
 - **Audited:** 2026-11-01, on a `make build` of `main` at `d7daeaf`.
 - **Method:** by hand. `axi-axi` is not installed on the build host. Each principle was checked against the text on https://axi.md, by running `build/llm-semantic` in an empty temp directory and reading the code the output comes from.
-- **Status:** a snapshot. Epics 05 and 05.1 close the gaps below. Once 05.1 T5 adds the README conformance table, that table is the current record and this file is only history.
+- **Status:** a snapshot. Epics 05 and 05.1 close the gaps below. The README's "AXI conformance" section (05.1 T6) is now the current record; this file is only history.
 
 | # | Principle (axi.md) | Verdict | Evidence | Closed by |
 |---|---|---|---|---|
