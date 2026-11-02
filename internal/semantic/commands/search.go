@@ -20,6 +20,7 @@ func searchCmd() *cobra.Command {
 		pathFilter       string
 		jsonOutput       bool
 		minOutput        bool
+		full             bool
 		hybrid           bool
 		fusionK          int
 		fusionAlpha      float64
@@ -109,6 +110,7 @@ how many candidates are fetched before reranking (default: max(topK*5, 50)).`,
 				pathFilter:       pathFilter,
 				jsonOutput:       jsonOutput,
 				minOutput:        minOutput,
+				full:             full,
 				hybrid:           hybrid,
 				fusionK:          fusionK,
 				fusionAlpha:      fusionAlpha,
@@ -132,6 +134,7 @@ how many candidates are fetched before reranking (default: max(topK*5, 50)).`,
 	cmd.Flags().StringVarP(&pathFilter, "path", "p", "", "Filter by path prefix")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output results as JSON")
 	cmd.Flags().BoolVar(&minOutput, "min", false, "Output minimal JSON format")
+	cmd.Flags().BoolVar(&full, "full", false, "With --axi, return every field and the whole content of each result")
 	cmd.Flags().BoolVar(&hybrid, "hybrid", false, "Enable hybrid search (dense + lexical with RRF fusion)")
 	cmd.Flags().IntVar(&fusionK, "fusion-k", 60, "RRF fusion k parameter (higher = smoother ranking)")
 	cmd.Flags().Float64Var(&fusionAlpha, "fusion-alpha", 0.7, "Fusion weight: 1.0 = dense only, 0.0 = lexical only")
@@ -156,6 +159,7 @@ type searchOpts struct {
 	pathFilter       string
 	jsonOutput       bool
 	minOutput        bool
+	full             bool
 	hybrid           bool
 	fusionK          int
 	fusionAlpha      float64
@@ -239,7 +243,17 @@ func runSearch(ctx context.Context, query string, opts searchOpts) error {
 	query = strings.TrimSpace(query)
 	if opts.jsonOutput || opts.minOutput || GlobalAXIOutput {
 		if GlobalAXIOutput {
-			return emitStdout(axiResultList(query, searchRows(results, opts.minOutput), len(results), resultHelp(len(results))))
+			// --full restores the whole chunk, --min keeps its own compact shape.
+			var rows any
+			switch {
+			case opts.full:
+				rows = results
+			case opts.minOutput:
+				rows = searchRows(results, true)
+			default:
+				rows = axiSearchRows(results)
+			}
+			return emitStdout(axiResultList(query, rows, len(results), resultHelp(len(results))))
 		}
 		return outputJSON(results, opts.minOutput)
 	}
@@ -293,6 +307,30 @@ func resultHelp(total int) []string {
 		"Run `llm-semantic callers <name>` or `llm-semantic refs <name>` on a result to see its call sites (Go only)",
 		"Narrow with `--path <prefix>` or `--type <kind>`, or raise `--top` for more results",
 	}
+}
+
+// axiContentLimit is how many characters of a chunk's content --axi shows
+// before cutting it with a size hint.
+const axiContentLimit = 200
+
+// axiSearchRows is the default --axi row: location, name, score and a content
+// excerpt. The rest of the chunk (id, hash, language, line range) is what
+// --full is for. Content that is cut says how much was left out.
+func axiSearchRows(results []semantic.SearchResult) []map[string]any {
+	rows := make([]map[string]any, len(results))
+	for i, r := range results {
+		content := r.Chunk.Content
+		if runes := []rune(content); len(runes) > axiContentLimit {
+			content = fmt.Sprintf("%s… (%d more chars, use --full for all)", string(runes[:axiContentLimit]), len(runes)-axiContentLimit)
+		}
+		rows[i] = map[string]any{
+			"file":    fmt.Sprintf("%s:%d", r.Chunk.FilePath, r.Chunk.StartLine),
+			"name":    r.Chunk.Name,
+			"score":   r.Score,
+			"content": content,
+		}
+	}
+	return rows
 }
 
 func outputJSON(results []semantic.SearchResult, minimal bool) error {
@@ -410,6 +448,7 @@ func searchAliasCmd(name, profileName string) *cobra.Command {
 		pathFilter       string
 		jsonOutput       bool
 		minOutput        bool
+		full             bool
 		hybrid           bool
 		fusionK          int
 		fusionAlpha      float64
@@ -468,6 +507,7 @@ Returns ranked results based on semantic similarity.`, profileName, profileName)
 				pathFilter:       pathFilter,
 				jsonOutput:       jsonOutput,
 				minOutput:        minOutput,
+				full:             full,
 				hybrid:           hybrid,
 				fusionK:          fusionK,
 				fusionAlpha:      fusionAlpha,
@@ -491,6 +531,7 @@ Returns ranked results based on semantic similarity.`, profileName, profileName)
 	cmd.Flags().StringVar(&pathFilter, "path", "", "Filter by file path prefix")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 	cmd.Flags().BoolVar(&minOutput, "min", false, "Minimal output format")
+	cmd.Flags().BoolVar(&full, "full", false, "With --axi, return every field and the whole content of each result")
 	cmd.Flags().BoolVar(&hybrid, "hybrid", false, "Enable hybrid search (dense + lexical with RRF)")
 	cmd.Flags().IntVar(&fusionK, "fusion-k", 60, "RRF smoothing constant (higher = less weight to top ranks)")
 	cmd.Flags().Float64Var(&fusionAlpha, "fusion-alpha", 0.7, "Dense vs lexical weight (0.0=lexical only, 1.0=dense only)")
