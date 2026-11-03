@@ -156,3 +156,17 @@ func TestCppChunker_TypedefStruct(t *testing.T) {
 		{"S", semantic.ChunkStruct, 13, 15},
 	})
 }
+
+// Defends the review finding on epic 09 T2: an array typedef must be named by
+// its identifier, not by the whole declarator text (`Buf[256]`).
+func TestCppChunker_TypedefArrayDeclaratorNames(t *testing.T) {
+	src := "typedef char Buf[256];\n\ntypedef int (*matrix)[4];\n"
+	chunks, err := NewCppChunker().Chunk("t.cpp", []byte(src))
+	if err != nil {
+		t.Fatalf("Chunk: %v", err)
+	}
+	assertChunks(t, chunks, []wantChunk{
+		{"Buf", semantic.ChunkStruct, 1, 1},
+		{"matrix", semantic.ChunkStruct, 3, 3},
+	})
+}

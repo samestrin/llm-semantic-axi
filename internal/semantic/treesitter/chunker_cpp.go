@@ -143,7 +143,7 @@ func (c *CppChunker) extractNamespace(node *gotreesitter.Node, content []byte, p
 func (c *CppChunker) declaratorName(d *gotreesitter.Node, content []byte) (name string, qualified bool) {
 	for d != nil {
 		switch d.Type(c.lang) {
-		case "function_declarator", "pointer_declarator", "reference_declarator", "parenthesized_declarator":
+		case "function_declarator", "pointer_declarator", "reference_declarator", "parenthesized_declarator", "array_declarator":
 			next := GetChildByFieldName(d, "declarator", c.lang)
 			if next == nil && d.NamedChildCount() > 0 {
 				next = d.NamedChild(0)
