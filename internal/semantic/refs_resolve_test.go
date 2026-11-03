@@ -220,3 +220,56 @@ func TestResolveRefs_OnlyWithinCallerLanguage(t *testing.T) {
 		t.Errorf("same-language call resolved to %q, want py-helper", got)
 	}
 }
+
+// TestResolveRefs_JSTSFamily defends two things at once. A .js call to a
+// function defined in .ts (or .ts to .tsx) must link, because JS and TS import
+// each other freely and treating each extension as its own language would leave
+// every such edge unresolved. And the family must not leak: a .ts call must not
+// link to a lone Go chunk, and a .py call must still resolve only to Python.
+func TestResolveRefs_JSTSFamily(t *testing.T) {
+	storage, cleanup := createTestSQLiteStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	chunk := func(id, path, name, lang string) ChunkWithEmbedding {
+		return ChunkWithEmbedding{Chunk: Chunk{ID: id, FilePath: path, Type: ChunkFunction, Name: name, Content: "x", StartLine: 1, EndLine: 3, Language: lang}, Embedding: []float32{0.1}}
+	}
+	chunks := []ChunkWithEmbedding{
+		chunk("js-caller", "a.js", "main", "js"),
+		chunk("ts-format", "b.ts", "format", "ts"),
+		chunk("ts-caller", "c.ts", "render", "ts"),
+		chunk("tsx-button", "d.tsx", "Button", "tsx"),
+		chunk("go-run", "e.go", "run", "go"),
+		chunk("py-caller", "f.py", "entry", "py"),
+		chunk("py-load", "g.py", "load", "py"),
+		chunk("mjs-load", "h.mjs", "load", "mjs"),
+	}
+	if err := storage.CreateBatch(ctx, chunks); err != nil {
+		t.Fatalf("CreateBatch: %v", err)
+	}
+	rs := RefStorage(storage)
+	if err := rs.StoreRefs(ctx, []ChunkRef{
+		{ChunkID: "js-caller", RefType: RefCalls, RefName: "format"},
+		{ChunkID: "ts-caller", RefType: RefCalls, RefName: "Button"},
+		{ChunkID: "ts-caller", RefType: RefCalls, RefName: "run"},
+		{ChunkID: "py-caller", RefType: RefCalls, RefName: "load"},
+	}); err != nil {
+		t.Fatalf("StoreRefs: %v", err)
+	}
+	if err := rs.ResolveRefs(ctx); err != nil {
+		t.Fatalf("ResolveRefs: %v", err)
+	}
+
+	if got := refTarget(t, rs, "js-caller", "format"); got != "ts-format" {
+		t.Errorf(".js call to format resolved to %q, want ts-format", got)
+	}
+	if got := refTarget(t, rs, "ts-caller", "Button"); got != "tsx-button" {
+		t.Errorf(".ts call to Button resolved to %q, want tsx-button", got)
+	}
+	if got := refTarget(t, rs, "ts-caller", "run"); got != "" {
+		t.Errorf(".ts call to run resolved to %q, want unresolved (only a Go run exists)", got)
+	}
+	if got := refTarget(t, rs, "py-caller", "load"); got != "py-load" {
+		t.Errorf(".py call to load resolved to %q, want py-load (the .mjs load is another language)", got)
+	}
+}
