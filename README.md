@@ -106,20 +106,24 @@ Every extension `RegisterAllChunkers` registers, and what indexes it. A test (`T
 | C++ | `.cpp` `.cxx` `.cc` `.hpp` `.hxx` `.hh` `.h` | tree-sitter | no |
 | C# | `.cs` | tree-sitter | no |
 | Java | `.java` | tree-sitter | no |
-| JavaScript | `.js` `.jsx` `.mjs` `.cjs` | tree-sitter | no |
+| JavaScript | `.js` `.jsx` `.mjs` `.cjs` | tree-sitter | yes |
 | Kotlin | `.kt` `.kts` | tree-sitter | no |
 | PHP | `.php` `.php5` `.php7` `.phtml` | tree-sitter | no |
-| Python | `.py` `.pyi` `.pyw` | tree-sitter | no |
+| Python | `.py` `.pyi` `.pyw` | tree-sitter | yes |
 | Ruby | `.rb` | tree-sitter | no |
 | Rust | `.rs` | tree-sitter | no |
-| TypeScript | `.ts` `.tsx` `.mts` `.cts` | tree-sitter | no |
+| TypeScript | `.ts` `.tsx` `.mts` `.cts` | tree-sitter | yes |
 | Markdown | `.md` `.markdown` | markdown | no |
 | HTML | `.html` `.htm` | HTML | no |
 | Other text | `.adoc` `.bash` `.cfg` `.conf` `.csv` `.diff` `.fish` `.ini` `.json` `.log` `.patch` `.rst` `.sh` `.text` `.toml` `.txt` `.xml` `.yaml` `.yml` `.zsh` | generic text windows | no |
 
-## Known limit: call edges are Go-only
+## Known limit: call edges exist for Go, JavaScript, TypeScript and Python only
 
-`callers` and `refs` read call edges from the index, and only the Go chunker emits them (see the table above). **An empty `callers` result in a Python, JavaScript or any other non-Go file means "not indexed for edges", not "no callers."** Do not read it as proof.
+`callers` and `refs` read call edges from the index, and only the Go, JavaScript, TypeScript and Python chunkers emit them (see the table above). **An empty `callers` result in a Java, Rust or any other file whose row says `no` means "not indexed for edges", not "no callers."** Do not read it as proof.
+
+JavaScript and TypeScript record a call only when the callee is a bare name (`foo()`) or has a `this.` receiver (`this.foo()`). `obj.foo()`, `a.b.foo()` and `super.foo()` are not recorded, so an empty `callers` for a method that is only called through another object is still not proof.
+
+**An index built before this change has no JavaScript, TypeScript or Python edges. Run `llm-semantic index --force` to rebuild it;** `index-update` does not re-chunk files whose hash is unchanged.
 
 The commands say which case an empty answer is, in plain and `--axi` output (`--axi` adds a `status` field): `symbol not indexed` when no chunk carries the name, `not indexed for edges` when the symbol is indexed only in languages the index holds no edges for, and `recorded in the call graph` only when an empty answer is genuine. `--json` keeps its old shape and does not carry this.
 
