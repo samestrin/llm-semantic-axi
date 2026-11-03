@@ -191,7 +191,9 @@ treating every `type`-bearing point as a chunk, will misclassify points. To
 select:
 
 - chunks → points having `chunk_id` (this is how `Stats` counts them for
-  `chunks_total`, `:673-679`);
+  `chunks_total` and counts their distinct `file_path` for `files_indexed`,
+  `:669-703`; `chunk_id` carries a keyword payload index, created on every
+  open, `:211-216`);
 - file-hash bookkeeping → `type == "file_hash"` (this is how
   `ListIndexedFiles` selects them, `:1342-1346`);
 - calibration metadata → `type == "calibration_metadata"` (read by ID at
