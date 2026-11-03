@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"gopkg.in/yaml.v3"
+	"github.com/samestrin/llm-semantic-axi/internal/semantic/config"
 )
 
 // BinaryPath is the path to the llm-semantic binary
@@ -84,38 +84,6 @@ func init() {
 	}
 }
 
-// SemanticConfig represents the semantic section of config.yaml
-type SemanticConfig struct {
-	CodeCollection    string `yaml:"code_collection"`
-	CodeStorage       string `yaml:"code_storage"`
-	DocsCollection    string `yaml:"docs_collection"`
-	DocsStorage       string `yaml:"docs_storage"`
-	MemoryCollection  string `yaml:"memory_collection"`
-	MemoryStorage     string `yaml:"memory_storage"`
-	SprintsCollection string `yaml:"sprints_collection"`
-	SprintsStorage    string `yaml:"sprints_storage"`
-}
-
-// Config represents the root config.yaml structure
-type Config struct {
-	Semantic SemanticConfig `yaml:"semantic"`
-}
-
-// loadConfig loads configuration from a YAML file
-func loadConfig(configPath string) (*Config, error) {
-	data, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read config file %q: %w", configPath, err)
-	}
-
-	var cfg Config
-	if err := yaml.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("failed to parse config file %q: %w", configPath, err)
-	}
-
-	return &cfg, nil
-}
-
 const defaultConfigPath = ".planning/.config/config.yaml"
 
 // resolveProfileSettings applies profile-based defaults to args
@@ -134,31 +102,21 @@ func resolveProfileSettings(args map[string]interface{}) error {
 		configPath = defaultConfigPath
 	}
 
-	// Load the config file - fail fast if profile is set but config can't be loaded
-	cfg, err := loadConfig(configPath)
+	// Unknown profiles are rejected here; GetProfileConfig would quietly fall
+	// back to the code profile.
+	if !config.IsValidProfile(profile) {
+		return fmt.Errorf("unknown profile: %s (valid profiles: %s)", profile, strings.Join(config.ValidProfiles(), ", "))
+	}
+
+	// Load the config file through the CLI's parser - fail fast if profile is
+	// set but config can't be loaded
+	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		return fmt.Errorf("config required for profile %q: %w (expected at %s)", profile, err, configPath)
 	}
 
-	// Look up profile-specific values
-	var collection, storage string
-
-	switch profile {
-	case "code":
-		collection = cfg.Semantic.CodeCollection
-		storage = cfg.Semantic.CodeStorage
-	case "docs":
-		collection = cfg.Semantic.DocsCollection
-		storage = cfg.Semantic.DocsStorage
-	case "memory":
-		collection = cfg.Semantic.MemoryCollection
-		storage = cfg.Semantic.MemoryStorage
-	case "sprints":
-		collection = cfg.Semantic.SprintsCollection
-		storage = cfg.Semantic.SprintsStorage
-	default:
-		return fmt.Errorf("unknown profile: %s (valid profiles: code, docs, memory, sprints)", profile)
-	}
+	pc := cfg.GetProfileConfig(profile)
+	collection, storage := pc.Collection, pc.Storage
 
 	// Apply profile values as defaults (only if not explicitly set)
 	if _, hasCollection := args["collection"].(string); !hasCollection || args["collection"] == "" {
