@@ -1,6 +1,8 @@
 package treesitter
 
 import (
+	"strings"
+
 	"github.com/odvcencio/gotreesitter"
 	"github.com/odvcencio/gotreesitter/grammars"
 	"github.com/samestrin/llm-semantic-axi/internal/semantic"
@@ -160,7 +162,7 @@ func (c *PythonChunker) walkRefs(node *gotreesitter.Node, content []byte, owners
 				if name != "" && innermostChunk(windows, nodeLine(child)) == "" {
 					*refs = append(*refs, semantic.ChunkRef{ChunkID: owners[0].ID, RefType: semantic.RefCalls, RefName: name})
 				}
-			} else if name != "" && name != chunkName(owners, id) {
+			} else if name != "" && bareName(name) != chunkName(owners, id) {
 				*refs = append(*refs, semantic.ChunkRef{ChunkID: id, RefType: semantic.RefCalls, RefName: name})
 			}
 
@@ -178,6 +180,15 @@ func (c *PythonChunker) walkRefs(node *gotreesitter.Node, content []byte, owners
 		}
 		c.walkRefs(child, content, owners, windows, refs)
 	})
+}
+
+// bareName drops a self. or cls. receiver, so f() and self.f() compare equal
+// to the chunk named f: recursion is one rule, whichever way it is spelled.
+func bareName(name string) string {
+	if i := strings.IndexByte(name, '.'); i >= 0 {
+		return name[i+1:]
+	}
+	return name
 }
 
 // callName returns the name a call is recorded under, or "" when its target
