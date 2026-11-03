@@ -48,7 +48,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Fixed
 
 - `search` with an unquoted multi-word query no longer embeds a trailing space; the query is the arguments joined by single spaces, as `code-search`, `docs-search` and `memory-search` already did. (epic 22)
-
+- `refs` lists every `imports` edge as unresolved. Before, an import linked to any lone chunk of the same name, so `import debounce from "lodash/debounce"` pointed at a local `function debounce` (and Go's `import "net/http"` at a lone `func http`). Re-indexing unlinks imports edges an older index had already linked. (epic 03.1)
 - JavaScript and TypeScript call edges: a `this.get()` call links only to a `get` method of the caller's own class, in the same file. Before, it linked to any lone chunk named `get`, so a method was reported as a caller of a top-level function or of another class's method it can never reach. With no such method, or outside a class, the call stays unresolved in `refs` and is never shown as a caller. (epic 03.1)
 - Re-indexing a file edited to remove a chunk's last call now removes that chunk's old call edges; before, an edit that left a file with no calls at all kept every edge it used to have. (epic 03)
 - Opening an index written before the `file_mtime` column existed no longer fails with `no such column: file_mtime`; the migration now runs before the index that references it. (epic 11)

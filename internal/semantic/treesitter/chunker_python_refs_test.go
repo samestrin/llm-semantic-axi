@@ -297,3 +297,59 @@ class Box:
 		t.Errorf("run edges = %v, want %s", got["run"], want)
 	}
 }
+
+// pythonRefStrings extracts refs and renders each as "chunk type:name".
+func pythonRefStrings(t *testing.T, src string) []string {
+	t.Helper()
+	c := NewPythonChunker()
+	chunks, err := c.Chunk("m.py", []byte(src))
+	if err != nil {
+		t.Fatalf("Chunk: %v", err)
+	}
+	refs, err := c.ExtractRefs("m.py", []byte(src), chunks)
+	if err != nil {
+		t.Fatalf("ExtractRefs: %v", err)
+	}
+	names := map[string]string{}
+	for _, ch := range chunks {
+		names[ch.ID] = ch.Name
+	}
+	var got []string
+	for _, r := range refs {
+		got = append(got, names[r.ChunkID]+" "+string(r.RefType)+":"+r.RefName)
+	}
+	return got
+}
+
+// Defends callers on a script entry point: main() under the __main__ guard lies
+// in no chunk, and used to write no edge, so `callers main` answered empty for
+// a function whose only caller is the script body. It belongs to the first
+// chunk, as imports do.
+func TestPythonRefs_ModuleLevelCallAttributedToFirstChunk(t *testing.T) {
+	got := pythonRefStrings(t, "def main():\n    pass\n\nif __name__ == \"__main__\":\n    main()\n")
+	if strings.Join(got, ",") != "main calls:main" {
+		t.Errorf("refs = %v, want [main calls:main]", got)
+	}
+}
+
+// Defends the recursion filter not eating module-level calls: a module-level
+// call to the first chunk's own name is not recursion, so its edge is kept.
+func TestPythonRefs_ModuleLevelCallToFirstChunkNameKeepsEdge(t *testing.T) {
+	got := pythonRefStrings(t, "def run():\n    pass\n\nrun()\n")
+	if strings.Join(got, ",") != "run calls:run" {
+		t.Errorf("refs = %v, want [run calls:run]", got)
+	}
+}
+
+// Defends "nothing to attribute to": a file with a call and no chunk yields no
+// edge and no error rather than a panic or an edge with an empty chunk ID.
+func TestPythonRefs_CallWithNoChunkYieldsNoEdge(t *testing.T) {
+	c := NewPythonChunker()
+	refs, err := c.ExtractRefs("s.py", []byte("print(1)\n"), nil)
+	if err != nil {
+		t.Fatalf("ExtractRefs: %v", err)
+	}
+	if len(refs) != 0 {
+		t.Errorf("refs = %v, want none", refs)
+	}
+}
