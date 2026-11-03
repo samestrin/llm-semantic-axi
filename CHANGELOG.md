@@ -28,6 +28,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - README language table covering every extension `RegisterAllChunkers` registers (language, extensions, chunker, call edges), replacing the stale chunker list under "Known limit". `TestReadmeLanguageTable_MatchesRegisteredExtensions` fails when an extension is registered without a row, a row names an unregistered extension, or a non-Go row claims call edges. (epic 02.1)
 - README gains an "AXI conformance" section: a table of the ten axi.md principles, each marked met or stated as an exception with its reason (usage errors exiting 2, plain-mode errors on stderr, the two commands that still prompt, and a scope note that principles 2-5 are met in `--axi`/plain only — `--json` keeps its pre-05.1 schema by board decision). It is the current record; `docs/axi-audit.md` is now history only. (epic 05.1)
 - `llm-semantic setup`: writes a Claude Code SessionStart hook into the project's `.claude/settings.json` (merged, other keys and hooks kept; refuses a file it cannot parse) and an Agent Skill at `.claude/skills/llm-semantic/SKILL.md`. Prints the paths written, `--dry-run` writes nothing, a second run reports `unchanged`, and it never prompts. (epic 05)
+- The Qdrant backend records the commit and time of the last index, as a new `last_index` point kind (`type`, `commit`, `indexed_at`) documented as section 6 of `docs/storage-contract.md`. The point is additive, so `contract_version` stays at 1. A `--force` re-index keeps it across the collection drop, as it keeps `calibration_metadata`. (epic 04)
 
 ### Changed
 
@@ -47,6 +48,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `search`, the profile search aliases and `multisearch` over an index that exists but holds no chunks no longer print `No results found for "..."`, the same words as a search that matched nothing. They say the index is empty and name `llm-semantic index <path>`; in `--axi` the answer carries `status: index_empty` and a `help` list pointing at `index`. An empty answer over a populated index carries `status: no_match`. `--json` is unchanged. (epic 05.1)
 - `llm-semantic-mcp` exits 0 when a client disconnects, including a client that hangs up or stops reading before the server has replied. Before this, a reply that lost that race made the server print `Server error: server is closing: EOF` or `write |1: broken pipe` and exit 1, or be killed by SIGPIPE, so a supervisor saw a normal session end as a crash. A malformed message from the client, or output that fails for any reason other than a closed pipe, still exits 1 and says why. (epic 07)
 - The MCP server's instructions now give the real number of tools, taken from the tool definitions. They said 4 while 16 were registered. (epic 07)
+- `index-status` on the Qdrant backend no longer reports the moment it was asked as `Last updated`. It reports the recorded time of the last index, and nothing when no index has been recorded; a record it cannot read is an error. (epic 04)
 
 ### Coverage gate
 

@@ -594,9 +594,8 @@ func TestQdrantStorage_StatsSurvivesScrollFailure(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stats should tolerate a scroll failure, got %v", err)
 	}
-	// Two chunks plus the last_index record point.
-	if stats.ChunksTotal != 3 {
-		t.Errorf("Stats ChunksTotal = %d, want 3", stats.ChunksTotal)
+	if stats.ChunksTotal != 2 {
+		t.Errorf("Stats ChunksTotal = %d, want 2", stats.ChunksTotal)
 	}
 	if stats.FilesIndexed != 0 {
 		t.Errorf("Stats FilesIndexed = %d, want 0 when the scroll failed", stats.FilesIndexed)

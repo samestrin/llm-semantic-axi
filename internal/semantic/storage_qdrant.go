@@ -673,15 +673,27 @@ func (s *QdrantStorage) Stats(ctx context.Context) (*IndexStats, error) {
 		chunksTotal = int(*info.PointsCount)
 	}
 
+	// LastUpdated is the recorded index time; empty when none has been recorded.
+	last, err := s.getLastIndexLocked(ctx)
+	if err != nil {
+		return nil, err
+	}
+	lastUpdated := ""
+	if last != nil {
+		lastUpdated = last.IndexedAt.Format(time.RFC3339)
+		// The record is a point but not a chunk; an index with none must still read as empty
+		chunksTotal--
+	}
+
 	return &IndexStats{
 		ChunksTotal:  chunksTotal,
 		FilesIndexed: filesIndexed,
-		LastUpdated:  time.Now().Format(time.RFC3339),
+		LastUpdated:  lastUpdated,
 	}, nil
 }
 
 // Clear removes all points from the Qdrant collection (for force re-index)
-// Preserves calibration metadata across the clear operation.
+// Preserves calibration metadata and the last index record across the clear operation.
 func (s *QdrantStorage) Clear(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -708,6 +720,9 @@ func (s *QdrantStorage) Clear(ctx context.Context) error {
 			}
 		}
 	}
+
+	// Save the last index record too; a failed read loses it, which reads as none recorded
+	savedLastIndex, _ := s.getLastIndexLocked(ctx)
 
 	// Delete collection entirely
 	if err := s.client.DeleteCollection(ctx, s.collectionName); err != nil {
@@ -758,6 +773,11 @@ func (s *QdrantStorage) Clear(ctx context.Context) error {
 				Points:         []*qdrant.PointStruct{point},
 			})
 		}
+	}
+
+	// Restore the last index record if we had one (best effort, as for calibration)
+	if savedLastIndex != nil {
+		_ = s.setLastIndexLocked(ctx, *savedLastIndex)
 	}
 
 	// Sync to parallel FTS index
@@ -1610,17 +1630,76 @@ func (s *QdrantStorage) SetCalibrationMetadata(ctx context.Context, meta *Calibr
 	return nil
 }
 
-// GetLastIndex is not supported on Qdrant: the record is kept only in sqlite.
-func (s *QdrantStorage) GetLastIndex(ctx context.Context) (*LastIndex, error) {
-	return nil, ErrLastIndexUnsupported
-}
-
-// SetLastIndex is not supported on Qdrant: the record is kept only in sqlite.
-func (s *QdrantStorage) SetLastIndex(ctx context.Context, li LastIndex) error {
-	return ErrLastIndexUnsupported
-}
-
 // lastIndexID returns the unique ID of the last_index record point.
 func lastIndexID() string {
 	return stringToUUID("last_index")
+}
+
+// GetLastIndex retrieves the record of the last index.
+// Returns (nil, nil) if none has been recorded yet.
+func (s *QdrantStorage) GetLastIndex(ctx context.Context) (*LastIndex, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.closed {
+		return nil, ErrStorageClosed
+	}
+	return s.getLastIndexLocked(ctx)
+}
+
+// getLastIndexLocked reads the last_index point. The caller holds s.mu.
+func (s *QdrantStorage) getLastIndexLocked(ctx context.Context) (*LastIndex, error) {
+	points, err := s.client.Get(ctx, &qdrant.GetPoints{
+		CollectionName: s.collectionName,
+		Ids:            []*qdrant.PointId{qdrant.NewID(lastIndexID())},
+		WithPayload:    qdrant.NewWithPayload(true),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get last index: %w", err)
+	}
+	if len(points) == 0 {
+		return nil, nil
+	}
+
+	payload := points[0].Payload
+	indexedAt, err := time.Parse(time.RFC3339Nano, payload["indexed_at"].GetStringValue())
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse last index time: %w", err)
+	}
+	return &LastIndex{Commit: payload["commit"].GetStringValue(), IndexedAt: indexedAt}, nil
+}
+
+// SetLastIndex stores the record of the last index, replacing any previous one.
+func (s *QdrantStorage) SetLastIndex(ctx context.Context, li LastIndex) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return ErrStorageClosed
+	}
+	return s.setLastIndexLocked(ctx, li)
+}
+
+// setLastIndexLocked upserts the last_index point. The caller holds s.mu.
+func (s *QdrantStorage) setLastIndexLocked(ctx context.Context, li LastIndex) error {
+	// Create a dummy embedding (zeros) for the metadata point
+	dummyEmbedding := make([]float32, s.embeddingDim)
+
+	point := &qdrant.PointStruct{
+		Id:      qdrant.NewID(lastIndexID()),
+		Vectors: qdrant.NewVectors(dummyEmbedding...),
+		Payload: map[string]*qdrant.Value{
+			"type":       qdrant.NewValueString("last_index"),
+			"commit":     qdrant.NewValueString(li.Commit),
+			"indexed_at": qdrant.NewValueString(li.IndexedAt.UTC().Format(time.RFC3339Nano)),
+		},
+	}
+
+	if _, err := s.client.Upsert(ctx, &qdrant.UpsertPoints{
+		CollectionName: s.collectionName,
+		Points:         []*qdrant.PointStruct{point},
+	}); err != nil {
+		return fmt.Errorf("failed to set last index: %w", err)
+	}
+	return nil
 }

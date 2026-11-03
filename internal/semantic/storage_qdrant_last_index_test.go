@@ -241,3 +241,23 @@ func TestQdrantStorage_LastIndexClosed(t *testing.T) {
 		t.Errorf("SetLastIndex on closed store = %v, want ErrStorageClosed", err)
 	}
 }
+
+// TestQdrantStorage_StatsDoesNotCountLastIndexAsChunk defends the index_empty
+// answer: an index that recorded a run but holds no chunks still reports 0
+// chunks, so a search over it says the index is empty rather than "no match".
+func TestQdrantStorage_StatsDoesNotCountLastIndexAsChunk(t *testing.T) {
+	storage, _ := newFakeQdrantStorage(t, "lastindex_nochunks", 4)
+	ctx := context.Background()
+
+	if err := storage.SetLastIndex(ctx, LastIndex{Commit: "aaaa", IndexedAt: recordedIndexTime}); err != nil {
+		t.Fatalf("SetLastIndex: %v", err)
+	}
+
+	stats, err := storage.Stats(ctx)
+	if err != nil {
+		t.Fatalf("Stats: %v", err)
+	}
+	if stats.ChunksTotal != 0 {
+		t.Errorf("Stats ChunksTotal = %d, want 0: the last_index record is not a chunk", stats.ChunksTotal)
+	}
+}
