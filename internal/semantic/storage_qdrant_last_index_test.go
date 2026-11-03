@@ -298,3 +298,47 @@ func TestQdrantStorage_StatsUncountedCollectionWithLastIndex(t *testing.T) {
 		t.Errorf("Stats LastUpdated = %q, want %q", stats.LastUpdated, want)
 	}
 }
+
+// TestQdrantStorage_StatsCountsOnlyChunkPoints defends the index_empty answer
+// against the points that share the collection with chunks: file hashes,
+// calibration metadata, memory entries and the last_index record are not
+// chunks. Counting them made a calibrated index with no indexable files report
+// chunks, so search answered no_match instead of index_empty.
+func TestQdrantStorage_StatsCountsOnlyChunkPoints(t *testing.T) {
+	storage, _ := newFakeQdrantStorage(t, "stats_chunks_only", 4)
+	ctx := context.Background()
+
+	if err := storage.SetCalibrationMetadata(ctx, &CalibrationMetadata{EmbeddingModel: "m", CalibrationDate: recordedIndexTime}); err != nil {
+		t.Fatalf("SetCalibrationMetadata: %v", err)
+	}
+	if err := storage.SetFileHash(ctx, "/empty.go", "hash"); err != nil {
+		t.Fatalf("SetFileHash: %v", err)
+	}
+	memory := MemoryEntry{ID: "mem-1", Question: "q", Answer: "a", Status: MemoryStatusPending}
+	if err := storage.StoreMemory(ctx, memory, []float32{0, 1, 0, 0}); err != nil {
+		t.Fatalf("StoreMemory: %v", err)
+	}
+	if err := storage.SetLastIndex(ctx, LastIndex{Commit: "aaaa", IndexedAt: recordedIndexTime}); err != nil {
+		t.Fatalf("SetLastIndex: %v", err)
+	}
+
+	stats, err := storage.Stats(ctx)
+	if err != nil {
+		t.Fatalf("Stats: %v", err)
+	}
+	if stats.ChunksTotal != 0 {
+		t.Errorf("Stats ChunksTotal = %d with no chunks stored, want 0: only chunk points are chunks", stats.ChunksTotal)
+	}
+
+	chunk := Chunk{ID: "c-1", FilePath: "/a.go", Type: ChunkFunction, Name: "Alpha", Content: "func Alpha() {}", Language: "go"}
+	if err := storage.Create(ctx, chunk, []float32{1, 0, 0, 0}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	stats, err = storage.Stats(ctx)
+	if err != nil {
+		t.Fatalf("Stats: %v", err)
+	}
+	if stats.ChunksTotal != 1 {
+		t.Errorf("Stats ChunksTotal = %d with one chunk stored, want 1", stats.ChunksTotal)
+	}
+}

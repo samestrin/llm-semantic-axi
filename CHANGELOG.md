@@ -52,6 +52,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `index-status` on the Qdrant backend no longer reports the moment it was asked as `Last updated`. It reports the recorded time of the last index, and nothing when no index has been recorded; a record it cannot read is an error. (epic 04)
 - An `index` or `index-update` in which any file failed to index (an embedding error, an unreadable file) no longer records the last index. It leaves the previous record as it was, so a later search reports the index as behind instead of `fresh` over files that are missing. (epic 04)
 - An `index --force` on the Qdrant backend that stops after clearing the collection (cancelled, or an embedding error) no longer leaves the previous last-index record over the partial index. The record is dropped with the chunks, so a later search reports the staleness as unknown (`no_record`), as on sqlite, instead of `fresh` or `stale`. (epic 04)
+- `chunks_total` on the Qdrant backend counts only chunk points. It counted every point in the collection, file hashes, calibration metadata and memory entries included, so a calibrated index with no chunks (an `index --force` over a directory with no indexable files) made `search` answer `no_match` instead of `index_empty`. A chunk count that fails is now an error. (epic 04)
 
 ### Coverage gate
 
