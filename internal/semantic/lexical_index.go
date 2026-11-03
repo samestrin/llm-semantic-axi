@@ -694,6 +694,18 @@ func (idx *LexicalIndex) GetAllMemoryStats() ([]RetrievalStats, error) {
 		return nil, fmt.Errorf("index is closed")
 	}
 
+	// The memory table belongs to SQLiteStorage, so it exists only when this index
+	// shares a file with one. Join it when present; otherwise leave question and
+	// created_at NULL (the shape of an unmatched LEFT JOIN row).
+	var memoryTables int
+	if err := idx.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'memory'`).Scan(&memoryTables); err != nil {
+		return nil, fmt.Errorf("failed to check for memory table: %w", err)
+	}
+	questionCols, memoryJoin := "NULL, NULL", ""
+	if memoryTables > 0 {
+		questionCols, memoryJoin = "m.question, m.created_at", "LEFT JOIN memory m ON ms.memory_id = m.id"
+	}
+
 	rows, err := idx.db.Query(`
 		SELECT
 			ms.memory_id,
@@ -701,11 +713,10 @@ func (idx *LexicalIndex) GetAllMemoryStats() ([]RetrievalStats, error) {
 			ms.last_retrieved,
 			ms.status,
 			COALESCE(AVG(rl.score), 0) as avg_score,
-			m.question,
-			m.created_at
+			` + questionCols + `
 		FROM memory_stats ms
 		LEFT JOIN retrieval_log rl ON ms.memory_id = rl.memory_id
-		LEFT JOIN memory m ON ms.memory_id = m.id
+		` + memoryJoin + `
 		GROUP BY ms.memory_id
 		ORDER BY ms.retrieval_count DESC
 	`)
