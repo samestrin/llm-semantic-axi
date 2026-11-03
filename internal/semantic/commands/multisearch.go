@@ -140,6 +140,7 @@ func runMultisearch(ctx context.Context, queries []string, opts multisearchOpts)
 	if err != nil {
 		return err
 	}
+	stale := indexStaleness(ctx, components.Storage)
 
 	// Apply output format if specified
 	if opts.outputFormat != "" && opts.outputFormat != semantic.OutputBlended {
@@ -148,9 +149,13 @@ func runMultisearch(ctx context.Context, queries []string, opts multisearchOpts)
 
 	// Output results
 	if opts.jsonOutput || opts.minOutput || GlobalAXIOutput {
-		return outputMultisearchJSON(queries, result, opts.minOutput, opts.full, indexEmpty)
+		return outputMultisearchJSON(queries, result, opts.minOutput, opts.full, indexEmpty, stale)
 	}
-	return outputMultisearchText(queries, result, indexEmpty)
+	if err := outputMultisearchText(queries, result, indexEmpty); err != nil {
+		return err
+	}
+	printStalenessLine(stale, false)
+	return nil
 }
 
 // noMultisearchResults is the zero-result sentence for plain and --axi.
@@ -161,12 +166,13 @@ func noMultisearchResults(queries []string) string {
 	return fmt.Sprintf("No results found for any of the %d queries.", len(queries))
 }
 
-func outputMultisearchJSON(queries []string, result *semantic.MultisearchResult, minimal, full, indexEmpty bool) error {
+func outputMultisearchJSON(queries []string, result *semantic.MultisearchResult, minimal, full, indexEmpty bool, stale semantic.Staleness) error {
 	payload := multisearchPayload(result, minimal)
 	if GlobalAXIOutput && !minimal && !full {
 		payload = multisearchAXIPayload(result)
 	}
 	if !GlobalAXIOutput {
+		printStalenessLine(stale, true)
 		return emitStdout(payload)
 	}
 
@@ -186,6 +192,7 @@ func outputMultisearchJSON(queries []string, result *semantic.MultisearchResult,
 		withMessage["message"] = noMultisearchResults(queries)
 		markZeroResults(withMessage, indexEmpty)
 	}
+	withMessage["stale"] = axiStaleness(stale)
 	return emitStdout(withMessage)
 }
 

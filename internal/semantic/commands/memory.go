@@ -400,7 +400,9 @@ func runMemorySearch(ctx context.Context, opts memorySearchOpts) error {
 			default:
 				rows = axiMemoryRows(results)
 			}
-			return emitStdout(axiResultList(opts.query, rows, len(results), memoryResultHelp(len(results))))
+			payload := axiResultList(opts.query, rows, len(results), memoryResultHelp(len(results)))
+			payload["stale"] = axiStalenessNotApplicable()
+			return emitStdout(payload)
 		}
 		return outputMemoryJSON(results, opts.minOutput)
 	}
