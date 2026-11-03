@@ -28,6 +28,8 @@ var stalenessTimeout = 5 * time.Second
 // indexStaleness compares the open index with the git working tree around the
 // current directory. The index's own directory is not counted as a change.
 func indexStaleness(ctx context.Context, storage semantic.Storage) semantic.Staleness {
+	ctx, cancel := context.WithTimeout(ctx, stalenessTimeout)
+	defer cancel()
 	var ignore []string
 	if indexDir != "" {
 		ignore = append(ignore, indexDir)
