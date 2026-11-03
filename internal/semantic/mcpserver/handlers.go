@@ -84,8 +84,6 @@ func init() {
 	}
 }
 
-const defaultConfigPath = ".planning/.config/config.yaml"
-
 // resolveProfileSettings applies profile-based defaults to args
 // Profile values are used only if the corresponding arg is not already set
 func resolveProfileSettings(args map[string]interface{}) error {
@@ -99,7 +97,7 @@ func resolveProfileSettings(args map[string]interface{}) error {
 	// If no config specified, use default path
 	configPath, hasConfig := args["config"].(string)
 	if !hasConfig || configPath == "" {
-		configPath = defaultConfigPath
+		configPath = config.DefaultConfigPath
 	}
 
 	// Unknown profiles are rejected here; GetProfileConfig would quietly fall
@@ -172,7 +170,7 @@ func ExecuteHandler(toolName string, args map[string]interface{}) (string, error
 	if cfgPath, ok := args["config"].(string); ok && cfgPath != "" {
 		cmdArgs = append(cmdArgs, "--config", cfgPath)
 	} else if _, hasProfile := args["profile"].(string); hasProfile {
-		cmdArgs = append(cmdArgs, "--config", defaultConfigPath)
+		cmdArgs = append(cmdArgs, "--config", config.DefaultConfigPath)
 	}
 	if p, ok := args["profile"].(string); ok && p != "" {
 		cmdArgs = append(cmdArgs, "--profile", p)

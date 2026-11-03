@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"encoding/json"
+	"github.com/samestrin/llm-semantic-axi/internal/semantic/config"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -237,7 +238,7 @@ func TestExecuteHandler_InjectsTheRegistryProfileAndItsConfigPath(t *testing.T) 
 	if !hasFlag(argv, "--profile", "memory") {
 		t.Errorf("the registry profile was not injected: %v", argv)
 	}
-	if !hasFlag(argv, "--config", defaultConfigPath) {
+	if !hasFlag(argv, "--config", config.DefaultConfigPath) {
 		t.Errorf("the default config path was not passed alongside the profile: %v", argv)
 	}
 	if args["profile"] != "memory" {
@@ -301,7 +302,7 @@ func TestExecuteHandler_PassesAnExplicitConfigPathInsteadOfTheDefault(t *testing
 	if !hasFlag(argv, "--config", cfgPath) {
 		t.Errorf("the explicit config path was not forwarded: %v", argv)
 	}
-	if hasFlag(argv, "--config", defaultConfigPath) {
+	if hasFlag(argv, "--config", config.DefaultConfigPath) {
 		t.Errorf("the default config path was used as well: %v", argv)
 	}
 	// The profile's collection/storage were resolved from that file and passed

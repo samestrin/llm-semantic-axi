@@ -1,6 +1,8 @@
 package semantic
 
 import (
+	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -364,22 +366,61 @@ func TestLexicalIndex_GetAllMemoryStats_JoinsMemoryTable(t *testing.T) {
 	}
 }
 
-// TestLexicalIndex_GetAllMemoryStats_NoMemoryTable documents that a standalone
-// LexicalIndex cannot answer GetAllMemoryStats: initSchema never creates the `memory`
-// table the query LEFT JOINs against, so the call fails rather than returning the
-// stats rows that do exist.
-func TestLexicalIndex_GetAllMemoryStats_NoMemoryTable(t *testing.T) {
-	idx := newStatsIndex(t)
+// TestLexicalIndex_GetAllMemoryStats_Standalone defends against GetAllMemoryStats failing
+// on a lexical index opened alone: the `memory` table belongs to SQLiteStorage, so the
+// method must not require it. The stat row is returned with an empty Question/CreatedAt.
+func TestLexicalIndex_GetAllMemoryStats_Standalone(t *testing.T) {
+	idx, err := NewLexicalIndex(filepath.Join(t.TempDir(), "lex.db"), 4)
+	if err != nil {
+		t.Fatalf("NewLexicalIndex() error = %v", err)
+	}
+	t.Cleanup(func() { idx.Close() })
 
 	if err := idx.TrackRetrieval("mem-1", "q", 0.5); err != nil {
 		t.Fatalf("TrackRetrieval() error = %v", err)
 	}
 
-	_, err := idx.GetAllMemoryStats()
-	if err == nil {
-		t.Fatal("GetAllMemoryStats() on a standalone index returned no error; the memory table join must fail")
+	all, err := idx.GetAllMemoryStats()
+	if err != nil {
+		t.Fatalf("GetAllMemoryStats() on a standalone index error = %v, want nil", err)
 	}
-	if !strings.Contains(err.Error(), "memory") {
-		t.Errorf("error = %v, want it to name the missing memory table", err)
+	if len(all) != 1 || all[0].MemoryID != "mem-1" || all[0].RetrievalCount != 1 || all[0].AvgScore != 0.5 {
+		t.Fatalf("GetAllMemoryStats() = %+v, want one mem-1 row with count 1 and avg 0.5", all)
+	}
+	if all[0].Question != "" || all[0].CreatedAt != "" {
+		t.Errorf("row = %+v, want empty Question and CreatedAt without a memory table", all[0])
+	}
+}
+
+// TestLexicalIndex_GetAllMemoryStats_SharedWithSQLiteStorage defends that the same call
+// on a file shared with a SQLiteStorage still joins the memory table, so the standalone
+// fix did not drop Question/CreatedAt for the shared deployment.
+func TestLexicalIndex_GetAllMemoryStats_SharedWithSQLiteStorage(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "shared.db")
+	st, err := NewSQLiteStorage(path, 4)
+	if err != nil {
+		t.Fatalf("NewSQLiteStorage() error = %v", err)
+	}
+	t.Cleanup(func() { st.Close() })
+	entry := MemoryEntry{ID: "mem-1", Question: "why?", Answer: "a", Status: "active", CreatedAt: "2026-01-01T00:00:00Z", UpdatedAt: "2026-01-01T00:00:00Z"}
+	if err := st.StoreMemory(context.Background(), entry, []float32{1, 0, 0, 0}); err != nil {
+		t.Fatalf("StoreMemory() error = %v", err)
+	}
+
+	idx, err := NewLexicalIndex(path, 4)
+	if err != nil {
+		t.Fatalf("NewLexicalIndex() error = %v", err)
+	}
+	t.Cleanup(func() { idx.Close() })
+	if err := idx.TrackRetrieval("mem-1", "q", 0.5); err != nil {
+		t.Fatalf("TrackRetrieval() error = %v", err)
+	}
+
+	all, err := idx.GetAllMemoryStats()
+	if err != nil {
+		t.Fatalf("GetAllMemoryStats() error = %v", err)
+	}
+	if len(all) != 1 || all[0].Question != "why?" || all[0].CreatedAt != "2026-01-01T00:00:00Z" {
+		t.Fatalf("GetAllMemoryStats() = %+v, want mem-1 joined with question and created_at", all)
 	}
 }
