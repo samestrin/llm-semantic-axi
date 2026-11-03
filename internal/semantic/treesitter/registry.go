@@ -29,24 +29,39 @@ func (r *Registry) Add(newChunker func() semantic.Chunker) {
 }
 
 // RegisterInto builds every chunker, wraps it in the parse-error fallback, and
-// registers it in the factory under each extension it supports. It panics if an extension is claimed twice, either by
-// two chunkers here or by a chunker the factory already holds: a silent
-// overwrite would chunk one language's files with another's grammar.
+// registers it in the factory through MustRegister, so an extension claimed
+// twice, either by two chunkers here or by a chunker the factory already
+// holds, panics.
 func (r *Registry) RegisterInto(factory *semantic.ChunkerFactory) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	for _, newChunker := range r.news {
-		c := WithFallback(newChunker())
-		for _, ext := range c.SupportedExtensions() {
-			if prev, exists := factory.GetChunker(ext); exists {
-				if w, ok := prev.(*Fallback); ok {
-					prev = w.Unwrap()
-				}
-				panic(fmt.Sprintf("treesitter: extension %q claimed by %T is already registered to %T", ext, c.Unwrap(), prev))
-			}
-			factory.Register(ext, c)
+		MustRegister(factory, WithFallback(newChunker()))
+	}
+}
+
+// MustRegister registers c in the factory under each extension it supports.
+// It panics if the factory already held one of them, as decided by Register's
+// return value: a silent overwrite would chunk one language's files with
+// another's grammar. The factory holds c for that extension when it panics.
+func MustRegister(factory *semantic.ChunkerFactory, c semantic.Chunker) {
+	for _, ext := range c.SupportedExtensions() {
+		// Read only to name the previous holder in the panic; the clash itself
+		// is decided by Register.
+		prev, _ := factory.GetChunker(ext)
+		if !factory.Register(ext, c) {
+			panic(fmt.Sprintf("treesitter: extension %q claimed by %T is already registered to %T", ext, unwrapFallback(c), unwrapFallback(prev)))
 		}
 	}
+}
+
+// unwrapFallback returns the chunker inside the parse-error fallback, so a
+// panic names the language chunker rather than the wrapper.
+func unwrapFallback(c semantic.Chunker) semantic.Chunker {
+	if w, ok := c.(*Fallback); ok {
+		return w.Unwrap()
+	}
+	return c
 }
 
 var defaultRegistry = NewRegistry()
