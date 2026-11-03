@@ -192,10 +192,11 @@ func TestPythonRefs_EditDroppingLastCallClearsItsEdges(t *testing.T) {
 }
 
 // Defends "a wrong edge is worse than none" for code that does not parse:
-// a call the grammar could only recover as an error is not trusted, and no
-// edge lands on the text windows the fallback puts in place of broken code.
-func TestPythonRefs_UnparsedCodeRecordsNoEdges(t *testing.T) {
-	src := []byte("def ok():\n    good()\n\ndef broken(x\n    bad(\n")
+// the fallback puts a text window over the lines around the error, and a call
+// the grammar still found there (bad) must not become an edge from that
+// window, while the clean function keeps its own.
+func TestPythonRefs_NoEdgeFromAFallbackTextWindow(t *testing.T) {
+	src := []byte("def ok():\n    good()\n\nbad(1)\nx = = 2\n")
 	f := WithFallback(NewPythonChunker())
 	chunks, err := f.Chunk("b.py", src)
 	if err != nil {
@@ -206,16 +207,23 @@ func TestPythonRefs_UnparsedCodeRecordsNoEdges(t *testing.T) {
 		t.Fatalf("ExtractRefs: %v", err)
 	}
 	byID := map[string]semantic.Chunk{}
+	windows := 0
 	for _, c := range chunks {
 		byID[c.ID] = c
+		if c.Type == semantic.ChunkFile {
+			windows++
+		}
+	}
+	if windows == 0 {
+		t.Fatalf("precondition: no text window in %+v; the fixture no longer falls back", chunks)
+	}
+	if len(refs) != 1 || refs[0].RefName != "good" {
+		t.Errorf("refs = %+v, want only ok's call to good", refs)
 	}
 	for _, r := range refs {
 		c := byID[r.ChunkID]
 		if c.Type == semantic.ChunkFile {
 			t.Errorf("edge %s:%s attributed to a text window %+v", r.RefType, r.RefName, c)
-		}
-		if r.RefName == "bad" {
-			t.Errorf("edge to %q recorded from code that did not parse", r.RefName)
 		}
 	}
 }
@@ -242,5 +250,32 @@ func TestFallback_ExtractRefsPanicBecomesAnError(t *testing.T) {
 	refs, err := WithFallback(&panickingRefs{}).ExtractRefs("x.stub", []byte("x"), nil)
 	if err == nil {
 		t.Fatalf("ExtractRefs = %v, nil; want the panic as an error", refs)
+	}
+}
+
+// Defends where import edges land and what they name: an import inside a
+// function belongs to that function, not to the file's first chunk, and a
+// wildcard import names no symbol, so it records no edge.
+func TestPythonRefs_LocalAndWildcardImports(t *testing.T) {
+	src := []byte("from m import *\n\ndef first():\n    pass\n\ndef f():\n    import json\n")
+	c := NewPythonChunker()
+	chunks, err := c.Chunk("i.py", src)
+	if err != nil {
+		t.Fatalf("Chunk: %v", err)
+	}
+	refs, err := c.ExtractRefs("i.py", src, chunks)
+	if err != nil {
+		t.Fatalf("ExtractRefs: %v", err)
+	}
+	names := map[string]string{}
+	for _, ch := range chunks {
+		names[ch.ID] = ch.Name
+	}
+	var got []string
+	for _, r := range refs {
+		got = append(got, names[r.ChunkID]+" "+string(r.RefType)+":"+r.RefName)
+	}
+	if strings.Join(got, ",") != "f imports:json" {
+		t.Errorf("refs = %v, want [f imports:json]", got)
 	}
 }
