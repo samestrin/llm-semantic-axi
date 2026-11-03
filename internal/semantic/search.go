@@ -357,6 +357,12 @@ func (s *Searcher) PrefilterSearch(ctx context.Context, query string, opts Prefi
 		}
 	}
 
+	// searchOpts.TopK is the over-fetch pool size when reranking, so trim to the
+	// caller's TopK here, on the reranked results and on the fallback alike.
+	if opts.TopK > 0 && len(results) > opts.TopK {
+		results = results[:opts.TopK]
+	}
+
 	// Apply relevance labels
 	s.applyRelevanceLabels(ctx, results)
 
