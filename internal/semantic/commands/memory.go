@@ -388,6 +388,11 @@ func runMemorySearch(ctx context.Context, opts memorySearchOpts) error {
 		}
 	}
 
+	storeEmpty, err := zeroResultsMemoryStoreEmpty(ctx, storage, len(results))
+	if err != nil {
+		return err
+	}
+
 	// Output results
 	if opts.jsonOutput || opts.minOutput || GlobalAXIOutput {
 		if GlobalAXIOutput {
@@ -401,12 +406,50 @@ func runMemorySearch(ctx context.Context, opts memorySearchOpts) error {
 				rows = axiMemoryRows(results)
 			}
 			payload := axiResultList(opts.query, rows, len(results), memoryResultHelp(len(results)))
+			if len(results) == 0 {
+				markMemoryZeroResults(payload, storeEmpty)
+			}
 			payload["stale"] = axiStalenessNotApplicable()
 			return emitStdout(payload)
 		}
 		return outputMemoryJSON(results, opts.minOutput)
 	}
+	if storeEmpty {
+		fmt.Println(emptyMemoryStoreMessage)
+		return nil
+	}
 	return outputMemoryText(opts.query, results)
+}
+
+// zeroResultsMemoryStoreEmpty checks an empty answer: true when the memory
+// store holds no entry at all. It asks without the search's filters, because a
+// filter that excludes every entry matched nothing; it did not search nothing.
+func zeroResultsMemoryStoreEmpty(ctx context.Context, storage semantic.Storage, total int) (bool, error) {
+	if total > 0 {
+		return false, nil
+	}
+	entries, err := storage.ListMemory(ctx, semantic.MemoryListOptions{Limit: 1})
+	if err != nil {
+		return false, fmt.Errorf("failed to check the memory store: %w", err)
+	}
+	return len(entries) == 0, nil
+}
+
+// emptyMemoryStoreMessage is the sentence memory search prints over a store
+// with no entries, in plain and --axi alike.
+const emptyMemoryStoreMessage = "The memory store is empty, so nothing was searched. Run `llm-semantic memory store` to add an entry."
+
+// markMemoryZeroResults gives an empty --axi memory answer a status an agent
+// can branch on: store_empty when there was nothing to search, no_match
+// otherwise.
+func markMemoryZeroResults(payload map[string]any, storeEmpty bool) {
+	if storeEmpty {
+		payload["status"] = "store_empty"
+		payload["message"] = emptyMemoryStoreMessage
+		payload["help"] = []string{"Run `llm-semantic memory store --question <q> --answer <a>` to add an entry"}
+		return
+	}
+	payload["status"] = "no_match"
 }
 
 // axiMemoryRows is the default --axi memory row: id, question, score and the
