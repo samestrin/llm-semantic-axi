@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -20,6 +21,10 @@ var BinaryPath = "llm-semantic"
 // Increased to 120s for index/update operations which can be slow
 // Can be overridden via LLM_SEMANTIC_TIMEOUT env var (in seconds)
 var CommandTimeout = 120 * time.Second
+
+// cancelWaitDelay bounds how long ExecuteHandler keeps waiting for the output
+// pipe to close after CommandTimeout has killed the command.
+const cancelWaitDelay = time.Second
 
 // argBuilder is a function that builds CLI arguments from the args map
 type argBuilder struct {
@@ -228,7 +233,19 @@ func ExecuteHandler(toolName string, args map[string]interface{}) (string, error
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, BinaryPath, cmdArgs...)
+	killProcessGroupOnCancel(cmd)
+	// Backstop for a descendant the group kill cannot reach (one that left the
+	// group, or any grandchild off Unix): once the deadline has fired, stop
+	// waiting on the output pipe after this long rather than until it closes.
+	cmd.WaitDelay = cancelWaitDelay
 	output, err := cmd.CombinedOutput()
+
+	// os/exec also starts WaitDelay when the child exits on its own, so a
+	// child that exited 0 while a descendant held the pipe surfaces as
+	// ErrWaitDelay. The command succeeded; report it that way.
+	if errors.Is(err, exec.ErrWaitDelay) && ctx.Err() == nil && cmd.ProcessState.Success() {
+		err = nil
+	}
 
 	if ctx.Err() == context.DeadlineExceeded {
 		return "", fmt.Errorf("command %q timed out after %v", cmdName, CommandTimeout)
