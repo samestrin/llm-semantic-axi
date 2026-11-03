@@ -263,7 +263,13 @@ func (m *IndexManager) indexPerFile(ctx context.Context, files []string, opts In
 
 		// Check if file is already indexed and unchanged (for resume capability)
 		if !opts.Force {
-			needsIndex, _ := m.fileNeedsUpdate(ctx, file)
+			needsIndex, err := m.fileNeedsUpdate(ctx, file)
+			if err != nil {
+				// An unreadable file is not indexed; counting it unchanged would hide that.
+				result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", file, err))
+				result.FilesSkipped++
+				continue
+			}
 			if !needsIndex {
 				result.FilesUnchanged++
 				// Report progress for skipped file
@@ -334,7 +340,13 @@ func (m *IndexManager) indexWithCrossFileBatching(ctx context.Context, files []s
 
 		// Check if file is already indexed and unchanged
 		if !opts.Force {
-			needsIndex, _ := m.fileNeedsUpdate(ctx, file)
+			needsIndex, err := m.fileNeedsUpdate(ctx, file)
+			if err != nil {
+				// An unreadable file is not indexed; counting it unchanged would hide that.
+				result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", file, err))
+				result.FilesSkipped++
+				continue
+			}
 			if !needsIndex {
 				result.FilesUnchanged++
 				if opts.OnProgress != nil {
