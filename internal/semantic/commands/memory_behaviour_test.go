@@ -378,6 +378,92 @@ func TestMemorySearchWithoutAnIndexPointsAtTheFix(t *testing.T) {
 	}
 }
 
+// runMemorySearchOutput runs one memory search and returns what it printed.
+func runMemorySearchOutput(t *testing.T, opts memorySearchOpts) string {
+	t.Helper()
+	return captureStdout(t, func() {
+		if err := runMemorySearch(context.Background(), opts); err != nil {
+			t.Fatalf("runMemorySearch: %v", err)
+		}
+	})
+}
+
+// TestMemorySearchOverAnEmptyStoreSaysTheStoreIsEmpty: a store with no entries
+// searched nothing, and used to print the same "No results found" as a search
+// that matched nothing (epic 15). Plain and --axi must both say it is empty.
+func TestMemorySearchOverAnEmptyStoreSaysTheStoreIsEmpty(t *testing.T) {
+	newWorkspace(t)
+	useEmbedder(t, newFakeEmbedder(t))
+	seedMemories(t) // creates the index with no memory rows
+	opts := memorySearchOpts{query: "authentication", topK: 5}
+
+	plain := runMemorySearchOutput(t, opts)
+	want := "The memory store is empty, so nothing was searched. Run `llm-semantic memory store` to add an entry.\n"
+	if plain != want {
+		t.Errorf("empty-store plain output = %q, want %q", plain, want)
+	}
+	if strings.Contains(plain, "No results found") {
+		t.Errorf("empty store reads as a search that matched nothing:\n%s", plain)
+	}
+
+	withAXI(t)
+	axi := runMemorySearchOutput(t, opts)
+	for _, want := range []string{"status: store_empty\n", "total: 0\n", "memory store is empty", "llm-semantic memory store"} {
+		if !strings.Contains(axi, want) {
+			t.Errorf("--axi empty-store output lacks %q:\n%s", want, axi)
+		}
+	}
+	if strings.Contains(axi, "No results found") || strings.Contains(axi, "no_match") {
+		t.Errorf("--axi empty store reads as a search that matched nothing:\n%s", axi)
+	}
+}
+
+// TestMemorySearchPopulatedStoreWithNoMatchIsNoMatch: the empty-store check must
+// not fire for a store that has entries and simply matched none of them.
+func TestMemorySearchPopulatedStoreWithNoMatchIsNoMatch(t *testing.T) {
+	newWorkspace(t)
+	useEmbedder(t, newFakeEmbedder(t))
+	seedMemories(t, newMemory("mem-auth", "How should authentication tokens be validated?", "Verify the signature"))
+	opts := memorySearchOpts{query: "authentication", topK: 5, threshold: 0.99}
+
+	plain := runMemorySearchOutput(t, opts)
+	if plain != "No results found for \"authentication\" (0 results).\n" {
+		t.Errorf("no-match plain output = %q", plain)
+	}
+
+	withAXI(t)
+	axi := runMemorySearchOutput(t, opts)
+	for _, want := range []string{"status: no_match\n", `message: "No results found for \"authentication\"."`} {
+		if !strings.Contains(axi, want) {
+			t.Errorf("--axi no-match output lacks %q:\n%s", want, axi)
+		}
+	}
+	if strings.Contains(axi, "store_empty") {
+		t.Errorf("a populated store was reported empty:\n%s", axi)
+	}
+}
+
+// TestMemorySearchFilterThatExcludesEverythingIsNoMatch: a --status filter
+// that excludes every entry leaves the search empty, but the store is not. A
+// check that passed the filter on to its emptiness probe would call it empty.
+func TestMemorySearchFilterThatExcludesEverythingIsNoMatch(t *testing.T) {
+	newWorkspace(t)
+	useEmbedder(t, newFakeEmbedder(t))
+	seedMemories(t, newMemory("mem-auth", "How should authentication tokens be validated?", "Verify the signature"))
+	opts := memorySearchOpts{query: "authentication tokens", topK: 5, status: string(semantic.MemoryStatusPromoted)}
+
+	plain := runMemorySearchOutput(t, opts)
+	if !strings.HasPrefix(plain, "No results found for") {
+		t.Errorf("filtered-out plain output = %q, want the no-results line", plain)
+	}
+
+	withAXI(t)
+	axi := runMemorySearchOutput(t, opts)
+	if !strings.Contains(axi, "status: no_match\n") || strings.Contains(axi, "store_empty") {
+		t.Errorf("a filter that excluded every entry was not reported as no_match:\n%s", axi)
+	}
+}
+
 // ===== outputMemoryJSON / outputMemoryText =====
 
 // TestOutputMemoryTextReportsAnEmptyResultSet: no results is not an error, and
