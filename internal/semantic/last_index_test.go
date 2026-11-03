@@ -337,3 +337,93 @@ func gitHeadOf(t *testing.T, dir, rev string) string {
 	}
 	return strings.TrimSpace(string(out))
 }
+
+// failingEmbedder embeds like trackingEmbedder but fails any batch containing marker,
+// so one file in a run can fail to embed while the rest succeed.
+type failingEmbedder struct {
+	trackingEmbedder
+	marker string
+}
+
+func (f *failingEmbedder) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
+	for _, text := range texts {
+		if strings.Contains(text, f.marker) {
+			return nil, errors.New("embedding endpoint rejected the batch")
+		}
+	}
+	return f.trackingEmbedder.EmbedBatch(ctx, texts)
+}
+
+// TestIndexManager_FileFailureLeavesLastIndex defends against an index with files that
+// failed to embed recording HEAD: a later search would then report the index fresh when
+// part of it is missing. Each of Index, the full-scan Update and UpdateGit's advance must
+// leave the previous record, time included, unchanged when any file failed.
+func TestIndexManager_FileFailureLeavesLastIndex(t *testing.T) {
+	repo := t.TempDir()
+	gitRun(t, repo, "init")
+	commitGoFile(t, repo, "one.go", "One")
+	ctx := context.Background()
+
+	storage := newFileStorage(t)
+	embedder := &failingEmbedder{trackingEmbedder: trackingEmbedder{embedding: []float32{0.1, 0.2, 0.3, 0.4}}, marker: "Broken"}
+	mgr := NewIndexManager(storage, embedder, goFactory())
+
+	planted := LastIndex{Commit: "planted", IndexedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)}
+	assertUnchanged := func(step string) {
+		t.Helper()
+		got := mustLastIndex(t, storage)
+		if got.Commit != planted.Commit || !got.IndexedAt.Equal(planted.IndexedAt) {
+			t.Errorf("after %s with a failed file: got %+v, want unchanged %+v", step, *got, planted)
+		}
+	}
+	plant := func() {
+		t.Helper()
+		if err := storage.SetLastIndex(ctx, planted); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	commitGoFile(t, repo, "broken.go", "Broken")
+
+	// Index, per-file path.
+	plant()
+	result, err := mgr.Index(ctx, repo, IndexOptions{})
+	if err != nil {
+		t.Fatalf("Index() error = %v", err)
+	}
+	if len(result.Errors) == 0 {
+		t.Fatal("Index() reported no errors; the test needs broken.go to fail")
+	}
+	assertUnchanged("index")
+
+	// Index, cross-file batching path (an embed failure there aborts the run).
+	plant()
+	if _, err := mgr.Index(ctx, repo, IndexOptions{EmbedBatchSize: 100}); err == nil {
+		t.Fatal("Index(EmbedBatchSize) error = nil; the test needs broken.go to fail")
+	}
+	assertUnchanged("batched index")
+
+	// Full-scan Update: broken.go was never stored, so it is retried and fails again.
+	plant()
+	if _, err := mgr.Update(ctx, repo, UpdateOptions{Domain: "code"}); err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	assertUnchanged("full-scan update")
+
+	// UpdateGit from a ref matching the recorded commit would advance it to HEAD.
+	planted.Commit = gitHeadOf(t, repo, "HEAD~1")
+	plant()
+	if _, err := mgr.UpdateGit(ctx, repo, "HEAD~1", UpdateOptions{Domain: "code"}); err != nil {
+		t.Fatalf("UpdateGit() error = %v", err)
+	}
+	assertUnchanged("git update")
+
+	// Once nothing fails, each records HEAD again, so the guard is not blocking every write.
+	embedder.marker = "\x00never"
+	if _, err := mgr.Update(ctx, repo, UpdateOptions{Domain: "code"}); err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+	if got := mustLastIndex(t, storage); got.Commit != gitHead(t, repo) {
+		t.Errorf("after a clean update: Commit = %q, want HEAD %q", got.Commit, gitHead(t, repo))
+	}
+}
