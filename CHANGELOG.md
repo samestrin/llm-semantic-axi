@@ -8,7 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- README: the language table marks every JavaScript and TypeScript extension (`.js` `.jsx` `.mjs` `.cjs` `.ts` `.tsx` `.mts` `.cts`) as having call edges, and the known-limit section says which calls are recorded (bare name or `this.` receiver only). An index built before the JS/TS edges needs `index --force`. (epic 03.1)
+- README: the language table marks every JavaScript and TypeScript extension (`.js` `.jsx` `.mjs` `.cjs` `.ts` `.tsx` `.mts` `.cts`) as having call edges, and the known-limit section says which calls are recorded (bare name or `this.` receiver only). The Python row is marked `yes` too (its edges shipped earlier). An index built before the JS/TS or Python edges needs `index --force`. (epic 03.1)
 - Python call edges: the tree-sitter Python chunker records `calls` edges for bare-name calls and `self.`/`cls.` method calls, and `imports` edges for each imported module or name, so `callers` and `refs` answer for `.py`, `.pyw` and `.pyi` files. There are no `uses_type` edges for Python, and a call is recorded against the innermost function or method, never its enclosing class. An index built before this change gains Python edges only after `index --force`. (epic 03)
 - C++ chunker: a `typedef` is indexed under its declarator name as a `struct` chunk covering the whole typedef, so `typedef struct { int x; } P;` is found as `P`. A bare nameless `struct {..} v;` is still not chunked. (epic 09)
 - The MCP server runs the CLI with `--axi` instead of `--json --min`, so tool results reach the model as TOON. (epic 05.1)
