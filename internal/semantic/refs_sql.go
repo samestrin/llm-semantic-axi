@@ -256,11 +256,22 @@ func symbolLanguagesSQL(ctx context.Context, db *sql.DB, name string) ([]SymbolL
 	return langs, rows.Err()
 }
 
+// refTargetEligibleSQL is the predicate a candidate chunk c must satisfy to be
+// the target of the reference row chunk_refs. It is the one place resolution
+// rules beyond the name match live, so later rules extend it rather than the
+// UPDATE below.
+//
+// Today the rule is: the target is in the calling chunk's language. Without it
+// a Python run() links to the only chunk named run in the index, a Go one.
+const refTargetEligibleSQL = `COALESCE(c.language, '') = COALESCE(
+				(SELECT caller.language FROM chunks caller WHERE caller.id = chunk_refs.chunk_id), '')`
+
 // resolveRefsSQL links stored references to the chunks they name.
 //
 // Two rules make the result trustworthy. A reference whose target chunk has
 // disappeared is unlinked first, so a rename cannot leave an edge pointing at a
-// chunk that no longer exists. A reference whose name matches more than one
+// chunk that no longer exists. A reference resolves only among chunks of the
+// calling chunk's language (refTargetEligibleSQL). A reference whose name matches more than one
 // chunk is left unresolved, because a confidently wrong edge is worse than a
 // missing one.
 func resolveRefsSQL(ctx context.Context, db *sql.DB) error {
@@ -280,6 +291,7 @@ func resolveRefsSQL(ctx context.Context, db *sql.DB) error {
 			SELECT CASE WHEN COUNT(*) = 1 THEN MIN(c.id) END
 			FROM chunks c
 			WHERE c.name = chunk_refs.ref_base_name
+			  AND `+refTargetEligibleSQL+`
 		)
 		WHERE ref_target_id IS NULL
 	`)
