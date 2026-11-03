@@ -3,6 +3,8 @@ package commands
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -497,5 +499,27 @@ func TestTildePath(t *testing.T) {
 		if got := tildePath(c.path, c.home); got != c.want {
 			t.Errorf("tildePath(%q,%q)=%q want %q", c.path, c.home, got, c.want)
 		}
+	}
+}
+
+// TestRootCmd_AutoDiscoversTheSharedDefaultConfigPath defends against the CLI
+// auto-discovering a different path from the one the MCP server passes via
+// --config: the file at config.DefaultConfigPath must actually be loaded.
+func TestRootCmd_AutoDiscoversTheSharedDefaultConfigPath(t *testing.T) {
+	t.Chdir(t.TempDir())
+	if err := os.MkdirAll(filepath.Dir(config.DefaultConfigPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(config.DefaultConfigPath, []byte("semantic:\n  max_results: 7\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	prev := loadedConfig
+	loadedConfig = nil
+	t.Cleanup(func() { loadedConfig = prev })
+
+	_, _ = executeCommand(RootCmd(), "index-status")
+
+	if loadedConfig == nil || loadedConfig.MaxResults != 7 {
+		t.Fatalf("default config was not auto-loaded: %+v", loadedConfig)
 	}
 }

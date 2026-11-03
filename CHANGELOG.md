@@ -47,6 +47,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- JavaScript and TypeScript call edges: a `this.get()` call links only to a `get` method of the caller's own class, in the same file. Before, it linked to any lone chunk named `get`, so a method was reported as a caller of a top-level function or of another class's method it can never reach. With no such method, or outside a class, the call stays unresolved in `refs` and is never shown as a caller. (epic 03.1)
 - Re-indexing a file edited to remove a chunk's last call now removes that chunk's old call edges; before, an edit that left a file with no calls at all kept every edge it used to have. (epic 03)
 - Opening an index written before the `file_mtime` column existed no longer fails with `no such column: file_mtime`; the migration now runs before the index that references it. (epic 11)
 - Qdrant `ReadEmbeddings` reads the `Dense` vector instead of the deprecated flat `Data` field, so a server that sends only `Dense` no longer yields an empty map and forces every unchanged chunk to be re-embedded. (epic 13)

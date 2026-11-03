@@ -373,3 +373,11 @@ func TestResolveIntValue(t *testing.T) {
 		t.Errorf("expected 10, got %d", result)
 	}
 }
+
+// TestDefaultConfigPath_Value pins the one default path the CLI and the MCP
+// server must share; a drifted copy would make them read different configs.
+func TestDefaultConfigPath_Value(t *testing.T) {
+	if DefaultConfigPath != ".planning/.config/config.yaml" {
+		t.Errorf("DefaultConfigPath = %q", DefaultConfigPath)
+	}
+}

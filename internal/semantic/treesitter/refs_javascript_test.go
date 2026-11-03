@@ -130,7 +130,10 @@ class Store {
 // Defends the done-when of epic 03.1 T2 where it bites: through a real sqlite
 // store and the resolver, with a lone `get` chunk indexed, a member call on
 // another receiver and a dynamic call leave `get` with no caller, while a
-// `this.get()` in the same file still resolves (so the fixture can link).
+// `this.get()` in a class that has its own get still resolves (so the fixture
+// can link). viaThis was once a top-level function whose this.get() linked to
+// util.ts's get, which is the false edge epic 03.1 F1 removed: a `this.` call
+// links only within the caller's own class.
 func TestJSRefs_MemberAndDynamicCallsDoNotLinkToALoneChunk(t *testing.T) {
 	ctx := context.Background()
 	storage, err := semantic.NewSQLiteStorage(":memory:", 0)
@@ -147,8 +150,12 @@ func TestJSRefs_MemberAndDynamicCallsDoNotLinkToALoneChunk(t *testing.T) {
     obj.get()();
 }
 
-function viaThis() {
-    this.get();
+class Box {
+    get() {}
+
+    viaThis() {
+        this.get();
+    }
 }
 `,
 	}

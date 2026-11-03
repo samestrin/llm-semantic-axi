@@ -633,21 +633,6 @@ func filterExcludedPaths(paths []string, excludes []string, excludeTests bool) [
 		// Check if any exclude pattern matches this path
 		excluded := false
 		for _, exc := range allExcludes {
-			// Simple directory name check: if exclude is a simple pattern without special chars
-			// check if it appears anywhere in the path as a directory component
-			if !strings.ContainsAny(exc, "*?[") {
-				// Check if exclude appears as a directory component in the path
-				pathParts := strings.Split(normalizedPath, "/")
-				for _, part := range pathParts {
-					if part == exc {
-						excluded = true
-						break
-					}
-				}
-				if excluded {
-					break
-				}
-			}
 			// Check using filepath.Match or substring
 			if strings.Contains(normalizedPath, exc) {
 				excluded = true

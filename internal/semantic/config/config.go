@@ -9,6 +9,10 @@ import (
 	"github.com/goccy/go-yaml"
 )
 
+// DefaultConfigPath is the config file the CLI auto-discovers and the MCP
+// server passes via --config when the caller names none.
+const DefaultConfigPath = ".planning/.config/config.yaml"
+
 // SemanticConfig represents the semantic configuration from a YAML file.
 // Configuration is read from the "semantic:" key in the YAML file.
 type SemanticConfig struct {
