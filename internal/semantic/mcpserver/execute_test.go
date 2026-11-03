@@ -493,6 +493,24 @@ func TestExecuteHandler_TimesOutWhenAGrandchildLeavesTheProcessGroup(t *testing.
 	}
 }
 
+func TestExecuteHandler_ReportsSuccessWhenAGrandchildOutlivesASuccessfulChild(t *testing.T) {
+	// cmd.WaitDelay is meant as a backstop for the deadline, but os/exec also
+	// starts it when the child exits on its own. A child that exits 0 while a
+	// background helper still holds the pipe must not come back as "WaitDelay
+	// expired": that reports failure for a command that succeeded, and buries
+	// its output in the error text.
+	script, _ := fakeBinary(t, "echo hello-out\nsleep 5 &\nexit 0")
+	useFakeBinary(t, script)
+
+	out, err := ExecuteHandler(ToolPrefix+"index_status", map[string]interface{}{})
+	if err != nil {
+		t.Fatalf("a command that exited 0 was reported as failed: %v", err)
+	}
+	if out != "hello-out\n" {
+		t.Errorf("output = %q, want %q", out, "hello-out\n")
+	}
+}
+
 func TestExecuteHandler_RejectsAnUnknownTool(t *testing.T) {
 	// A tool name with no registry entry must be refused before anything is
 	// executed. Shelling out with an unmapped name would hand arbitrary text to
