@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Python call edges: the tree-sitter Python chunker records `calls` edges for bare-name calls and `self.`/`cls.` method calls, and `imports` edges for each imported module or name, so `callers` and `refs` answer for `.py`, `.pyw` and `.pyi` files. There are no `uses_type` edges for Python, and a call is recorded against the innermost function or method, never its enclosing class. An index built before this change gains Python edges only after `index --force`. (epic 03)
 - C++ chunker: a `typedef` is indexed under its declarator name as a `struct` chunk covering the whole typedef, so `typedef struct { int x; } P;` is found as `P`. A bare nameless `struct {..} v;` is still not chunked. (epic 09)
 - The MCP server runs the CLI with `--axi` instead of `--json --min`, so tool results reach the model as TOON. (epic 05.1)
 - `--axi` output of `search`, the profile search aliases and `multisearch` shows four fields per result (`file` as `path:line`, `name`, `score`, `content`), and `memory search` shows `id`, `question`, `score`, `answer`, cutting text over 200 characters with a note of how many characters were left out. `--full` returns every field and the whole text. `--json` and plain output are unchanged. (epic 05.1)
@@ -45,6 +46,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Re-indexing a file edited to remove a chunk's last call now removes that chunk's old call edges; before, an edit that left a file with no calls at all kept every edge it used to have. (epic 03)
 - Opening an index written before the `file_mtime` column existed no longer fails with `no such column: file_mtime`; the migration now runs before the index that references it. (epic 11)
 - Qdrant `ReadEmbeddings` reads the `Dense` vector instead of the deprecated flat `Data` field, so a server that sends only `Dense` no longer yields an empty map and forces every unchanged chunk to be re-embedded. (epic 13)
 - MCP tool schemas no longer advertise `json` and `min` properties. The server always runs the CLI with `--axi`, so setting either was silently ignored. (epic 08)
