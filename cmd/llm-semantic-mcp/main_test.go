@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -11,9 +12,11 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
+	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/samestrin/llm-semantic-axi/internal/semantic/mcpserver"
 )
@@ -106,7 +109,7 @@ func launch(t *testing.T) (*server, *os.File, *os.File) {
 	srv := &server{clientWrite: stdinW, done: make(chan struct{})}
 	go func() {
 		defer close(srv.done)
-		srv.code = run(context.Background(), &mcp.IOTransport{Reader: stdinR, Writer: stdoutW}, &srv.stderr)
+		srv.code = run(context.Background(), stdinR, stdoutW, &srv.stderr)
 	}()
 	return srv, stdoutR, stdinW
 }
@@ -457,6 +460,77 @@ func TestServer_TransportFailureStillExitsOne(t *testing.T) {
 	}
 }
 
+// failingWriter stands in for a stdout that cannot be written, for a reason
+// other than the reader going away.
+type failingWriter struct{}
+
+func (failingWriter) Write([]byte) (int, error) { return 0, errors.New("no space left on device") }
+func (failingWriter) Close() error              { return nil }
+
+func TestServer_WriteFailureStillExitsOneWithItsCause(t *testing.T) {
+	// When a write fails, the SDK closes the connection itself and its reader
+	// then reports "file already closed", which server.Run returns ahead of
+	// the write error. Treating that as a disconnect would turn a real
+	// failure, such as stdout on a full disk, into exit 0. Only a broken pipe
+	// means the client left; anything else must exit 1 and name the cause.
+	fakeCLI(t, "{}")
+	stdinR, stdinW, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("Pipe: %v", err)
+	}
+	t.Cleanup(func() { _ = stdinR.Close(); _ = stdinW.Close() })
+
+	var stderr bytes.Buffer
+	done := make(chan int)
+	go func() { done <- run(context.Background(), stdinR, failingWriter{}, &stderr) }()
+	if _, err := stdinW.Write([]byte(initializeRequest)); err != nil {
+		t.Fatalf("write initialize: %v", err)
+	}
+
+	select {
+	case code := <-done:
+		if code != 1 {
+			t.Errorf("run() = %d after its output failed, want 1", code)
+		}
+		if !strings.Contains(stderr.String(), "no space left on device") {
+			t.Errorf("stderr does not name the write failure:\n%s", stderr.String())
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("run() did not return after its output failed")
+	}
+}
+
+func TestSessionResult(t *testing.T) {
+	// The exit decision on its own, for the cases the end-to-end tests cannot
+	// produce on demand. A closed read side with no failed write is not
+	// something a client can cause, so it is not called a disconnect.
+	closing := fmt.Errorf("%w: %v", &jsonrpc.Error{Code: codeServerClosing, Message: "server is closing"}, io.EOF)
+	tests := []struct {
+		name     string
+		runErr   error
+		writeErr error
+		clean    bool
+	}{
+		{"session ended", nil, nil, true},
+		{"reply after the client hung up", closing, nil, true},
+		{"client stopped reading", os.ErrClosed, syscall.EPIPE, true},
+		{"output failed", os.ErrClosed, errors.New("disk full"), false},
+		{"input closed with no failed write", os.ErrClosed, nil, false},
+		{"malformed message", errors.New("invalid character"), nil, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := sessionResult(tt.runErr, tt.writeErr)
+			if (err == nil) != tt.clean {
+				t.Errorf("sessionResult(%v, %v) = %v, want clean=%v", tt.runErr, tt.writeErr, err, tt.clean)
+			}
+			if tt.writeErr != nil && !tt.clean && !errors.Is(err, tt.writeErr) {
+				t.Errorf("sessionResult reported %v, want the write error %v", err, tt.writeErr)
+			}
+		})
+	}
+}
+
 func TestServer_MissingCLIExitsOne(t *testing.T) {
 	// Without llm-semantic every tool call would fail. The server must refuse
 	// to start, not come up advertising tools it cannot run.
@@ -465,7 +539,7 @@ func TestServer_MissingCLIExitsOne(t *testing.T) {
 	t.Cleanup(func() { mcpserver.BinaryPath = original })
 
 	var stderr bytes.Buffer
-	code := run(context.Background(), &mcp.IOTransport{Reader: os.Stdin, Writer: os.Stdout}, &stderr)
+	code := run(context.Background(), os.Stdin, os.Stdout, &stderr)
 	if code != 1 {
 		t.Errorf("run() = %d with the CLI missing, want 1", code)
 	}
