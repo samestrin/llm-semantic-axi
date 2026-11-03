@@ -386,8 +386,8 @@ func TestCheckStaleness_GitRefusalIsNotNotGit(t *testing.T) {
 	if err := storage.SetLastIndex(ctx, LastIndex{Commit: gitHead(t, repo), IndexedAt: time.Now()}); err != nil {
 		t.Fatal(err)
 	}
-	// Corrupt HEAD so every git command in the repository fails, without it ceasing to be one.
-	if err := os.WriteFile(filepath.Join(repo, ".git", "HEAD"), []byte("garbage\n"), 0644); err != nil {
+	// Corrupt the config so git refuses the repository, without it ceasing to be one.
+	if err := os.WriteFile(filepath.Join(repo, ".git", "config"), []byte("[[[bad\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 
