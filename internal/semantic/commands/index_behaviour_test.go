@@ -75,19 +75,15 @@ func TestRunIndexJSONCarriesTheCounts(t *testing.T) {
 	if strings.Contains(out, "Indexing ") {
 		t.Errorf("--json emitted human progress text alongside the payload:\n%s", out)
 	}
-	// IndexResult carries no json tags, so the keys are the Go field names.
-	// Asserting the snake_case names a reader would expect made this test pass
-	// against zeroes, which is the false green these tests exist to avoid.
-	var payload struct {
-		FilesProcessed int `json:"FilesProcessed"`
-		ChunksCreated  int `json:"ChunksCreated"`
-	}
+	// The keys are snake_case, as index-update's are. Decoding into a map and
+	// requiring the key keeps a renamed key from passing as a zero count.
+	var payload map[string]any
 	decodeJSON(t, out, &payload)
-	if payload.FilesProcessed != 1 {
-		t.Errorf("FilesProcessed = %d, want 1", payload.FilesProcessed)
+	if got, ok := payload["files_processed"]; !ok || got != float64(1) {
+		t.Errorf("files_processed = %v (present %v), want 1:\n%s", got, ok, out)
 	}
-	if payload.ChunksCreated == 0 {
-		t.Error("ChunksCreated = 0, want the sample's chunks")
+	if got, ok := payload["chunks_created"].(float64); !ok || got == 0 {
+		t.Errorf("chunks_created = %v, want the sample's chunks:\n%s", payload["chunks_created"], out)
 	}
 }
 
@@ -108,7 +104,7 @@ func TestRunIndexAXIEmitsTOONWithoutProgressProse(t *testing.T) {
 	if strings.HasPrefix(strings.TrimSpace(out), "{") {
 		t.Errorf("--axi emitted JSON rather than TOON:\n%s", out)
 	}
-	if !strings.Contains(out, "FilesProcessed: 1") {
+	if !strings.Contains(out, "files_processed: 1") {
 		t.Errorf("TOON payload is missing the indexed file count:\n%s", out)
 	}
 }

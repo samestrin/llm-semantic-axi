@@ -2,8 +2,12 @@ package semantic
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
+	"regexp"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -1305,5 +1309,80 @@ func TestFileMatchesFilters(t *testing.T) {
 				t.Errorf("fileMatchesFilters() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+// snakeCaseKey matches the key style every printed result uses. A Go field
+// name such as FilesProcessed fails it.
+var snakeCaseKey = regexp.MustCompile(`^[a-z][a-z0-9]*(_[a-z0-9]+)*$`)
+
+// TestIndexAndUpdateResultsMarshalSnakeCaseKeys defends `index --json` and
+// `--axi`, which publish IndexResult through encoding/json: with no tags they
+// printed Go identifiers (FilesProcessed) while `index-update` printed
+// snake_case, so a caller reading one command's keys missed the other's.
+func TestIndexAndUpdateResultsMarshalSnakeCaseKeys(t *testing.T) {
+	// Every field is set so omitempty cannot hide a key from the check.
+	index := IndexResult{
+		FilesProcessed: 1, FilesSkipped: 1, FilesUnchanged: 1, ChunksCreated: 1,
+		FilesFallback: 1, FallbackFiles: []string{"a.go"}, Errors: []string{"boom"},
+	}
+	update := UpdateResult{
+		FilesUpdated: 1, FilesRemoved: 1, ChunksCreated: 1, ChunksRemoved: 1,
+		FilesFallback: 1, FallbackFiles: []string{"a.go"}, Mode: "git",
+	}
+
+	for name, tc := range map[string]struct {
+		value any
+		want  []string
+	}{
+		"IndexResult": {index, []string{"files_processed", "files_skipped", "files_unchanged",
+			"chunks_created", "files_fallback", "fallback_files", "errors"}},
+		"UpdateResult": {update, []string{"files_updated", "files_removed", "chunks_created",
+			"chunks_removed", "files_fallback", "fallback_files", "mode"}},
+	} {
+		raw, err := json.Marshal(tc.value)
+		if err != nil {
+			t.Fatalf("%s: marshal: %v", name, err)
+		}
+		var keys map[string]any
+		if err := json.Unmarshal(raw, &keys); err != nil {
+			t.Fatalf("%s: unmarshal: %v", name, err)
+		}
+		for key := range keys {
+			if !snakeCaseKey.MatchString(key) {
+				t.Errorf("%s marshals key %q, want snake_case: %s", name, key, raw)
+			}
+		}
+		for _, key := range tc.want {
+			if _, ok := keys[key]; !ok {
+				t.Errorf("%s is missing key %q: %s", name, key, raw)
+			}
+		}
+	}
+}
+
+// TestPrintedResultTypesTagEveryExportedField is the guard for the next field:
+// an exported field added without a json tag marshals under its Go name, and
+// the marshal test above only catches it if someone remembers to set it.
+func TestPrintedResultTypesTagEveryExportedField(t *testing.T) {
+	for _, typ := range []reflect.Type{
+		reflect.TypeOf(IndexResult{}),
+		reflect.TypeOf(UpdateResult{}),
+	} {
+		for i := 0; i < typ.NumField(); i++ {
+			field := typ.Field(i)
+			if !field.IsExported() {
+				continue
+			}
+			tag, ok := field.Tag.Lookup("json")
+			name, _, _ := strings.Cut(tag, ",")
+			if !ok || name == "" {
+				t.Errorf("%s.%s has no json name; it would marshal as %q", typ.Name(), field.Name, field.Name)
+				continue
+			}
+			if name != "-" && !snakeCaseKey.MatchString(name) {
+				t.Errorf("%s.%s json name %q is not snake_case", typ.Name(), field.Name, name)
+			}
+		}
 	}
 }
