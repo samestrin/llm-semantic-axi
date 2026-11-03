@@ -273,3 +273,78 @@ func TestResolveRefs_JSTSFamily(t *testing.T) {
 		t.Errorf(".py call to load resolved to %q, want py-load (the .mjs load is another language)", got)
 	}
 }
+
+// TestResolveRefs_ThisCallStaysInItsClass defends against a `this.` call
+// linking by bare name: with two classes in one file, each with get, plus a
+// top-level get there, A's this.get() means A's get and nothing else. A
+// `this.` call from outside any class names no class, so it stays unresolved
+// rather than picking the one lone match. Both stores that resolve edges run
+// it: SQLite, and the sidecar index behind Qdrant.
+func TestResolveRefs_ThisCallStaysInItsClass(t *testing.T) {
+	chunks := []Chunk{
+		{ID: "class-a", FilePath: "m.ts", Type: ChunkStruct, Name: "A", Content: "x", StartLine: 1, EndLine: 10, Language: "ts"},
+		{ID: "a-get", FilePath: "m.ts", Type: ChunkMethod, Name: "get", Content: "x", StartLine: 2, EndLine: 4, Language: "ts"},
+		{ID: "a-run", FilePath: "m.ts", Type: ChunkMethod, Name: "run", Content: "x", StartLine: 5, EndLine: 9, Language: "ts"},
+		{ID: "class-b", FilePath: "m.ts", Type: ChunkStruct, Name: "B", Content: "x", StartLine: 12, EndLine: 20, Language: "ts"},
+		{ID: "b-get", FilePath: "m.ts", Type: ChunkMethod, Name: "get", Content: "x", StartLine: 13, EndLine: 15, Language: "ts"},
+		{ID: "top-get", FilePath: "m.ts", Type: ChunkFunction, Name: "get", Content: "x", StartLine: 22, EndLine: 24, Language: "ts"},
+		{ID: "loose", FilePath: "n.ts", Type: ChunkFunction, Name: "loose", Content: "x", StartLine: 1, EndLine: 3, Language: "ts"},
+		{ID: "lone", FilePath: "o.ts", Type: ChunkMethod, Name: "lone", Content: "x", StartLine: 2, EndLine: 3, Language: "ts"},
+		{ID: "lone-class", FilePath: "o.ts", Type: ChunkStruct, Name: "C", Content: "x", StartLine: 1, EndLine: 4, Language: "ts"},
+		{ID: "bare", FilePath: "p.ts", Type: ChunkFunction, Name: "bare", Content: "x", StartLine: 1, EndLine: 3, Language: "ts"},
+		{ID: "bare-target", FilePath: "q.ts", Type: ChunkFunction, Name: "target", Content: "x", StartLine: 1, EndLine: 3, Language: "ts"},
+	}
+	refs := []ChunkRef{
+		{ChunkID: "a-run", RefType: RefCalls, RefName: "this.get"},
+		{ChunkID: "loose", RefType: RefCalls, RefName: "this.lone"},
+		{ChunkID: "bare", RefType: RefCalls, RefName: "target"},
+	}
+	cases := []struct{ chunkID, refName, want, why string }{
+		{"a-run", "this.get", "a-get", "this.get in A must link to A's get, not B's or the function"},
+		{"loose", "this.lone", "", "this. outside a class names no class and must stay unresolved"},
+		{"bare", "target", "bare-target", "a bare name keeps resolving across files"},
+	}
+
+	ctx := context.Background()
+	stores := map[string]func(t *testing.T) RefStorage{
+		"sqlite": func(t *testing.T) RefStorage {
+			storage, cleanup := createTestSQLiteStorage(t)
+			t.Cleanup(cleanup)
+			var batch []ChunkWithEmbedding
+			for _, c := range chunks {
+				batch = append(batch, ChunkWithEmbedding{Chunk: c, Embedding: []float32{0.1}})
+			}
+			if err := storage.CreateBatch(ctx, batch); err != nil {
+				t.Fatalf("CreateBatch: %v", err)
+			}
+			return storage
+		},
+		"lexical": func(t *testing.T) RefStorage {
+			idx, err := NewLexicalIndex(":memory:", 4)
+			if err != nil {
+				t.Fatalf("NewLexicalIndex: %v", err)
+			}
+			t.Cleanup(func() { idx.Close() })
+			if err := idx.IndexBatch(ctx, chunks); err != nil {
+				t.Fatalf("IndexBatch: %v", err)
+			}
+			return idx
+		},
+	}
+	for name, open := range stores {
+		t.Run(name, func(t *testing.T) {
+			rs := open(t)
+			if err := rs.StoreRefs(ctx, refs); err != nil {
+				t.Fatalf("StoreRefs: %v", err)
+			}
+			if err := rs.ResolveRefs(ctx); err != nil {
+				t.Fatalf("ResolveRefs: %v", err)
+			}
+			for _, tc := range cases {
+				if got := refTarget(t, rs, tc.chunkID, tc.refName); got != tc.want {
+					t.Errorf("%s: %q resolved to %q, want %q", tc.why, tc.refName, got, tc.want)
+				}
+			}
+		})
+	}
+}
