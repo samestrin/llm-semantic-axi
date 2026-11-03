@@ -85,7 +85,8 @@ func runCallers(ctx context.Context, symbol string, jsonOutput, minOutput bool) 
 		return err
 	}
 
-	return formatCallers(os.Stdout, symbol, edges, zero, jsonOutput, minOutput)
+	stale := refStaleness(ctx, rs)
+	return formatCallers(os.Stdout, symbol, edges, zero, &stale, jsonOutput, minOutput)
 }
 
 func runRefs(ctx context.Context, symbol string, jsonOutput, minOutput bool) error {
@@ -105,7 +106,8 @@ func runRefs(ctx context.Context, symbol string, jsonOutput, minOutput bool) err
 		return err
 	}
 
-	return formatRefs(os.Stdout, symbol, edges, zero, jsonOutput, minOutput)
+	stale := refStaleness(ctx, rs)
+	return formatRefs(os.Stdout, symbol, edges, zero, &stale, jsonOutput, minOutput)
 }
 
 // zeroEdges says what an empty callers or refs answer means. Without it the
@@ -208,10 +210,11 @@ func openRefStorage(ctx context.Context) (semantic.RefStorage, func(), error) {
 // formatCallers prints the callers of symbol. zero is the diagnosis of an
 // empty answer; with none, the empty text can only say the symbol may not be
 // indexed.
-func formatCallers(w io.Writer, symbol string, edges []semantic.RefEdge, zero *zeroEdges, jsonOutput, minOutput bool) error {
+func formatCallers(w io.Writer, symbol string, edges []semantic.RefEdge, zero *zeroEdges, stale *semantic.Staleness, jsonOutput, minOutput bool) error {
 	if jsonOutput || minOutput || GlobalAXIOutput {
-		return writeCallersJSON(w, symbol, edges, zero, minOutput)
+		return writeCallersJSON(w, symbol, edges, zero, stale, minOutput)
 	}
+	defer writeStalenessLine(w, stale)
 
 	if len(edges) == 0 {
 		if zero != nil {
@@ -229,7 +232,7 @@ func formatCallers(w io.Writer, symbol string, edges []semantic.RefEdge, zero *z
 	return nil
 }
 
-func writeCallersJSON(w io.Writer, symbol string, edges []semantic.RefEdge, zero *zeroEdges, minimal bool) error {
+func writeCallersJSON(w io.Writer, symbol string, edges []semantic.RefEdge, zero *zeroEdges, stale *semantic.Staleness, minimal bool) error {
 	callers := make([]map[string]interface{}, 0, len(edges))
 	for _, e := range edges {
 		entry := map[string]interface{}{
@@ -250,6 +253,7 @@ func writeCallersJSON(w io.Writer, symbol string, edges []semantic.RefEdge, zero
 		"callers": callers,
 	}
 	addZeroEdges(payload, zero)
+	addStaleness(payload, stale)
 	return emitJSON(w, payload, true)
 }
 
@@ -277,12 +281,13 @@ func collapseRefEdges(edges []semantic.RefEdge) []semantic.RefEdge {
 }
 
 // formatRefs prints the references from symbol; zero is as for formatCallers.
-func formatRefs(w io.Writer, symbol string, edges []semantic.RefEdge, zero *zeroEdges, jsonOutput, minOutput bool) error {
+func formatRefs(w io.Writer, symbol string, edges []semantic.RefEdge, zero *zeroEdges, stale *semantic.Staleness, jsonOutput, minOutput bool) error {
 	edges = collapseRefEdges(edges)
 
 	if jsonOutput || minOutput || GlobalAXIOutput {
-		return writeRefsJSON(w, symbol, edges, zero, minOutput)
+		return writeRefsJSON(w, symbol, edges, zero, stale, minOutput)
 	}
+	defer writeStalenessLine(w, stale)
 
 	if len(edges) == 0 {
 		if zero != nil {
@@ -304,7 +309,7 @@ func formatRefs(w io.Writer, symbol string, edges []semantic.RefEdge, zero *zero
 	return nil
 }
 
-func writeRefsJSON(w io.Writer, symbol string, edges []semantic.RefEdge, zero *zeroEdges, minimal bool) error {
+func writeRefsJSON(w io.Writer, symbol string, edges []semantic.RefEdge, zero *zeroEdges, stale *semantic.Staleness, minimal bool) error {
 	refs := make([]map[string]interface{}, 0, len(edges))
 	for _, e := range edges {
 		entry := map[string]interface{}{
@@ -328,6 +333,7 @@ func writeRefsJSON(w io.Writer, symbol string, edges []semantic.RefEdge, zero *z
 		"references": refs,
 	}
 	addZeroEdges(payload, zero)
+	addStaleness(payload, stale)
 	return emitJSON(w, payload, true)
 }
 
@@ -340,4 +346,18 @@ func addZeroEdges(payload map[string]interface{}, zero *zeroEdges) {
 	}
 	payload["status"] = zero.Status
 	payload["message"] = zero.Message
+}
+
+// addStaleness carries the staleness: a `stale` object under --axi, and one
+// stderr line under --json and --min, whose schema stays as it was. nil means
+// the caller did not measure it.
+func addStaleness(payload map[string]interface{}, stale *semantic.Staleness) {
+	if stale == nil {
+		return
+	}
+	if GlobalAXIOutput {
+		payload["stale"] = axiStaleness(*stale)
+		return
+	}
+	printStalenessLine(*stale, true)
 }

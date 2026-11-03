@@ -242,6 +242,7 @@ func runSearch(ctx context.Context, query string, opts searchOpts) error {
 	if err != nil {
 		return err
 	}
+	stale := indexStaleness(ctx, components.Storage)
 
 	// Output results
 	query = strings.TrimSpace(query)
@@ -261,15 +262,19 @@ func runSearch(ctx context.Context, query string, opts searchOpts) error {
 			if len(results) == 0 {
 				markZeroResults(payload, indexEmpty)
 			}
+			payload["stale"] = axiStaleness(stale)
 			return emitStdout(payload)
 		}
+		printStalenessLine(stale, true)
 		return outputJSON(results, opts.minOutput)
 	}
 	if indexEmpty {
 		fmt.Println(emptyIndexMessage)
-		return nil
+	} else if err := outputText(query, results); err != nil {
+		return err
 	}
-	return outputText(query, results)
+	printStalenessLine(stale, false)
+	return nil
 }
 
 // resultCount reads "1 result" or "N results".

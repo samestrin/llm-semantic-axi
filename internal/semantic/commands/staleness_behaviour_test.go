@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/samestrin/llm-semantic-axi/internal/semantic"
 )
 
 // Epic 04 T4. A search over an index built from older code read exactly like a
@@ -311,5 +313,77 @@ func TestMemorySearchSaysStalenessIsNotApplicable(t *testing.T) {
 				decodeJSON(t, stdout, &rows)
 			}
 		})
+	}
+}
+
+// withoutStalenessNote strips the staleness note that ends plain output, so a
+// test pinning the text before it byte for byte keeps doing so. These workspaces
+// sit outside git, so the note must be there, and must be the last line alone.
+func withoutStalenessNote(t *testing.T, out string) string {
+	t.Helper()
+	i := strings.LastIndex(out, "\nIndex staleness unknown: ")
+	if i < 0 {
+		t.Fatalf("plain output outside git lacks the staleness note:\n%s", out)
+	}
+	if note := out[i+1:]; strings.Count(note, "\n") != 1 || !strings.HasSuffix(note, "\n") {
+		t.Fatalf("the staleness note is not the last line alone:\n%s", out)
+	}
+	return out[:i]
+}
+
+// TestStalenessLineNamesEveryUnknownReason defends against an unknown staleness
+// reading as fresh: every reason prints a line that says "unknown" and why, never
+// an empty line, which is what fresh prints.
+func TestStalenessLineNamesEveryUnknownReason(t *testing.T) {
+	cases := map[string]string{
+		semantic.StalenessReasonNoRecord:      "no last index is recorded",
+		semantic.StalenessReasonUnsupported:   "does not record the last index",
+		semantic.StalenessReasonReadFailed:    "could not be read",
+		semantic.StalenessReasonNotGit:        "not in a git repository",
+		semantic.StalenessReasonNoCommit:      "built outside git",
+		semantic.StalenessReasonNoHead:        "has no commits",
+		semantic.StalenessReasonCommitUnknown: "not in the history of HEAD",
+		semantic.StalenessReasonGitFailed:     "git could not measure it",
+		"something_new":                       "could not be measured",
+	}
+	for reason, want := range cases {
+		line := stalenessLine(semantic.Staleness{State: semantic.StalenessUnknown, Reason: reason})
+		if !strings.HasPrefix(line, "Index staleness unknown: ") || !strings.Contains(line, want) {
+			t.Errorf("reason %s: line %q lacks %q", reason, line, want)
+		}
+	}
+
+	line := stalenessLine(semantic.Staleness{State: semantic.StalenessUnknown, Reason: semantic.StalenessReasonGitFailed, Detail: "exit status 128"})
+	if !strings.Contains(line, "(exit status 128)") {
+		t.Errorf("the git failure's detail is dropped: %q", line)
+	}
+	commit := strings.Repeat("a", 40)
+	line = stalenessLine(semantic.Staleness{State: semantic.StalenessUnknown, Reason: semantic.StalenessReasonCommitUnknown, IndexedCommit: commit})
+	if !strings.Contains(line, "(indexed at aaaaaaaaaaaa)") || strings.Contains(line, commit) {
+		t.Errorf("a commit with no time should read as its short form alone: %q", line)
+	}
+}
+
+// TestAXIStalenessCarriesTheDetail: a git failure under --axi says what failed,
+// as plain text does.
+func TestAXIStalenessCarriesTheDetail(t *testing.T) {
+	obj := axiStaleness(semantic.Staleness{State: semantic.StalenessUnknown, Reason: semantic.StalenessReasonGitFailed, Detail: "boom"})
+	if obj["detail"] != "boom" || obj["reason"] != semantic.StalenessReasonGitFailed {
+		t.Errorf("axiStaleness = %v", obj)
+	}
+	if _, ok := obj["indexed_at"]; ok {
+		t.Errorf("an unrecorded index time is printed: %v", obj)
+	}
+}
+
+// refsOnly is a RefStorage that is not a Storage.
+type refsOnly struct{ semantic.RefStorage }
+
+// TestRefStalenessWithoutAStorageIsUnknown defends against a call graph view the
+// staleness cannot be read from reporting fresh.
+func TestRefStalenessWithoutAStorageIsUnknown(t *testing.T) {
+	s := refStaleness(context.Background(), refsOnly{})
+	if s.State != semantic.StalenessUnknown || s.Reason != semantic.StalenessReasonUnsupported {
+		t.Errorf("refStaleness = %+v, want unknown/unsupported", s)
 	}
 }

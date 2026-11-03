@@ -41,7 +41,7 @@ func TestSearchPlainZeroResultsNamesTheQueryAndTheTotal(t *testing.T) {
 		}
 	})
 
-	if out != "No results found for \"authenticate\" (0 results).\n" {
+	if out := withoutStalenessNote(t, out); out != "No results found for \"authenticate\" (0 results).\n" {
 		t.Errorf("zero-result plain output = %q", out)
 	}
 }
@@ -344,7 +344,7 @@ func TestZeroCallersOfAGoSymbolIsAGenuineNone(t *testing.T) {
 			t.Fatalf("runCallers: %v", err)
 		}
 	})
-	if out != "No callers of Caller recorded in the call graph (0 callers).\n" {
+	if out := withoutStalenessNote(t, out); out != "No callers of Caller recorded in the call graph (0 callers).\n" {
 		t.Errorf("zero callers of a Go symbol printed %q", out)
 	}
 }
@@ -420,7 +420,7 @@ func TestZeroCallersOfANameInGoAndPythonNamesTheUncoveredLanguage(t *testing.T) 
 		}
 	})
 	want := "No callers of Caller recorded in the call graph; its py chunks are not indexed for edges (0 callers).\n"
-	if out != want {
+	if out := withoutStalenessNote(t, out); out != want {
 		t.Errorf("mixed-language zero callers:\n got %q\nwant %q", out, want)
 	}
 }
