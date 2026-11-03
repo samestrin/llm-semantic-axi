@@ -59,6 +59,10 @@ type fakeQdrant struct {
 	lastScrollLimit uint32
 	// lastQueryLimit records the Limit of the most recent Query request.
 	lastQueryLimit uint64
+
+	// omitPointsCount makes GetCollectionInfo leave PointsCount unset, as a
+	// server may while it has not counted the collection yet.
+	omitPointsCount bool
 }
 
 func newFakeQdrant() *fakeQdrant {
@@ -246,6 +250,9 @@ func (f *fakeQdrant) Get(_ context.Context, req *qdrant.GetCollectionInfoRequest
 	c, ok := f.collections[req.GetCollectionName()]
 	if !ok {
 		return nil, status.Errorf(codes.NotFound, "collection %s not found", req.GetCollectionName())
+	}
+	if f.omitPointsCount {
+		return &qdrant.GetCollectionInfoResponse{Result: &qdrant.CollectionInfo{}}, nil
 	}
 	count := uint64(len(c.points))
 	return &qdrant.GetCollectionInfoResponse{
