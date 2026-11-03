@@ -264,12 +264,14 @@ func A() {
 // (the ID hashes path, name and start line), so when the edit removes its last
 // call the old edge is still filed under that ID. extractAndStoreRefs used to
 // return on an empty result before deleting, which left A "calling" B forever.
-// Both the full index and the incremental update paths store refs, so each is
-// checked.
+// The incremental update is the path that kept the stale edge; the --force
+// index is checked too so the full path cannot regress to it.
 func TestIndexManager_EditDroppingLastCallClearsItsEdges(t *testing.T) {
 	for name, reindex := range map[string]func(context.Context, *IndexManager, string) error{
-		"index": func(ctx context.Context, mgr *IndexManager, dir string) error {
-			_, err := mgr.Index(ctx, dir, IndexOptions{})
+		// A plain index of an edited file fails on a duplicate chunk ID
+		// (filed as debt), so the full path is a --force re-index.
+		"index --force": func(ctx context.Context, mgr *IndexManager, dir string) error {
+			_, err := mgr.Index(ctx, dir, IndexOptions{Force: true})
 			return err
 		},
 		"update": func(ctx context.Context, mgr *IndexManager, dir string) error {

@@ -155,8 +155,10 @@ func TestPythonRefs_IndexedThroughTheRegisteredChunker(t *testing.T) {
 // unchanged ID.
 func TestPythonRefs_EditDroppingLastCallClearsItsEdges(t *testing.T) {
 	for name, reindex := range map[string]func(context.Context, *semantic.IndexManager, string) error{
-		"index": func(ctx context.Context, mgr *semantic.IndexManager, dir string) error {
-			_, err := mgr.Index(ctx, dir, semantic.IndexOptions{})
+		// A plain index of an edited file fails on a duplicate chunk ID
+		// (filed as debt), so the full path is a --force re-index.
+		"index --force": func(ctx context.Context, mgr *semantic.IndexManager, dir string) error {
+			_, err := mgr.Index(ctx, dir, semantic.IndexOptions{Force: true})
 			return err
 		},
 		"update": func(ctx context.Context, mgr *semantic.IndexManager, dir string) error {
