@@ -30,14 +30,6 @@ type schemaProperty struct {
 // This centralizes the definitions to avoid duplication.
 func commonProperties() map[string]schemaProperty {
 	return map[string]schemaProperty{
-		"json": {
-			Type:        "boolean",
-			Description: "Output as JSON",
-		},
-		"min": {
-			Type:        "boolean",
-			Description: "Minimal output format",
-		},
 		"storage": {
 			Type:        "string",
 			Description: "Storage backend (default: sqlite)",

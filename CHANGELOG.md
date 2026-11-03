@@ -44,6 +44,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- MCP tool schemas no longer advertise `json` and `min` properties. The server always runs the CLI with `--axi`, so setting either was silently ignored. (epic 08)
+
 - With `--axi`, a failed command now prints its error as TOON (`error: true`, `message: ...`) on stdout and still exits non-zero. Before this it printed a plain `Error: ...` on stderr and left stdout empty, because nothing passed `--axi` to the error formatter. This covers errors from the root command's config checks as well as from the subcommand. (epic 05.1)
 - Plain `multisearch` with `--output by_query` or `by_collection` no longer prints `No results found.` under a header that counts results. The empty check read the blended list, which a grouped format leaves empty; it now reads the total. (epic 05.1)
 - `search`, the profile search aliases and `multisearch` over an index that exists but holds no chunks no longer print `No results found for "..."`, the same words as a search that matched nothing. They say the index is empty and name `llm-semantic index <path>`; in `--axi` the answer carries `status: index_empty` and a `help` list pointing at `index`. An empty answer over a populated index carries `status: no_match`. `--json` is unchanged. (epic 05.1)

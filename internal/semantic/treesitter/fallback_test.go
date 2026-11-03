@@ -316,3 +316,43 @@ func TestRegistry_WrapsEveryChunkerInTheFallback(t *testing.T) {
 		}
 	}
 }
+
+// refStub is a stubChunker that also extracts refs, or panics doing so.
+type refStub struct {
+	stubChunker
+	refs   []semantic.ChunkRef
+	panics bool
+}
+
+func (s *refStub) ExtractRefs(string, []byte, []semantic.Chunk) ([]semantic.ChunkRef, error) {
+	if s.panics {
+		panic("ref walk blew up")
+	}
+	return s.refs, nil
+}
+
+// Defends the edges of every tree-sitter language: the registry wraps each
+// chunker in the fallback, and the index only asks the chunker it was given
+// whether it extracts refs. A wrapper that hid RefExtractor stored zero edges
+// for every language behind it, and callers and refs answered empty.
+func TestFallback_ForwardsRefExtraction(t *testing.T) {
+	want := []semantic.ChunkRef{{ChunkID: "a", RefType: semantic.RefCalls, RefName: "b"}}
+	got, err := WithFallback(&refStub{refs: want}).ExtractRefs("x.stub", nil, nil)
+	if err != nil || len(got) != 1 || got[0] != want[0] {
+		t.Errorf("ExtractRefs = %+v, %v; want the inner chunker's %+v", got, err, want)
+	}
+
+	got, err = WithFallback(&stubChunker{}).ExtractRefs("x.stub", nil, nil)
+	if err != nil || len(got) != 0 {
+		t.Errorf("chunker without refs: ExtractRefs = %+v, %v; want none and no error", got, err)
+	}
+}
+
+// Defends the index run: the fallback exists so one malformed file cannot end
+// it, and a panic in the ref walk would end it just the same.
+func TestFallback_RefExtractionPanicIsAnError(t *testing.T) {
+	_, err := WithFallback(&refStub{panics: true}).ExtractRefs("x.stub", nil, nil)
+	if err == nil || !strings.Contains(err.Error(), "ref walk blew up") {
+		t.Errorf("ExtractRefs err = %v, want the panic as an error", err)
+	}
+}
