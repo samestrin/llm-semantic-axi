@@ -261,17 +261,28 @@ func symbolLanguagesSQL(ctx context.Context, db *sql.DB, name string) ([]SymbolL
 // rules beyond the name match live, so later rules extend it rather than the
 // UPDATE below.
 //
-// Today the rule is: the target is in the calling chunk's language. Without it
-// a Python run() links to the only chunk named run in the index, a Go one.
-const refTargetEligibleSQL = `COALESCE(c.language, '') = COALESCE(
-				(SELECT caller.language FROM chunks caller WHERE caller.id = chunk_refs.chunk_id), '')`
+// Today the rule is: the target is in the calling chunk's language family.
+// Without it a Python run() links to the only chunk named run in the index, a
+// Go one. A chunk's language is its file extension, so the JS/TS extensions
+// are folded into one family (languageFamilySQL): a .js file calls into .ts
+// and .ts into .tsx all the time. Every other extension is its own family.
+var refTargetEligibleSQL = languageFamilySQL("c.language") + ` = ` + languageFamilySQL(
+	"(SELECT caller.language FROM chunks caller WHERE caller.id = chunk_refs.chunk_id)")
+
+// jsTSFamily lists the extensions that resolve edges to one another.
+const jsTSFamily = `'js', 'jsx', 'mjs', 'cjs', 'ts', 'tsx', 'mts', 'cts'`
+
+// languageFamilySQL maps a language column expression to its resolution family.
+func languageFamilySQL(expr string) string {
+	return `(CASE WHEN COALESCE(` + expr + `, '') IN (` + jsTSFamily + `) THEN 'js' ELSE COALESCE(` + expr + `, '') END)`
+}
 
 // resolveRefsSQL links stored references to the chunks they name.
 //
 // Two rules make the result trustworthy. A reference whose target chunk has
 // disappeared is unlinked first, so a rename cannot leave an edge pointing at a
 // chunk that no longer exists. A reference resolves only among chunks of the
-// calling chunk's language (refTargetEligibleSQL). A reference whose name matches more than one
+// calling chunk's language family (refTargetEligibleSQL). A reference whose name matches more than one
 // chunk is left unresolved, because a confidently wrong edge is worse than a
 // missing one.
 func resolveRefsSQL(ctx context.Context, db *sql.DB) error {
