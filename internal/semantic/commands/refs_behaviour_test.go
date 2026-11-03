@@ -331,3 +331,52 @@ func TestCallersOfAPrePythonEdgeIndexIsNotIndexedForEdges(t *testing.T) {
 		}
 	}
 }
+
+// TestRefsShowsAnImportedPackageUnresolved is epic 03.1 F2's fixture end to
+// end: a .ts file imports debounce from a package, and another file declares a
+// lone function debounce. The import names the package, so refs must list it
+// with no target; before the fix it pointed at local.ts, a confident wrong
+// answer.
+func TestRefsShowsAnImportedPackageUnresolved(t *testing.T) {
+	dir := newWorkspace(t)
+	useEmbedder(t, newFakeEmbedder(t))
+	writeFile(t, filepath.Join(dir, "main.ts"), `import debounce from "lodash/debounce";
+
+export function onResize() {
+    return 1;
+}
+`)
+	writeFile(t, filepath.Join(dir, "local.ts"), `export function debounce() {
+    return 2;
+}
+`)
+	runIndexIn(t, ".", indexOpts{skipCalibration: true})
+
+	out := captureStdout(t, func() {
+		if err := runRefs(context.Background(), "onResize", true, false); err != nil {
+			t.Fatalf("runRefs: %v", err)
+		}
+	})
+	var payload struct {
+		References []struct {
+			Ref      string `json:"ref"`
+			Type     string `json:"type"`
+			Resolved bool   `json:"resolved"`
+			File     string `json:"file"`
+		} `json:"references"`
+	}
+	decodeJSON(t, out, &payload)
+	found := false
+	for _, r := range payload.References {
+		if r.Type != "imports" || r.Ref != "debounce" {
+			continue
+		}
+		found = true
+		if r.Resolved || r.File != "" {
+			t.Errorf("imports debounce resolved to %q; a package has no chunk:\n%s", r.File, out)
+		}
+	}
+	if !found {
+		t.Errorf("refs from onResize lacks the imports debounce edge:\n%s", out)
+	}
+}
