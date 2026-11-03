@@ -1,6 +1,7 @@
 package semantic
 
 import (
+	"errors"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -82,3 +83,7 @@ func gitResolveCommit(dir, rev string) (string, error) {
 	}
 	return strings.TrimSpace(string(out)), nil
 }
+
+// errFlagLikeRef is returned for a ref starting with "-", which git would
+// parse as an option rather than a revision.
+var errFlagLikeRef = errors.New("git ref must not start with '-'")
