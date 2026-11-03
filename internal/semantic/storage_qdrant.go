@@ -681,8 +681,8 @@ func (s *QdrantStorage) Stats(ctx context.Context) (*IndexStats, error) {
 	lastUpdated := ""
 	if last != nil {
 		lastUpdated = last.IndexedAt.Format(time.RFC3339)
-		// The record is a point but not a chunk; an index with none must still read as empty
-		chunksTotal--
+		// The record is a point but not a chunk; an uncounted collection (0) has nothing to remove
+		chunksTotal = max(chunksTotal-1, 0)
 	}
 
 	return &IndexStats{
