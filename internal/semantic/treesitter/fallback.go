@@ -21,12 +21,14 @@ const fallbackMaxChunkSize = 1500
 // the file is reported as a fallback, so it is neither dropped nor counted as
 // parsed.
 //
-// The wrapper hides any optional interface the inner chunker implements (for
-// example semantic.RefExtractor); none of the tree-sitter chunkers has one.
+// The wrapper forwards semantic.RefExtractor to the inner chunker, and hides
+// any other optional interface the inner chunker implements.
 type Fallback struct {
 	inner   semantic.Chunker
 	generic *semantic.GenericChunker
 }
+
+var _ semantic.RefExtractor = (*Fallback)(nil)
 
 // WithFallback wraps a chunker in the parse-error fallback.
 func WithFallback(inner semantic.Chunker) *Fallback {
@@ -105,6 +107,21 @@ func (f *Fallback) windowUncovered(path string, content []byte, chunks []semanti
 		start = end
 	}
 	return windows, nil
+}
+
+// ExtractRefs returns the inner chunker's references, or none if it extracts
+// none. A panic becomes an error, as it does in Chunk.
+func (f *Fallback) ExtractRefs(path string, content []byte, chunks []semantic.Chunk) (refs []semantic.ChunkRef, err error) {
+	re, ok := f.inner.(semantic.RefExtractor)
+	if !ok {
+		return nil, nil
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			refs, err = nil, fmt.Errorf("ref extraction panicked: %v", r)
+		}
+	}()
+	return re.ExtractRefs(path, content, chunks)
 }
 
 // chunkInner runs the inner chunker, turning a panic into an error so one
