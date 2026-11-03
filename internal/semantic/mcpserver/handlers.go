@@ -21,6 +21,10 @@ var BinaryPath = "llm-semantic"
 // Can be overridden via LLM_SEMANTIC_TIMEOUT env var (in seconds)
 var CommandTimeout = 120 * time.Second
 
+// cancelWaitDelay bounds how long ExecuteHandler keeps waiting for the output
+// pipe to close after CommandTimeout has killed the command.
+const cancelWaitDelay = time.Second
+
 // argBuilder is a function that builds CLI arguments from the args map
 type argBuilder struct {
 	build    func(args map[string]interface{}) []string
@@ -228,6 +232,11 @@ func ExecuteHandler(toolName string, args map[string]interface{}) (string, error
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, BinaryPath, cmdArgs...)
+	killProcessGroupOnCancel(cmd)
+	// Backstop for a descendant the group kill cannot reach (one that left the
+	// group, or any grandchild off Unix): once the deadline has fired, stop
+	// waiting on the output pipe after this long rather than until it closes.
+	cmd.WaitDelay = cancelWaitDelay
 	output, err := cmd.CombinedOutput()
 
 	if ctx.Err() == context.DeadlineExceeded {

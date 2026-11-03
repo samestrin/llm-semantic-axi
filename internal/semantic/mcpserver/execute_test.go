@@ -3,6 +3,7 @@ package mcpserver
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -439,6 +440,56 @@ func TestExecuteHandler_TimesOutWhenAGrandchildHoldsTheOutputPipe(t *testing.T) 
 	}
 	if elapsed > CommandTimeout+3*time.Second {
 		t.Errorf("ExecuteHandler waited for the grandchild instead of the deadline: took %v", elapsed)
+	}
+}
+
+func TestExecuteHandler_TimeoutKillsTheGrandchild(t *testing.T) {
+	// Returning at the deadline is not enough if the work carries on behind
+	// the client's back: a timed-out index that keeps writing is a call the
+	// client was told failed, still taking effect. The deadline kills the
+	// child's whole process group, so the grandchild never reaches its write.
+	marker := filepath.Join(t.TempDir(), "survived")
+	script, _ := fakeBinary(t, "(sleep 1; echo survived > "+marker+") &\nwait")
+	useFakeBinary(t, script)
+
+	originalTimeout := CommandTimeout
+	CommandTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { CommandTimeout = originalTimeout })
+
+	start := time.Now()
+	if _, err := ExecuteHandler(ToolPrefix+"index_status", map[string]interface{}{}); err == nil {
+		t.Fatal("a timed-out command was reported as success")
+	}
+	time.Sleep(2*time.Second - time.Since(start))
+
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("the grandchild outlived the timeout and finished its work")
+	}
+}
+
+func TestExecuteHandler_TimesOutWhenAGrandchildLeavesTheProcessGroup(t *testing.T) {
+	// A descendant that starts its own session is out of reach of the group
+	// kill but still holds the output pipe. CommandTimeout must hold anyway:
+	// the handler stops waiting on the pipe shortly after the deadline.
+	if _, err := exec.LookPath("setsid"); err != nil {
+		t.Skip("setsid is not available")
+	}
+	script, _ := fakeBinary(t, "setsid sleep 10 &\nwait")
+	useFakeBinary(t, script)
+
+	originalTimeout := CommandTimeout
+	CommandTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { CommandTimeout = originalTimeout })
+
+	start := time.Now()
+	_, err := ExecuteHandler(ToolPrefix+"index_status", map[string]interface{}{})
+	elapsed := time.Since(start)
+
+	if err == nil || !strings.Contains(err.Error(), "timed out") {
+		t.Fatalf("expected a timeout error, got %v", err)
+	}
+	if elapsed > CommandTimeout+cancelWaitDelay+3*time.Second {
+		t.Errorf("a grandchild outside the process group held the call open: took %v", elapsed)
 	}
 }
 
