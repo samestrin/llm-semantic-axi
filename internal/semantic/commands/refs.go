@@ -75,18 +75,23 @@ func runCallers(ctx context.Context, symbol string, jsonOutput, minOutput bool) 
 	}
 	defer cleanup()
 
+	return writeCallers(ctx, os.Stdout, rs, symbol, jsonOutput, minOutput)
+}
+
+// writeCallers answers runCallers from an opened call graph view.
+func writeCallers(ctx context.Context, w io.Writer, rs semantic.RefStorage, symbol string, jsonOutput, minOutput bool) error {
 	edges, err := rs.GetCallersByName(ctx, symbol)
 	if err != nil {
 		return fmt.Errorf("failed to look up callers of %q: %w", symbol, err)
 	}
 
-	zero, err := diagnoseZeroEdges(ctx, rs, symbol, "callers of", len(edges))
+	zero, err := diagnoseWhenUsed(ctx, rs, symbol, "callers of", len(edges), jsonOutput, minOutput)
 	if err != nil {
 		return err
 	}
 
 	stale := refStaleness(ctx, rs)
-	return formatCallers(os.Stdout, symbol, edges, zero, &stale, jsonOutput, minOutput)
+	return formatCallers(w, symbol, edges, zero, &stale, jsonOutput, minOutput)
 }
 
 func runRefs(ctx context.Context, symbol string, jsonOutput, minOutput bool) error {
@@ -96,18 +101,23 @@ func runRefs(ctx context.Context, symbol string, jsonOutput, minOutput bool) err
 	}
 	defer cleanup()
 
+	return writeRefs(ctx, os.Stdout, rs, symbol, jsonOutput, minOutput)
+}
+
+// writeRefs answers runRefs from an opened call graph view.
+func writeRefs(ctx context.Context, w io.Writer, rs semantic.RefStorage, symbol string, jsonOutput, minOutput bool) error {
 	edges, err := rs.GetRefsByName(ctx, symbol)
 	if err != nil {
 		return fmt.Errorf("failed to look up references from %q: %w", symbol, err)
 	}
 
-	zero, err := diagnoseZeroEdges(ctx, rs, symbol, "references from", len(edges))
+	zero, err := diagnoseWhenUsed(ctx, rs, symbol, "references from", len(edges), jsonOutput, minOutput)
 	if err != nil {
 		return err
 	}
 
 	stale := refStaleness(ctx, rs)
-	return formatRefs(os.Stdout, symbol, edges, zero, &stale, jsonOutput, minOutput)
+	return formatRefs(w, symbol, edges, zero, &stale, jsonOutput, minOutput)
 }
 
 // zeroEdges says what an empty callers or refs answer means. Without it the
@@ -124,6 +134,16 @@ const (
 	zeroNotIndexedForEdges = "not_indexed_for_edges"
 	zeroNoneRecorded       = "none_recorded"
 )
+
+// diagnoseWhenUsed runs diagnoseZeroEdges only when the output carries its
+// result. Under --json or --min without --axi the diagnosis is discarded, so a
+// failed lookup must not fail an answer that never prints it.
+func diagnoseWhenUsed(ctx context.Context, rs semantic.RefStorage, symbol, noun string, count int, jsonOutput, minOutput bool) (*zeroEdges, error) {
+	if (jsonOutput || minOutput) && !GlobalAXIOutput {
+		return nil, nil
+	}
+	return diagnoseZeroEdges(ctx, rs, symbol, noun, count)
+}
 
 // diagnoseZeroEdges looks up the chunks named symbol when an answer came back
 // empty, and returns nil when it did not. noun reads "callers of" or

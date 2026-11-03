@@ -1,11 +1,15 @@
 package commands
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/samestrin/llm-semantic-axi/internal/semantic"
 )
 
 // TestCallersAndRefsNameAChunkWithNoRecordedLanguage defends the NULL-language
@@ -56,6 +60,67 @@ func TestCallersAndRefsNameAChunkWithNoRecordedLanguage(t *testing.T) {
 		for _, want := range []string{"unknown language", "status: not_indexed_for_edges\n"} {
 			if !strings.Contains(out, want) {
 				t.Errorf("--axi %s lacks %q:\n%s", name, want, out)
+			}
+		}
+	}
+}
+
+// failingLangs is a RefStorage with no edges whose SymbolLanguages always errors.
+type failingLangs struct{ semantic.RefStorage }
+
+func (failingLangs) GetCallersByName(context.Context, string) ([]semantic.RefEdge, error) {
+	return nil, nil
+}
+func (failingLangs) GetRefsByName(context.Context, string) ([]semantic.RefEdge, error) {
+	return nil, nil
+}
+func (failingLangs) SymbolLanguages(context.Context, string) ([]semantic.SymbolLanguage, error) {
+	return nil, errors.New("languages unavailable")
+}
+
+// TestZeroEdgeDiagnosisRunsOnlyWhereItsResultIsPrinted defends against a failed
+// SymbolLanguages lookup failing --json and --min answers that discard the
+// diagnosis, while plain and --axi output, which print it, still surface it.
+func TestZeroEdgeDiagnosisRunsOnlyWhereItsResultIsPrinted(t *testing.T) {
+	t.Cleanup(func() { GlobalAXIOutput = false })
+
+	cases := []struct {
+		name      string
+		axi       bool
+		json, min bool
+		wantErr   bool
+	}{
+		{"json", false, true, false, false},
+		{"min", false, false, true, false},
+		{"plain", false, false, false, true},
+		{"axi", true, false, false, true},
+		{"axi json", true, true, false, true},
+		{"axi min", true, false, true, true},
+	}
+	writers := map[string]func(*bytes.Buffer, bool, bool) error{
+		"callers": func(b *bytes.Buffer, j, m bool) error {
+			return writeCallers(context.Background(), b, failingLangs{}, "sym", j, m)
+		},
+		"refs": func(b *bytes.Buffer, j, m bool) error {
+			return writeRefs(context.Background(), b, failingLangs{}, "sym", j, m)
+		},
+	}
+	for _, tc := range cases {
+		for wname, write := range writers {
+			GlobalAXIOutput = tc.axi
+			var buf bytes.Buffer
+			err := write(&buf, tc.json, tc.min)
+			if tc.wantErr {
+				if err == nil || !strings.Contains(err.Error(), "languages unavailable") {
+					t.Errorf("%s %s: err = %v, want the lookup error", wname, tc.name, err)
+				}
+				continue
+			}
+			if err != nil {
+				t.Errorf("%s %s: lookup error surfaced: %v", wname, tc.name, err)
+			}
+			if !strings.Contains(buf.String(), "sym") {
+				t.Errorf("%s %s: answer not printed: %q", wname, tc.name, buf.String())
 			}
 		}
 	}
