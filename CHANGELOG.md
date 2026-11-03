@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- C++ chunker: a `typedef` is indexed under its declarator name as a `struct` chunk covering the whole typedef, so `typedef struct { int x; } P;` is found as `P`. A bare nameless `struct {..} v;` is still not chunked. (epic 09)
 - The MCP server runs the CLI with `--axi` instead of `--json --min`, so tool results reach the model as TOON. (epic 05.1)
 - `--axi` output of `search`, the profile search aliases and `multisearch` shows four fields per result (`file` as `path:line`, `name`, `score`, `content`), and `memory search` shows `id`, `question`, `score`, `answer`, cutting text over 200 characters with a note of how many characters were left out. `--full` returns every field and the whole text. `--json` and plain output are unchanged. (epic 05.1)
 - `--axi` output of `search`, the profile search aliases, `memory search`, `multisearch` and `index-status` carries a `help` list of suggested next steps, and the missing-index error does too. A search with results points at `callers`/`refs` and narrowing flags; an empty one says how to widen it. `--json` and plain output are unchanged. (epic 05.1)
@@ -44,6 +45,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Opening an index written before the `file_mtime` column existed no longer fails with `no such column: file_mtime`; the migration now runs before the index that references it. (epic 11)
 - MCP tool schemas no longer advertise `json` and `min` properties. The server always runs the CLI with `--axi`, so setting either was silently ignored. (epic 08)
 
 - With `--axi`, a failed command now prints its error as TOON (`error: true`, `message: ...`) on stdout and still exits non-zero. Before this it printed a plain `Error: ...` on stderr and left stdout empty, because nothing passed `--axi` to the error formatter. This covers errors from the root command's config checks as well as from the subcommand. (epic 05.1)

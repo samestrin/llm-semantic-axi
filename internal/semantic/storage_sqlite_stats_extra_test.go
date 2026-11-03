@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -271,23 +270,44 @@ func TestSQLiteStorage_MigrateMtimeColumn(t *testing.T) {
 	}
 }
 
-// TestSQLiteStorage_OpenLegacyDatabase documents a defect: initSchema executes its whole
-// schema block - including `CREATE INDEX ... ON chunks(file_mtime)` - before calling
-// migrateMtimeColumn, so opening a database written before that column existed fails and
-// the migration never runs. LexicalIndex.initSchema orders the two the other way round
-// and carries a comment saying the migration must come first.
+// TestSQLiteStorage_OpenLegacyDatabase defends opening a database written before the
+// file_mtime column existed: initSchema must create the tables, run the migration, and
+// only then create the index that references the column. Previously the index came first
+// and the open failed with "no such column: file_mtime", so a legacy index was unusable.
 func TestSQLiteStorage_OpenLegacyDatabase(t *testing.T) {
 	db, dbPath := legacyChunksDB(t)
 	if err := db.Close(); err != nil {
 		t.Fatalf("failed to close legacy db: %v", err)
 	}
 
-	_, err := NewSQLiteStorage(dbPath, 4)
-	if err == nil {
-		t.Fatal("NewSQLiteStorage() on a pre-file_mtime database unexpectedly succeeded; the migration ordering may have been fixed")
+	storage, err := NewSQLiteStorage(dbPath, 4)
+	if err != nil {
+		t.Fatalf("NewSQLiteStorage() on a pre-file_mtime database error = %v, want success", err)
 	}
-	if !strings.Contains(err.Error(), "file_mtime") {
-		t.Errorf("error = %v, want it to name the missing file_mtime column", err)
+	t.Cleanup(func() { storage.Close() })
+
+	var cols int
+	if err := storage.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('chunks') WHERE name = 'file_mtime'`).Scan(&cols); err != nil {
+		t.Fatalf("pragma query failed: %v", err)
+	}
+	if cols != 1 {
+		t.Errorf("file_mtime column count = %d, want 1", cols)
+	}
+
+	var idx int
+	if err := storage.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_chunks_file_mtime'`).Scan(&idx); err != nil {
+		t.Fatalf("index query failed: %v", err)
+	}
+	if idx != 1 {
+		t.Errorf("idx_chunks_file_mtime count = %d, want 1", idx)
+	}
+
+	var name, content string
+	if err := storage.db.QueryRow(`SELECT name, content FROM chunks WHERE id = 'old'`).Scan(&name, &content); err != nil {
+		t.Fatalf("the pre-existing row did not survive the open: %v", err)
+	}
+	if name != "Old" || content != "body" {
+		t.Errorf("surviving row = (%q, %q), want (Old, body)", name, content)
 	}
 }
 
@@ -331,5 +351,24 @@ func TestSQLiteStorage_Update(t *testing.T) {
 	missing := Chunk{ID: "nope", FilePath: "a.go", Name: "X", Type: ChunkFunction, Content: "x"}
 	if err := storage.Update(ctx, missing, []float32{1, 0, 0, 0}); !errors.Is(err, ErrNotFound) {
 		t.Errorf("Update(unknown id) error = %v, want ErrNotFound", err)
+	}
+}
+
+// TestSQLiteStorage_FreshDatabaseHasMtimeIndex defends the index moving out of the schema
+// block: a brand-new database has the column from CREATE TABLE, so the migration's
+// "column missing" branch never runs and the index must still be created.
+func TestSQLiteStorage_FreshDatabaseHasMtimeIndex(t *testing.T) {
+	storage, err := NewSQLiteStorage(filepath.Join(t.TempDir(), "fresh.db"), 4)
+	if err != nil {
+		t.Fatalf("failed to create storage: %v", err)
+	}
+	t.Cleanup(func() { storage.Close() })
+
+	var idx int
+	if err := storage.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_chunks_file_mtime'`).Scan(&idx); err != nil {
+		t.Fatalf("index query failed: %v", err)
+	}
+	if idx != 1 {
+		t.Errorf("idx_chunks_file_mtime count = %d, want 1 on a fresh database", idx)
 	}
 }
