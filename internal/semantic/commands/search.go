@@ -59,14 +59,7 @@ precision. Use --no-rerank to disable. Use --rerank-candidates to control
 how many candidates are fetched before reranking (default: max(topK*5, 50)).`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			query := args[0]
-			if len(args) > 1 {
-				// Join multiple args as the query
-				query = ""
-				for _, arg := range args {
-					query += arg + " "
-				}
-			}
+			query := strings.Join(args, " ")
 
 			// Validate hybrid parameters
 			if hybrid {
