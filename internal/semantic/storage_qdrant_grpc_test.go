@@ -75,6 +75,64 @@ func TestQdrantStorage_EnsureCollectionCreatesOnce(t *testing.T) {
 	}
 }
 
+// TestQdrantStorage_OpenIndexesChunkIDOnExistingCollection defends the chunk
+// filters (Stats counts and scrolls on chunk_id) on collections created before
+// the index existed: indexing only at creation would leave every existing
+// collection scanning. Opening it twice proves the call is idempotent.
+func TestQdrantStorage_OpenIndexesChunkIDOnExistingCollection(t *testing.T) {
+	fq, url := startFakeQdrant(t)
+	fq.addCollection("legacy", 4)
+
+	cfg := QdrantConfig{APIKey: "test-key", URL: url, CollectionName: "legacy", EmbeddingDim: 4, FTSDataDir: t.TempDir()}
+	for i := 0; i < 2; i++ {
+		storage, err := NewQdrantStorage(cfg)
+		if err != nil {
+			t.Fatalf("NewQdrantStorage (open %d): %v", i+1, err)
+		}
+		_ = storage.Close()
+		cfg.FTSDataDir = t.TempDir()
+	}
+
+	if n := fq.callCount("CreateCollection"); n != 0 {
+		t.Errorf("CreateCollection called %d times, want 0: the collection already existed", n)
+	}
+	if n := fq.callCount("CreateFieldIndex"); n != 2 {
+		t.Errorf("CreateFieldIndex called %d times, want once per open (2)", n)
+	}
+	typ, ok := fq.fieldIndex("legacy", "chunk_id")
+	if !ok {
+		t.Fatal("expected a chunk_id payload index on the existing collection")
+	}
+	if typ != qdrant.FieldType_FieldTypeKeyword {
+		t.Errorf("chunk_id index type = %v, want keyword", typ)
+	}
+}
+
+// TestQdrantStorage_OpenIndexesChunkIDOnNewCollection pins the other half: a
+// collection created on open is indexed too.
+func TestQdrantStorage_OpenIndexesChunkIDOnNewCollection(t *testing.T) {
+	_, fq := newFakeQdrantStorage(t, "fresh", 4)
+	if _, ok := fq.fieldIndex("fresh", "chunk_id"); !ok {
+		t.Fatal("expected a chunk_id payload index on the new collection")
+	}
+}
+
+// TestQdrantStorage_NewWrapsFieldIndexFailure pins that a failed chunk_id index
+// aborts construction rather than opening a store that reports it is ready.
+func TestQdrantStorage_NewWrapsFieldIndexFailure(t *testing.T) {
+	fq, url := startFakeQdrant(t)
+	fq.setFailure("CreateFieldIndex", status.Error(codes.PermissionDenied, "read-only"))
+
+	storage, err := NewQdrantStorage(QdrantConfig{APIKey: "test-key", URL: url, CollectionName: "noindex", EmbeddingDim: 4, FTSDataDir: t.TempDir()})
+	if err == nil {
+		storage.Close()
+		t.Fatal("expected construction to fail when the chunk_id index cannot be created")
+	}
+	if !strings.Contains(err.Error(), "failed to create chunk_id index") {
+		t.Errorf("error = %q, want it to mention the chunk_id index", err)
+	}
+}
+
 // TestQdrantStorage_NewWrapsEnsureCollectionFailure pins that a collection
 // listing failure aborts construction with a wrapped error rather than
 // returning a half-built storage.
@@ -570,43 +628,56 @@ func TestQdrantStorage_SearchWrapsServerFailure(t *testing.T) {
 	}
 }
 
-// TestQdrantStorage_StatsSurvivesScrollFailure pins that the file count is
-// best-effort: a failed scroll still yields the point total rather than an
-// error.
-func TestQdrantStorage_StatsSurvivesScrollFailure(t *testing.T) {
+// TestQdrantStorage_StatsFailsWhenFileScrollFails defends FilesIndexed against
+// a partial count. It replaces TestQdrantStorage_StatsSurvivesScrollFailure,
+// which pinned a failed scroll as FilesIndexed 0 with no error. Now that the
+// count pages, a failure on a later page would leave a half-counted total, so
+// any failed page is an error. The first page succeeds here and the second
+// fails, which is the half-counted case.
+func TestQdrantStorage_StatsFailsWhenFileScrollFails(t *testing.T) {
 	storage, fq := newFakeQdrantStorage(t, "statsdegraded", 4)
 	ctx := context.Background()
 
-	for i := 0; i < 2; i++ {
-		c := Chunk{ID: fmt.Sprintf("st-%d", i), FilePath: fmt.Sprintf("/s%d.go", i), Type: ChunkFunction, Language: "go"}
-		if err := storage.Create(ctx, c, []float32{1, 0, 0, 0}); err != nil {
-			t.Fatalf("Create: %v", err)
-		}
-	}
+	fq.seedChunkPoints("statsdegraded", 10001)
 
-	indexedAt := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-	if err := storage.SetLastIndex(ctx, LastIndex{Commit: "aaaa", IndexedAt: indexedAt}); err != nil {
-		t.Fatalf("SetLastIndex: %v", err)
-	}
-
-	fq.setFailure("Scroll", status.Error(codes.DeadlineExceeded, "slow"))
+	before := fq.callCount("Scroll")
+	fq.setFailureAfter("Scroll", 1, status.Error(codes.DeadlineExceeded, "slow"))
 	stats, err := storage.Stats(ctx)
+	if err == nil {
+		t.Fatalf("expected Stats to fail when a file_path scroll page fails, got %+v", stats)
+	}
+	if stats != nil {
+		t.Errorf("Stats returned %+v alongside the error, want nil", stats)
+	}
+	if !strings.Contains(err.Error(), "failed to scroll") {
+		t.Errorf("error = %q, want it to mention the scroll failure", err)
+	}
+	if got := fq.callCount("Scroll") - before; got != 2 {
+		t.Errorf("Scroll called %d times, want 2: the second page is the one that failed", got)
+	}
+}
+
+// TestQdrantStorage_StatsCountsFilesPastScrollCap defends FilesIndexed against
+// the single 10000-point scroll it used to take: an index of more than 10000
+// files reported exactly 10000.
+func TestQdrantStorage_StatsCountsFilesPastScrollCap(t *testing.T) {
+	storage, fq := newFakeQdrantStorage(t, "statsmanyfiles", 4)
+	fq.seedChunkPoints("statsmanyfiles", 10001)
+
+	stats, err := storage.Stats(context.Background())
 	if err != nil {
-		t.Fatalf("Stats should tolerate a scroll failure, got %v", err)
+		t.Fatalf("Stats: %v", err)
 	}
-	if stats.ChunksTotal != 2 {
-		t.Errorf("Stats ChunksTotal = %d, want 2", stats.ChunksTotal)
+	if stats.FilesIndexed != 10001 {
+		t.Errorf("Stats FilesIndexed = %d, want 10001", stats.FilesIndexed)
 	}
-	if stats.FilesIndexed != 0 {
-		t.Errorf("Stats FilesIndexed = %d, want 0 when the scroll failed", stats.FilesIndexed)
-	}
-	if want := indexedAt.Format(time.RFC3339); stats.LastUpdated != want {
-		t.Errorf("Stats LastUpdated = %q, want the recorded index time %q", stats.LastUpdated, want)
+	if stats.ChunksTotal != 10001 {
+		t.Errorf("Stats ChunksTotal = %d, want 10001", stats.ChunksTotal)
 	}
 }
 
 // TestQdrantStorage_StatsWrapsCollectionInfoFailure pins that a failed
-// collection lookup is a hard error, unlike the best-effort scroll.
+// collection lookup is a hard error.
 func TestQdrantStorage_StatsWrapsCollectionInfoFailure(t *testing.T) {
 	storage, fq := newFakeQdrantStorage(t, "statsfail", 4)
 	fq.setFailure("GetCollectionInfo", status.Error(codes.Unavailable, "no node"))
