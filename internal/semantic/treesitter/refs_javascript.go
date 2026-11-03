@@ -78,10 +78,13 @@ func extractJSRefs(lang *gotreesitter.Language, content []byte, chunks []semanti
 	return refs, nil
 }
 
-// jsCallName names a callee the way Go's refs do: a bare name as itself, a
-// member of a name or `this` as "obj.prop", any other member by its property.
-// A callee with no name (a call result, a computed member, a dynamic import)
-// gives "", and no edge is recorded for it.
+// jsCallName names a callee only where the name says what is called: a bare
+// name as itself, a member of `this` as "this.prop". Any other member call
+// (`obj.get()`, `super.get()`, `a.b.get()`) gives "": the resolver links on
+// the text after the last dot, so it would link to any lone chunk named
+// "get" though nothing ties obj to it. A callee with no name (a call result,
+// a computed member, a dynamic import) gives "" too. No edge is recorded for
+// "".
 func jsCallName(fn *gotreesitter.Node, lang *gotreesitter.Language, content []byte) string {
 	if fn == nil {
 		return ""
@@ -90,16 +93,12 @@ func jsCallName(fn *gotreesitter.Node, lang *gotreesitter.Language, content []by
 	case "identifier":
 		return GetNodeText(fn, content)
 	case "member_expression":
-		prop := GetNodeText(GetChildByFieldName(fn, "property", lang), content)
+		prop := GetChildByFieldName(fn, "property", lang)
 		obj := GetChildByFieldName(fn, "object", lang)
-		if prop == "" || obj == nil {
-			return prop
+		if prop == nil || obj == nil || obj.Type(lang) != "this" {
+			return ""
 		}
-		switch obj.Type(lang) {
-		case "identifier", "this", "super":
-			return GetNodeText(obj, content) + "." + prop
-		}
-		return prop
+		return "this." + GetNodeText(prop, content)
 	}
 	return ""
 }
