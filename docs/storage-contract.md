@@ -29,57 +29,57 @@ payload, not by collection or by ID namespace alone.
 
 ### 1. Chunk points (code chunks)
 
-Written by `chunkToPoint` (`storage_qdrant.go:1436-1460`).
+Written by `chunkToPoint` (`storage_qdrant.go:1442-1466`).
 
-- **ID:** `stringToUUID(chunk.ID)` (`:1444`).
-- **Vector:** the real embedding of the chunk content (`:1445`).
-- **Payload** (`:1446-1458`):
+- **ID:** `stringToUUID(chunk.ID)` (`:1450`).
+- **Vector:** the real embedding of the chunk content (`:1451`).
+- **Payload** (`:1452-1464`):
 
 | Key | Type | Written at |
 | --- | --- | --- |
-| `chunk_id` | string — original chunk ID | `:1447` |
-| `file_path` | string | `:1448` |
-| `type` | string — `ChunkType.String()`: the values emitted by the registered chunkers are `function`, `method`, `struct`, `interface`, `file`; the default branch also returns `unknown` for any out-of-range value (`internal/semantic/types.go:23-38`, default at `:36-37`) | `:1449` |
-| `name` | string | `:1450` |
-| `signature` | string | `:1451` |
-| `content` | string — full chunk text | `:1452` |
-| `start_line` | int | `:1453` |
-| `end_line` | int | `:1454` |
-| `language` | string | `:1455` |
-| `domain` | string — defaults to `"code"` when unset (`:1437-1441`) | `:1456` |
-| `content_hash` | string | `:1457` |
+| `chunk_id` | string — original chunk ID | `:1453` |
+| `file_path` | string | `:1454` |
+| `type` | string — `ChunkType.String()`: the values emitted by the registered chunkers are `function`, `method`, `struct`, `interface`, `file`; the default branch also returns `unknown` for any out-of-range value (`internal/semantic/types.go:23-38`, default at `:36-37`) | `:1455` |
+| `name` | string | `:1456` |
+| `signature` | string | `:1457` |
+| `content` | string — full chunk text | `:1458` |
+| `start_line` | int | `:1459` |
+| `end_line` | int | `:1460` |
+| `language` | string | `:1461` |
+| `domain` | string — defaults to `"code"` when unset (`:1443-1447`) | `:1462` |
+| `content_hash` | string | `:1463` |
 
 ### 2. `file_hash` points (incremental-index bookkeeping)
 
-Written by `SetFileHash` (`storage_qdrant.go:1403-1433`).
+Written by `SetFileHash` (`storage_qdrant.go:1409-1439`).
 
-- **ID:** `stringToUUID("file_hash:" + filePath)` (`fileHashID`, `:1322-1324`;
-  used at `:1415`).
+- **ID:** `stringToUUID("file_hash:" + filePath)` (`fileHashID`, `:1328-1330`;
+  used at `:1421`).
 - **Vector:** a zero vector of `embeddingDim` floats — a dummy, never
-  semantically meaningful (`:1411-1412`, used at `:1416`).
-- **Payload** (`:1417-1421`):
+  semantically meaningful (`:1417-1418`, used at `:1422`).
+- **Payload** (`:1423-1427`):
 
 | Key | Type | Written at |
 | --- | --- | --- |
-| `type` | string — always `"file_hash"` | `:1418` |
-| `file_path` | string | `:1419` |
-| `content_hash` | string — hash of the file's content at index time | `:1420` |
+| `type` | string — always `"file_hash"` | `:1424` |
+| `file_path` | string | `:1425` |
+| `content_hash` | string — hash of the file's content at index time | `:1426` |
 
 ### 3. The `calibration_metadata` point (singleton)
 
-Written by `SetCalibrationMetadata` (`storage_qdrant.go:1590-1624`); restored
-across collection clears at `:755-767`.
+Written by `SetCalibrationMetadata` (`storage_qdrant.go:1596-1630`); restored
+across collection clears at `:761-773`.
 
 - **ID:** `stringToUUID("calibration_metadata")` (`calibrationMetadataID`,
-  `:1545-1548`; used at `:1607`). Exactly one such point exists per collection.
-- **Vector:** a zero vector of `embeddingDim` floats — a dummy (`:1603-1604`,
-  used at `:1608`).
-- **Payload** (`:1609-1612`):
+  `:1551-1554`; used at `:1613`). Exactly one such point exists per collection.
+- **Vector:** a zero vector of `embeddingDim` floats — a dummy (`:1609-1610`,
+  used at `:1614`).
+- **Payload** (`:1615-1618`):
 
 | Key | Type | Written at |
 | --- | --- | --- |
-| `type` | string — always `"calibration_metadata"` | `:1610` |
-| `calibration_json` | string — JSON-serialized `CalibrationMetadata` | `:1611` |
+| `type` | string — always `"calibration_metadata"` | `:1616` |
+| `calibration_json` | string — JSON-serialized `CalibrationMetadata` | `:1617` |
 
 The JSON in `calibration_json` has these fields
 (`internal/semantic/calibration.go:27-36`): `embedding_model` (string),
@@ -89,32 +89,32 @@ The JSON in `calibration_json` has these fields
 
 ### 4. Memory entry points
 
-Written by `memoryToPoint` (`storage_qdrant.go:912-932`).
+Written by `memoryToPoint` (`storage_qdrant.go:918-938`).
 
-- **ID:** `stringToUUID("memory:" + entry.ID)` (`memoryPointID`, `:907-909`;
-  used at `:914`).
-- **Vector:** a **real** embedding (`:915`) — memory entries are
+- **ID:** `stringToUUID("memory:" + entry.ID)` (`memoryPointID`, `:913-915`;
+  used at `:920`).
+- **Vector:** a **real** embedding (`:921`) — memory entries are
   semantically searchable, unlike the zero-vector bookkeeping points.
-- **Payload** (`:916-930`). Note: memory points carry **no `type` key**;
+- **Payload** (`:922-936`). Note: memory points carry **no `type` key**;
   their discriminator is `entry_type`.
 
 Keys written at creation:
 
 | Key | Type | Written at |
 | --- | --- | --- |
-| `memory_id` | string — original entry ID | `:917` |
-| `question` | string | `:918` |
-| `answer` | string | `:919` |
-| `tags` | string — comma-joined | `:920` |
-| `source` | string | `:921` |
-| `status` | string — a `MemoryStatus`: `pending` or `promoted` (`internal/semantic/memory_entry.go:11-19`) | `:922` |
-| `occurrences` | int | `:923` |
-| `entry_type` | string — always `"memory"` | `:924` |
-| `created_at` | string | `:925` |
-| `updated_at` | string | `:926` |
-| `file_path` | string | `:927` |
-| `sprints` | string — comma-joined | `:928` |
-| `files` | string — comma-joined | `:929` |
+| `memory_id` | string — original entry ID | `:923` |
+| `question` | string | `:924` |
+| `answer` | string | `:925` |
+| `tags` | string — comma-joined | `:926` |
+| `source` | string | `:927` |
+| `status` | string — a `MemoryStatus`: `pending` or `promoted` (`internal/semantic/memory_entry.go:11-19`) | `:928` |
+| `occurrences` | int | `:929` |
+| `entry_type` | string — always `"memory"` | `:930` |
+| `created_at` | string | `:931` |
+| `updated_at` | string | `:932` |
+| `file_path` | string | `:933` |
+| `sprints` | string — comma-joined | `:934` |
+| `files` | string — comma-joined | `:935` |
 
 Keys added or rewritten later (all in
 `internal/semantic/storage_qdrant_stats.go`):
@@ -154,50 +154,51 @@ of `memory_id`.
 ### 6. The `last_index` point (singleton)
 
 The commit and time of the last index that brought the whole collection up to
-that commit. Written by `SetLastIndex` (`storage_qdrant.go:1665-1698`, payload
-built by `setLastIndexLocked` at `:1677-1698`); read by `getLastIndexLocked`
-(`:1643-1663`), which `Stats` uses to report `last_updated` (`:676-691`);
-removed by a collection clear (`Clear`, `:698`), which unlike
+that commit. Written by `SetLastIndex` (`storage_qdrant.go:1671-1704`, payload
+built by `setLastIndexLocked` at `:1683-1704`); read by `getLastIndexLocked`
+(`:1649-1669`), which `Stats` uses to report `last_updated` (`:684-692`);
+removed by a collection clear (`Clear`, `:704`), which unlike
 `calibration_metadata` does not restore it: a re-index that stops after the
 clear must leave no record, so it reads as unknown rather than current, as the
 sqlite backend does. Added after version 1 was published; it is additive, so
 the version is unchanged.
 
-- **ID:** `stringToUUID("last_index")` (`lastIndexID`, `:1626-1629`; used at
-  `:1682`). At most one such point exists per collection; it is absent until
+- **ID:** `stringToUUID("last_index")` (`lastIndexID`, `:1632-1635`; used at
+  `:1688`). At most one such point exists per collection; it is absent until
   the first index is recorded.
-- **Vector:** a zero vector of `embeddingDim` floats — a dummy (`:1679`, used
-  at `:1683`).
-- **Payload** (`:1684-1688`):
+- **Vector:** a zero vector of `embeddingDim` floats — a dummy (`:1685`, used
+  at `:1689`).
+- **Payload** (`:1690-1694`):
 
 | Key | Type | Written at |
 | --- | --- | --- |
-| `type` | string — always `"last_index"` | `:1685` |
-| `commit` | string — the full commit hash of `HEAD` when the index started; empty when the indexed directory is not in a git repository | `:1686` |
-| `indexed_at` | string — RFC 3339 timestamp in UTC, with fractional seconds, of when the index started | `:1687` |
+| `type` | string — always `"last_index"` | `:1691` |
+| `commit` | string — the full commit hash of `HEAD` when the index started; empty when the indexed directory is not in a git repository | `:1692` |
+| `indexed_at` | string — RFC 3339 timestamp in UTC, with fractional seconds, of when the index started | `:1693` |
 
 ## Filter rule: how to select chunks
 
 **Chunks are exactly the points that carry a `chunk_id` payload key.** Only
-`chunkToPoint` writes `chunk_id` (`:1447`); none of the other five kinds do.
+`chunkToPoint` writes `chunk_id` (`:1453`); none of the other five kinds do.
 The read path relies on the same key: `payloadToChunk` prefers `chunk_id` from
-the payload over the point UUID (`:1470-1472`).
+the payload over the point UUID (`:1476-1478`).
 
 **`type` is not chunk-exclusive.** `file_hash` points, the
 `calibration_metadata` point and the `last_index` point also carry a `type`
-key (`:1418`, `:1610`, `:1685`), while
+key (`:1424`, `:1616`, `:1691`), while
 memory points carry none at all. Filtering on the presence of `type`, or
 treating every `type`-bearing point as a chunk, will misclassify points. To
 select:
 
-- chunks → points having `chunk_id`;
+- chunks → points having `chunk_id` (this is how `Stats` counts them for
+  `chunks_total`, `:673-679`);
 - file-hash bookkeeping → `type == "file_hash"` (this is how
-  `ListIndexedFiles` selects them, `:1336-1340`);
+  `ListIndexedFiles` selects them, `:1342-1346`);
 - calibration metadata → `type == "calibration_metadata"` (read by ID at
-  `:1562`);
-- the last index record → `type == "last_index"` (read by ID at `:1647`);
+  `:1568`);
+- the last index record → `type == "last_index"` (read by ID at `:1653`);
 - memory entries → `entry_type == "memory"` (this is how memory search
-  filters, `:1071-1073` and `:1230-1232`; also the decode guard at `:941`);
+  filters, `:1077-1079` and `:1236-1238`; also the decode guard at `:947`);
 - retrieval logs → `entry_type == "retrieval_log"`
   (`storage_qdrant_stats.go:103`).
 

@@ -715,6 +715,19 @@ func matchCondition(c *qdrant.Condition, p *fakePoint) bool {
 		return false
 	case *qdrant.Condition_Filter:
 		return matchFilter(v.Filter, p)
+	case *qdrant.Condition_IsEmpty:
+		// Qdrant: the field is absent, null, or an empty list
+		val, ok := p.payload[v.IsEmpty.GetKey()]
+		if !ok {
+			return true
+		}
+		if _, isNull := val.GetKind().(*qdrant.Value_NullValue); isNull {
+			return true
+		}
+		if l, isList := val.GetKind().(*qdrant.Value_ListValue); isList {
+			return len(l.ListValue.GetValues()) == 0
+		}
+		return false
 	}
 	return false
 }

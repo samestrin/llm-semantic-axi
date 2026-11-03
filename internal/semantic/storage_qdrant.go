@@ -641,7 +641,7 @@ func (s *QdrantStorage) Stats(ctx context.Context) (*IndexStats, error) {
 		return nil, ErrStorageClosed
 	}
 
-	info, err := s.client.GetCollectionInfo(ctx, s.collectionName)
+	_, err := s.client.GetCollectionInfo(ctx, s.collectionName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get collection info: %w", err)
 	}
@@ -668,9 +668,17 @@ func (s *QdrantStorage) Stats(ctx context.Context) (*IndexStats, error) {
 		filesIndexed = len(fileSet)
 	}
 
-	chunksTotal := 0
-	if info.PointsCount != nil {
-		chunksTotal = int(*info.PointsCount)
+	// Only chunk points carry chunk_id. The collection's PointsCount also holds file
+	// hashes, calibration metadata, memories and the last index record.
+	chunksTotal, err := s.client.Count(ctx, &qdrant.CountPoints{
+		CollectionName: s.collectionName,
+		Filter: &qdrant.Filter{
+			MustNot: []*qdrant.Condition{qdrant.NewIsEmpty("chunk_id")},
+		},
+		Exact: qdrant.PtrOf(true),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to count chunks: %w", err)
 	}
 
 	// LastUpdated is the recorded index time; empty when none has been recorded.
@@ -681,12 +689,10 @@ func (s *QdrantStorage) Stats(ctx context.Context) (*IndexStats, error) {
 	lastUpdated := ""
 	if last != nil {
 		lastUpdated = last.IndexedAt.Format(time.RFC3339)
-		// The record is a point but not a chunk; an uncounted collection (0) has nothing to remove
-		chunksTotal = max(chunksTotal-1, 0)
 	}
 
 	return &IndexStats{
-		ChunksTotal:  chunksTotal,
+		ChunksTotal:  int(chunksTotal),
 		FilesIndexed: filesIndexed,
 		LastUpdated:  lastUpdated,
 	}, nil

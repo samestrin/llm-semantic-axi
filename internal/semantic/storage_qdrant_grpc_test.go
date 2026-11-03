@@ -620,6 +620,22 @@ func TestQdrantStorage_StatsWrapsCollectionInfoFailure(t *testing.T) {
 	}
 }
 
+// TestQdrantStorage_StatsFailsWhenChunkCountFails defends the index_empty answer:
+// a chunk count that could not be taken is an error, not 0 chunks, so a search
+// never reports an empty index it could not see.
+func TestQdrantStorage_StatsFailsWhenChunkCountFails(t *testing.T) {
+	storage, fq := newFakeQdrantStorage(t, "statscountfail", 4)
+	fq.setFailure("Count", status.Error(codes.Unavailable, "no node"))
+
+	stats, err := storage.Stats(context.Background())
+	if err == nil {
+		t.Fatalf("expected Stats to fail when the chunk count fails, got %+v", stats)
+	}
+	if !strings.Contains(err.Error(), "failed to count chunks") {
+		t.Errorf("error = %q, want it to mention the chunk count", err)
+	}
+}
+
 // TestQdrantStorage_ClearPreservesCalibrationMetadata pins the documented
 // promise of Clear: the collection is dropped and rebuilt, but calibration
 // survives.
