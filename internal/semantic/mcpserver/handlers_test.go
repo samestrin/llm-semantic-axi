@@ -1,9 +1,14 @@
 package mcpserver
 
 import (
+	"errors"
 	"os"
 	"reflect"
+	"regexp"
 	"testing"
+
+	"github.com/samestrin/llm-semantic-axi/internal/semantic"
+	"github.com/samestrin/llm-semantic-axi/internal/semantic/config"
 )
 
 func TestBuildMemoryStoreArgs(t *testing.T) {
@@ -364,8 +369,11 @@ func TestBuildSearchArgs_AllParameters(t *testing.T) {
 
 // Profile configuration tests
 
+// TestLoadConfig defends the one-parser rule: the handler must read every
+// profile's collection and storage through config.LoadConfig. It drives
+// resolveProfileSettings once per profile so all eight fields are asserted on
+// the path the MCP server actually takes, not on a private parser.
 func TestLoadConfig(t *testing.T) {
-	// Create a temp config file
 	tmpDir := t.TempDir()
 	configPath := tmpDir + "/config.yaml"
 
@@ -376,43 +384,47 @@ func TestLoadConfig(t *testing.T) {
   docs_storage: sqlite
   memory_collection: my-memory-index
   memory_storage: qdrant
+  sprints_collection: my-sprints-index
+  sprints_storage: sqlite
 `
 	if err := writeTestFile(configPath, configContent); err != nil {
 		t.Fatalf("Failed to create test config: %v", err)
 	}
 
-	cfg, err := loadConfig(configPath)
-	if err != nil {
-		t.Fatalf("loadConfig() error = %v", err)
+	want := map[string][2]string{
+		"code":    {"my-code-index", "qdrant"},
+		"docs":    {"my-docs-index", "sqlite"},
+		"memory":  {"my-memory-index", "qdrant"},
+		"sprints": {"my-sprints-index", "sqlite"},
 	}
-
-	if cfg.Semantic.CodeCollection != "my-code-index" {
-		t.Errorf("loadConfig() CodeCollection = %s, want my-code-index", cfg.Semantic.CodeCollection)
-	}
-	if cfg.Semantic.CodeStorage != "qdrant" {
-		t.Errorf("loadConfig() CodeStorage = %s, want qdrant", cfg.Semantic.CodeStorage)
-	}
-	if cfg.Semantic.DocsCollection != "my-docs-index" {
-		t.Errorf("loadConfig() DocsCollection = %s, want my-docs-index", cfg.Semantic.DocsCollection)
-	}
-	if cfg.Semantic.DocsStorage != "sqlite" {
-		t.Errorf("loadConfig() DocsStorage = %s, want sqlite", cfg.Semantic.DocsStorage)
-	}
-	if cfg.Semantic.MemoryCollection != "my-memory-index" {
-		t.Errorf("loadConfig() MemoryCollection = %s, want my-memory-index", cfg.Semantic.MemoryCollection)
-	}
-	if cfg.Semantic.MemoryStorage != "qdrant" {
-		t.Errorf("loadConfig() MemoryStorage = %s, want qdrant", cfg.Semantic.MemoryStorage)
+	for profile, w := range want {
+		args := map[string]interface{}{"profile": profile, "config": configPath}
+		if err := resolveProfileSettings(args); err != nil {
+			t.Fatalf("resolveProfileSettings(%s) error = %v", profile, err)
+		}
+		if args["collection"] != w[0] {
+			t.Errorf("profile %s collection = %v, want %s", profile, args["collection"], w[0])
+		}
+		if args["storage"] != w[1] {
+			t.Errorf("profile %s storage = %v, want %s", profile, args["storage"], w[1])
+		}
 	}
 }
 
+// TestLoadConfig_FileNotFound defends against a missing config being treated
+// as an empty one: the handler must fail and say the file was not found.
 func TestLoadConfig_FileNotFound(t *testing.T) {
-	_, err := loadConfig("/nonexistent/path/config.yaml")
+	path := "/nonexistent/path/config.yaml"
+	err := resolveProfileSettings(map[string]interface{}{"profile": "code", "config": path})
 	if err == nil {
-		t.Error("loadConfig() expected error for missing file, got nil")
+		t.Fatal("resolveProfileSettings() expected error for missing file, got nil")
 	}
+	assertConfigError(t, err, config.ErrConfigNotFound(path).Message)
 }
 
+// TestLoadConfig_InvalidYAML defends the line-and-column report on bad YAML.
+// The handler's old yaml.v3 parser gave no column, so a caller could not find
+// the fault the CLI would have pointed at.
 func TestLoadConfig_InvalidYAML(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := tmpDir + "/invalid.yaml"
@@ -422,9 +434,49 @@ func TestLoadConfig_InvalidYAML(t *testing.T) {
 		t.Fatalf("Failed to create test config: %v", err)
 	}
 
-	_, err := loadConfig(configPath)
+	err := resolveProfileSettings(map[string]interface{}{"profile": "code", "config": configPath})
 	if err == nil {
-		t.Error("loadConfig() expected error for invalid YAML, got nil")
+		t.Fatal("resolveProfileSettings() expected error for invalid YAML, got nil")
+	}
+	var se *semantic.SemanticError
+	if !errors.As(err, &se) {
+		t.Fatalf("error %v is not a *semantic.SemanticError", err)
+	}
+	if !regexp.MustCompile(`at line \d+, column \d+`).MatchString(se.Message) {
+		t.Errorf("error message %q has no line and column", se.Message)
+	}
+}
+
+// TestLoadConfig_EmptyFile defends against an empty config.yaml reporting
+// success: the CLI rejects it with ErrConfigEmpty, and the MCP path used to
+// accept it and resolve nothing, so a profile silently fell back to defaults.
+func TestLoadConfig_EmptyFile(t *testing.T) {
+	configPath := t.TempDir() + "/config.yaml"
+	if err := writeTestFile(configPath, ""); err != nil {
+		t.Fatalf("Failed to create test config: %v", err)
+	}
+
+	args := map[string]interface{}{"profile": "code", "config": configPath}
+	err := resolveProfileSettings(args)
+	if err == nil {
+		t.Fatal("resolveProfileSettings() accepted an empty config file")
+	}
+	assertConfigError(t, err, config.ErrConfigEmpty(configPath).Message)
+	if _, set := args["collection"]; set {
+		t.Errorf("collection set to %v from an empty config", args["collection"])
+	}
+}
+
+// assertConfigError checks that err wraps the config package's SemanticError
+// with the given message, so the handler reports what the CLI would.
+func assertConfigError(t *testing.T, err error, wantMessage string) {
+	t.Helper()
+	var se *semantic.SemanticError
+	if !errors.As(err, &se) {
+		t.Fatalf("error %v is not a *semantic.SemanticError", err)
+	}
+	if se.Message != wantMessage {
+		t.Errorf("error message = %q, want %q", se.Message, wantMessage)
 	}
 }
 
