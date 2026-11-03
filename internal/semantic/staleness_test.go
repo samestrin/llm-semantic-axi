@@ -427,3 +427,55 @@ func (s fixedLastIndexStorage) GetLastIndex(context.Context) (*LastIndex, error)
 	li := s.li
 	return &li, nil
 }
+
+// TestCheckStaleness_StatusFailureIsUnknown defends against a failed `git status` leaving
+// the file count at 0, so that a repository at the recorded commit reads as fresh. A
+// corrupt .git/index makes status fail while every commit check still succeeds.
+func TestCheckStaleness_StatusFailureIsUnknown(t *testing.T) {
+	repo := t.TempDir()
+	gitRun(t, repo, "init")
+	commitGoFile(t, repo, "one.go", "One")
+	storage := newFileStorage(t)
+	ctx := context.Background()
+	if err := storage.SetLastIndex(ctx, LastIndex{Commit: gitHead(t, repo), IndexedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repo, ".git", "index"), []byte("DIRC"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := CheckStaleness(ctx, storage, repo)
+	assertUnknown(t, s, StalenessReasonGitFailed)
+	if s.Detail == "" {
+		t.Error("Detail is empty, want git's stderr")
+	}
+}
+
+// TestCheckStaleness_UntrackedShownDespiteConfig defends against a repository setting
+// status.showUntrackedFiles=no hiding new files from the check, so an index that never
+// saw them reads as fresh. Each untracked file also counts on its own, not as its directory.
+func TestCheckStaleness_UntrackedShownDespiteConfig(t *testing.T) {
+	repo := t.TempDir()
+	gitRun(t, repo, "init")
+	commitGoFile(t, repo, "one.go", "One")
+	gitRun(t, repo, "config", "status.showUntrackedFiles", "no")
+	storage := newFileStorage(t)
+	ctx := context.Background()
+	if err := storage.SetLastIndex(ctx, LastIndex{Commit: gitHead(t, repo), IndexedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	sub := filepath.Join(repo, "pkg")
+	if err := os.MkdirAll(sub, 0755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"a.go", "b.go"} {
+		if err := os.WriteFile(filepath.Join(sub, name), goSource("X"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	s := CheckStaleness(ctx, storage, repo)
+	if s.State != StalenessStale || s.FilesChanged == nil || *s.FilesChanged != 2 {
+		t.Errorf("State = %q, FilesChanged = %v; want stale, 2 (pkg/a.go, pkg/b.go)", s.State, s.FilesChanged)
+	}
+}
