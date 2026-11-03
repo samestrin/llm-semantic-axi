@@ -266,8 +266,22 @@ func symbolLanguagesSQL(ctx context.Context, db *sql.DB, name string) ([]SymbolL
 // Go one. A chunk's language is its file extension, so the JS/TS extensions
 // are folded into one family (languageFamilySQL): a .js file calls into .ts
 // and .ts into .tsx all the time. Every other extension is its own family.
+//
+// A JS/TS `this.` call also names its class, so its target must be a method
+// in the caller's file, inside a class chunk that holds the caller too.
+// Without it this.get() links to a lone top-level get, or to another class's
+// get, which the call can never reach. The rule is JS/TS only: Go records a
+// call on a receiver named this as this.Method, and a Go method is declared
+// outside its type, so the class test would drop every such edge.
 var refTargetEligibleSQL = languageFamilySQL("c.language") + ` = ` + languageFamilySQL(
-	"(SELECT caller.language FROM chunks caller WHERE caller.id = chunk_refs.chunk_id)")
+	"(SELECT caller.language FROM chunks caller WHERE caller.id = chunk_refs.chunk_id)") + `
+	AND (substr(chunk_refs.ref_name, 1, 5) <> 'this.' OR ` + languageFamilySQL("c.language") + ` <> 'js' OR (c.type = 'method' AND EXISTS (
+		SELECT 1 FROM chunks caller JOIN chunks cls ON cls.file_path = caller.file_path
+		WHERE caller.id = chunk_refs.chunk_id
+		  AND cls.type = 'struct'
+		  AND c.file_path = caller.file_path
+		  AND cls.start_line <= caller.start_line AND caller.end_line <= cls.end_line
+		  AND cls.start_line <= c.start_line AND c.end_line <= cls.end_line)))`
 
 // jsTSFamily lists the extensions that resolve edges to one another.
 const jsTSFamily = `'js', 'jsx', 'mjs', 'cjs', 'ts', 'tsx', 'mts', 'cts'`
