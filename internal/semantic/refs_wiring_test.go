@@ -258,3 +258,70 @@ func A() {
 		t.Errorf("target = %q, want B's chunk %q", callers[0].RefTargetID, b.ID)
 	}
 }
+
+// TestIndexManager_EditDroppingLastCallClearsItsEdges defends against stale
+// edges outliving the code that made them. A chunk keeps its ID across an edit
+// (the ID hashes path, name and start line), so when the edit removes its last
+// call the old edge is still filed under that ID. extractAndStoreRefs used to
+// return on an empty result before deleting, which left A "calling" B forever.
+// Both the full index and the incremental update paths store refs, so each is
+// checked.
+func TestIndexManager_EditDroppingLastCallClearsItsEdges(t *testing.T) {
+	for name, reindex := range map[string]func(context.Context, *IndexManager, string) error{
+		"index": func(ctx context.Context, mgr *IndexManager, dir string) error {
+			_, err := mgr.Index(ctx, dir, IndexOptions{})
+			return err
+		},
+		"update": func(ctx context.Context, mgr *IndexManager, dir string) error {
+			_, err := mgr.Update(ctx, dir, UpdateOptions{})
+			return err
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			storage, mgr, dir := newRefsHarness(t)
+			ctx := context.Background()
+			rs := RefStorage(storage)
+
+			writeGoFile(t, dir, "a.go", `package main
+
+func A() {
+	B()
+}
+
+func B() {}
+`)
+			if _, err := mgr.Index(ctx, dir, IndexOptions{}); err != nil {
+				t.Fatalf("Index: %v", err)
+			}
+			a := chunkByName(t, storage, "A")
+			if refs, err := rs.GetRefs(ctx, a.ID); err != nil {
+				t.Fatalf("GetRefs(A) before edit: %v", err)
+			} else if len(refs) == 0 {
+				t.Fatalf("precondition: A has no edges before the edit")
+			}
+
+			// A is edited to call nothing; its start line, so its ID, is unchanged.
+			writeGoFile(t, dir, "a.go", `package main
+
+func A() {
+}
+
+func B() {}
+`)
+			if err := reindex(ctx, mgr, dir); err != nil {
+				t.Fatalf("re-index: %v", err)
+			}
+
+			if got := chunkByName(t, storage, "A"); got.ID != a.ID {
+				t.Fatalf("A's chunk ID changed across the edit (%q -> %q); the test no longer covers a surviving ID", a.ID, got.ID)
+			}
+			refs, err := rs.GetRefs(ctx, a.ID)
+			if err != nil {
+				t.Fatalf("GetRefs(A) after edit: %v", err)
+			}
+			if len(refs) != 0 {
+				t.Errorf("A still has edges %+v after the edit removed its last call", refs)
+			}
+		})
+	}
+}
