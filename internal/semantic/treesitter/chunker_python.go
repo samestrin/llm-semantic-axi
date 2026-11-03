@@ -147,21 +147,21 @@ func (c *PythonChunker) walkRefs(node *gotreesitter.Node, content []byte, owners
 	WalkNamedChildren(node, c.lang, func(child *gotreesitter.Node, nodeType string) {
 		switch nodeType {
 		case "call":
-			owner, ok := innermostChunk(owners, child)
+			id := innermostChunk(owners, nodeLine(child))
 			name := c.callName(child, content)
-			if ok && name != "" && name != owner.Name {
-				*refs = append(*refs, semantic.ChunkRef{ChunkID: owner.ID, RefType: semantic.RefCalls, RefName: name})
+			if id != "" && name != "" && name != chunkName(owners, id) {
+				*refs = append(*refs, semantic.ChunkRef{ChunkID: id, RefType: semantic.RefCalls, RefName: name})
 			}
 
 		case "import_statement", "import_from_statement":
 			// A top-level import belongs to the file's first chunk, as in
 			// GoChunker; one inside a function belongs to that function.
-			owner, ok := innermostChunk(owners, child)
-			if !ok {
-				owner = owners[0]
+			id := innermostChunk(owners, nodeLine(child))
+			if id == "" {
+				id = owners[0].ID
 			}
 			for _, name := range c.importNames(child, content) {
-				*refs = append(*refs, semantic.ChunkRef{ChunkID: owner.ID, RefType: semantic.RefImports, RefName: name})
+				*refs = append(*refs, semantic.ChunkRef{ChunkID: id, RefType: semantic.RefImports, RefName: name})
 			}
 			return
 		}
@@ -216,19 +216,15 @@ func (c *PythonChunker) importNames(stmt *gotreesitter.Node, content []byte) []s
 	return names
 }
 
-// innermostChunk returns the smallest chunk whose lines hold the node's first
-// line, so a call in a method belongs to the method, not its class.
-func innermostChunk(chunks []semantic.Chunk, node *gotreesitter.Node) (semantic.Chunk, bool) {
-	line := int(node.StartPoint().Row) + 1
-	var best semantic.Chunk
-	found := false
+// nodeLine returns the 1-based line a node starts on.
+func nodeLine(n *gotreesitter.Node) int { return int(n.StartPoint().Row) + 1 }
+
+// chunkName returns the name of the chunk with this ID.
+func chunkName(chunks []semantic.Chunk, id string) string {
 	for _, ch := range chunks {
-		if line < ch.StartLine || line > ch.EndLine {
-			continue
-		}
-		if !found || ch.EndLine-ch.StartLine < best.EndLine-best.StartLine {
-			best, found = ch, true
+		if ch.ID == id {
+			return ch.Name
 		}
 	}
-	return best, found
+	return ""
 }

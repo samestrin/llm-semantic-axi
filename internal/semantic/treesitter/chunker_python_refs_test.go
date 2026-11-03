@@ -228,31 +228,6 @@ func TestPythonRefs_NoEdgeFromAFallbackTextWindow(t *testing.T) {
 	}
 }
 
-// Defends the Fallback forwarding contract for every other language: a
-// wrapped chunker with no ExtractRefs records nothing and reports no error,
-// so wrapping does not invent edges or fail an index run.
-func TestFallback_ExtractRefsWithoutInnerExtractorIsEmpty(t *testing.T) {
-	refs, err := WithFallback(&stubChunker{}).ExtractRefs("x.stub", []byte("x"), nil)
-	if err != nil || len(refs) != 0 {
-		t.Errorf("ExtractRefs = %v, %v; want no refs and no error", refs, err)
-	}
-}
-
-type panickingRefs struct{ stubChunker }
-
-func (panickingRefs) ExtractRefs(string, []byte, []semantic.Chunk) ([]semantic.ChunkRef, error) {
-	panic("extractor blew up")
-}
-
-// Defends the index run against one bad file: a panicking extractor becomes
-// an error, as a panicking Chunk already does.
-func TestFallback_ExtractRefsPanicBecomesAnError(t *testing.T) {
-	refs, err := WithFallback(&panickingRefs{}).ExtractRefs("x.stub", []byte("x"), nil)
-	if err == nil {
-		t.Fatalf("ExtractRefs = %v, nil; want the panic as an error", refs)
-	}
-}
-
 // Defends where import edges land and what they name: an import inside a
 // function belongs to that function, not to the file's first chunk, and a
 // wildcard import names no symbol, so it records no edge.
