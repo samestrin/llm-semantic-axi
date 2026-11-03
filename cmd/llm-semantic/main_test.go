@@ -168,3 +168,56 @@ func TestMain_AXIErrorIsTOONOnStdout(t *testing.T) {
 		})
 	}
 }
+
+func TestMain_FlagParseErrorUnderAXIIsTOONOnStdout(t *testing.T) {
+	// Defends the same contract as TestMain_AXIErrorIsTOONOnStdout for the
+	// failure that never reaches PersistentPreRunE: an unknown flag fails in
+	// cobra's flag parsing, so --axi was never published to the output package
+	// and the agent that asked for TOON got an empty stdout and a plain stderr.
+	cases := map[string][]string{
+		"unknown flag after --axi":  {"search", "--axi", "--nope"},
+		"unknown flag before --axi": {"search", "--nope", "--axi"},
+		"unknown subcommand":        {"nosuchcmd", "--axi"},
+		"explicit --axi=true":       {"search", "--nope", "--axi=true"},
+	}
+	for name, args := range cases {
+		t.Run(name, func(t *testing.T) {
+			stdout, stderr, code := runMain(t, args...)
+
+			if code == 0 {
+				t.Errorf("exit code 0 for a flag-parse error; stdout=%q stderr=%q", stdout, stderr)
+			}
+			if !strings.Contains(stdout, "error: true") || !strings.Contains(stdout, "message:") {
+				t.Errorf("stdout carries no TOON error: stdout=%q stderr=%q", stdout, stderr)
+			}
+			if strings.Contains(stderr, "Error:") {
+				t.Errorf("the error went to stderr as plain text instead: %q", stderr)
+			}
+		})
+	}
+}
+
+func TestMain_FlagParseErrorWithoutAXIIsUnchanged(t *testing.T) {
+	// Defends the other half: without --axi (or with --axi=false, or after a
+	// "--" terminator) the plain "Error:" on stderr and empty stdout must stay.
+	cases := map[string][]string{
+		"no --axi":         {"search", "--nope"},
+		"--axi=false":      {"search", "--nope", "--axi=false"},
+		"after terminator": {"search", "--nope", "--", "--axi"},
+	}
+	for name, args := range cases {
+		t.Run(name, func(t *testing.T) {
+			stdout, stderr, code := runMain(t, args...)
+
+			if code == 0 {
+				t.Errorf("exit code 0 for a flag-parse error; stdout=%q", stdout)
+			}
+			if stdout != "" {
+				t.Errorf("stdout should be empty without --axi: %q", stdout)
+			}
+			if !strings.Contains(stderr, "Error:") || !strings.Contains(stderr, "unknown") {
+				t.Errorf("stderr lost the plain error: %q", stderr)
+			}
+		})
+	}
+}
