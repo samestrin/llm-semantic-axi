@@ -33,6 +33,9 @@ const (
 
 // Staleness reports how far the index is behind the working tree.
 //
+// FilesChanged counts the whole repository containing the indexed directory, not only
+// that directory.
+//
 // CommitsBehind and FilesChanged are nil unless State is fresh or stale: an unknown
 // staleness has no counts, so it can never be read as "0 behind".
 type Staleness struct {
@@ -40,7 +43,7 @@ type Staleness struct {
 	Reason        string    `json:"reason,omitempty"` // set when State is unknown
 	Detail        string    `json:"detail,omitempty"` // underlying error, if any
 	CommitsBehind *int      `json:"commits_behind,omitempty"`
-	FilesChanged  *int      `json:"files_changed,omitempty"` // uncommitted changes, untracked files included
+	FilesChanged  *int      `json:"files_changed,omitempty"` // uncommitted changes, untracked files included; repository-wide, not narrowed to the indexed directory
 	IndexedCommit string    `json:"indexed_commit,omitempty"`
 	IndexedAt     time.Time `json:"indexed_at"`
 }
@@ -56,8 +59,10 @@ var commitHash = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 // CheckStaleness compares the last index recorded in storage with the git working tree
 // containing dir. It uses git only (no tree walk, no embedding): commits from the recorded
 // commit to HEAD, plus uncommitted changes from `git status --porcelain`, across the whole
-// repository. Changes at or under any of ignore are not counted: pass the index's own
-// directory, which otherwise shows up as an untracked change after every index.
+// repository: FilesChanged is repository-wide and is not narrowed to dir, so a change
+// outside the indexed directory still counts. Changes at or under any of ignore are not
+// counted: pass the index's own directory, which otherwise shows up as an untracked
+// change after every index.
 // Anything that cannot be measured reports StalenessUnknown, never fresh.
 func CheckStaleness(ctx context.Context, storage Storage, dir string, ignore ...string) Staleness {
 	last, err := storage.GetLastIndex(ctx)

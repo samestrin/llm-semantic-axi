@@ -176,6 +176,38 @@ func TestCheckStaleness_UncommittedEditIsStale(t *testing.T) {
 	}
 }
 
+// TestCheckStaleness_FilesChangedIsRepositoryWide defends the documented scope of
+// FilesChanged: it counts the whole repository, not just the directory passed in. A
+// change in a sibling directory shows up when the index covers only a subdirectory;
+// narrowing `git status` to dir would make an index of src/ read fresh while docs/ moved.
+func TestCheckStaleness_FilesChangedIsRepositoryWide(t *testing.T) {
+	repo := t.TempDir()
+	gitRun(t, repo, "init")
+	commitGoFile(t, repo, "one.go", "One")
+	indexed := filepath.Join(repo, "src")
+	if err := os.MkdirAll(indexed, 0755); err != nil {
+		t.Fatal(err)
+	}
+
+	storage := newFileStorage(t)
+	ctx := context.Background()
+	if err := storage.SetLastIndex(ctx, LastIndex{Commit: gitHead(t, repo), IndexedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	// Dirty a file outside the indexed directory.
+	if err := os.WriteFile(filepath.Join(repo, "one.go"), goSource("OneEdited"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := CheckStaleness(ctx, storage, indexed)
+	if s.State != StalenessStale {
+		t.Errorf("State = %q (reason %q), want stale", s.State, s.Reason)
+	}
+	if s.FilesChanged == nil || *s.FilesChanged != 1 {
+		t.Errorf("FilesChanged = %v, want 1: a change outside the indexed directory counts", s.FilesChanged)
+	}
+}
+
 // TestCheckStaleness_UnknownCases is the task's "done when", second half: every case
 // where the index's position cannot be measured reports "unknown", never fresh.
 func TestCheckStaleness_UnknownCases(t *testing.T) {
