@@ -18,6 +18,12 @@ func NewValueFloat(v float64) *qdrant.Value {
 	}
 }
 
+// Scroll page sizes for the memory stats read and the retrieval-log prune.
+const (
+	memoryStatsPageSize  uint32 = 100
+	retrievalLogPageSize uint32 = 200
+)
+
 // Ensure QdrantStorage implements MemoryStatsTracker
 var _ MemoryStatsTracker = (*QdrantStorage)(nil)
 

@@ -1399,6 +1399,78 @@ func TestQdrantStorage_PruneMemoryRetrievalLog(t *testing.T) {
 	}
 }
 
+// TestQdrantStorage_GetAllMemoryStatsFullPageBoundary defends against the
+// stats scroll re-reading a point at an exactly-full page. Qdrant's scroll
+// offset is inclusive, so restarting from the last returned id hands that id
+// back as the first point of the next page: with a memory count that is an
+// exact multiple of the page size, one memory came back as two rows.
+func TestQdrantStorage_GetAllMemoryStatsFullPageBoundary(t *testing.T) {
+	storage, _ := newFakeQdrantStorage(t, "statsboundary", 4)
+	ctx := context.Background()
+
+	total := 2 * int(memoryStatsPageSize)
+	for i := 0; i < total; i++ {
+		id := fmt.Sprintf("sb-%03d", i)
+		if err := storage.StoreMemory(ctx, MemoryEntry{ID: id, Question: "q", Answer: "a", Status: MemoryStatusPending}, []float32{1, 0, 0, 0}); err != nil {
+			t.Fatalf("StoreMemory %s: %v", id, err)
+		}
+	}
+
+	all, err := storage.GetAllMemoryStats(ctx)
+	if err != nil {
+		t.Fatalf("GetAllMemoryStats: %v", err)
+	}
+	seen := map[string]int{}
+	for _, s := range all {
+		seen[s.MemoryID]++
+	}
+	for id, n := range seen {
+		if n > 1 {
+			t.Errorf("memory %s returned %d times, want once", id, n)
+		}
+	}
+	if len(all) != total || len(seen) != total {
+		t.Fatalf("GetAllMemoryStats returned %d rows over %d memories, want %d of each", len(all), len(seen), total)
+	}
+}
+
+// TestQdrantStorage_PruneMemoryRetrievalLogFullPageBoundary defends against
+// the prune scroll collecting one log id twice at an exactly-full page (the
+// scroll offset is inclusive), which reported a deletedCount one higher than
+// the number of logs actually removed.
+func TestQdrantStorage_PruneMemoryRetrievalLogFullPageBoundary(t *testing.T) {
+	storage, fq := newFakeQdrantStorage(t, "pruneboundary", 4)
+	ctx := context.Background()
+
+	total := 2 * int(retrievalLogPageSize)
+	fq.mu.Lock()
+	for i := 0; i < total; i++ {
+		id := qdrant.NewID(stringToUUID(fmt.Sprintf("boundary-log-%d", i)))
+		fq.collections["pruneboundary"].points[pointKey(id)] = &fakePoint{
+			id:     id,
+			vector: []float32{0, 0, 0, 0},
+			seq:    uint64(10 + i),
+			payload: map[string]*qdrant.Value{
+				"entry_type": qdrant.NewValueString("retrieval_log"),
+				"memory_id":  qdrant.NewValueString("m"),
+				"timestamp":  qdrant.NewValueString("2020-01-01T00:00:00Z"),
+			},
+		}
+	}
+	fq.mu.Unlock()
+
+	n, err := storage.PruneMemoryRetrievalLog(ctx, 30)
+	if err != nil {
+		t.Fatalf("PruneMemoryRetrievalLog: %v", err)
+	}
+	if n != int64(total) {
+		t.Errorf("PruneMemoryRetrievalLog reported %d deleted, want exactly %d", n, total)
+	}
+	if got := fq.pointCount("pruneboundary"); got != 0 {
+		t.Errorf("collection holds %d points after pruning, want 0", got)
+	}
+}
+
 // TestQdrantStorage_PruneMemoryRetrievalLogNothingToDo pins the zero-work path.
 func TestQdrantStorage_PruneMemoryRetrievalLogNothingToDo(t *testing.T) {
 	storage, fq := newFakeQdrantStorage(t, "prune_none", 4)
