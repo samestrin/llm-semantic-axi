@@ -3,6 +3,7 @@ package semantic
 import (
 	"context"
 	"errors"
+	"time"
 )
 
 var (
@@ -14,6 +15,10 @@ var (
 
 	// ErrStorageClosed indicates that the storage has been closed
 	ErrStorageClosed = errors.New("storage is closed")
+
+	// ErrLastIndexUnsupported indicates that the backend cannot record the last index.
+	// It means "unknown", never "not indexed".
+	ErrLastIndexUnsupported = errors.New("last index record not supported by this storage backend")
 )
 
 // ListOptions configures how chunks are listed
@@ -45,6 +50,13 @@ type SearchOptions struct {
 	Rerank           bool    `json:"rerank,omitempty"`            // Enable reranking with cross-encoder
 	RerankCandidates int     `json:"rerank_candidates,omitempty"` // Number of candidates to fetch for reranking (default: TopK * 5)
 	RerankThreshold  float32 `json:"rerank_threshold,omitempty"`  // Minimum reranker score (0.0 - 1.0)
+}
+
+// LastIndex records the commit and time of the last index that brought the whole
+// index up to that commit.
+type LastIndex struct {
+	Commit    string    `json:"commit"` // HEAD at the time of the index; empty outside git
+	IndexedAt time.Time `json:"indexed_at"`
 }
 
 // ChunkWithEmbedding pairs a chunk with its embedding for batch operations
@@ -176,6 +188,17 @@ type Storage interface {
 	// SetCalibrationMetadata stores calibration data.
 	// Overwrites any existing calibration data.
 	SetCalibrationMetadata(ctx context.Context, meta *CalibrationMetadata) error
+
+	// ===== Last Index Methods =====
+
+	// GetLastIndex retrieves the record of the last index.
+	// Returns (nil, nil) if none has been recorded yet.
+	// Returns ErrLastIndexUnsupported if the backend cannot record one.
+	GetLastIndex(ctx context.Context) (*LastIndex, error)
+
+	// SetLastIndex stores the record of the last index, replacing any previous one.
+	// Returns ErrLastIndexUnsupported if the backend cannot record one.
+	SetLastIndex(ctx context.Context, li LastIndex) error
 }
 
 // MemoryStatsTracker is an optional interface for tracking memory retrieval statistics.

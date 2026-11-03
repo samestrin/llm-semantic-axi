@@ -203,8 +203,9 @@ func TestMedian_DoesNotModifyInput(t *testing.T) {
 
 // mockStorage implements Storage interface for testing calibration
 type mockCalibrationStorage struct {
-	chunks []Chunk
-	stats  *IndexStats
+	chunks    []Chunk
+	stats     *IndexStats
+	lastIndex *LastIndex
 }
 
 func (m *mockCalibrationStorage) Create(ctx context.Context, chunk Chunk, embedding []float32) error {
@@ -283,6 +284,13 @@ func (m *mockCalibrationStorage) GetCalibrationMetadata(ctx context.Context) (*C
 	return nil, nil
 }
 func (m *mockCalibrationStorage) SetCalibrationMetadata(ctx context.Context, meta *CalibrationMetadata) error {
+	return nil
+}
+func (m *mockCalibrationStorage) GetLastIndex(ctx context.Context) (*LastIndex, error) {
+	return m.lastIndex, nil
+}
+func (m *mockCalibrationStorage) SetLastIndex(ctx context.Context, li LastIndex) error {
+	m.lastIndex = &li
 	return nil
 }
 
@@ -416,8 +424,9 @@ func (m *mockDifferentiatingEmbedder) Model() string   { return "mock-diff" }
 
 // mockDifferentiatingStorage returns different scores based on query embedding pattern
 type mockDifferentiatingStorage struct {
-	chunks   []Chunk
-	embedder *mockDifferentiatingEmbedder
+	chunks    []Chunk
+	embedder  *mockDifferentiatingEmbedder
+	lastIndex *LastIndex
 }
 
 func (m *mockDifferentiatingStorage) Create(ctx context.Context, chunk Chunk, embedding []float32) error {
@@ -503,5 +512,12 @@ func (m *mockDifferentiatingStorage) GetCalibrationMetadata(ctx context.Context)
 	return nil, nil
 }
 func (m *mockDifferentiatingStorage) SetCalibrationMetadata(ctx context.Context, meta *CalibrationMetadata) error {
+	return nil
+}
+func (m *mockDifferentiatingStorage) GetLastIndex(ctx context.Context) (*LastIndex, error) {
+	return m.lastIndex, nil
+}
+func (m *mockDifferentiatingStorage) SetLastIndex(ctx context.Context, li LastIndex) error {
+	m.lastIndex = &li
 	return nil
 }

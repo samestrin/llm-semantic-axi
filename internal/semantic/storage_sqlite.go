@@ -808,6 +808,11 @@ func (s *SQLiteStorage) Clear(ctx context.Context) error {
 		return err
 	}
 
+	// A cleared index reflects no commit
+	if _, err := s.db.ExecContext(ctx, "DELETE FROM index_metadata WHERE key = ?", lastIndexKey); err != nil {
+		return err
+	}
+
 	// Clear file hashes
 	_, err := s.db.ExecContext(ctx, "DELETE FROM file_hashes")
 	return err
@@ -1594,6 +1599,60 @@ func (s *SQLiteStorage) SetCalibrationMetadata(ctx context.Context, meta *Calibr
 		return fmt.Errorf("failed to set calibration metadata: %w", err)
 	}
 
+	return nil
+}
+
+// lastIndexKey is the index_metadata key holding the LastIndex record.
+const lastIndexKey = "last_index"
+
+// GetLastIndex retrieves the record of the last index.
+// Returns (nil, nil) if none has been recorded yet.
+func (s *SQLiteStorage) GetLastIndex(ctx context.Context) (*LastIndex, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.closed {
+		return nil, ErrStorageClosed
+	}
+
+	var value string
+	err := s.db.QueryRowContext(ctx,
+		`SELECT value FROM index_metadata WHERE key = ?`, lastIndexKey,
+	).Scan(&value)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to get last index: %w", err)
+	}
+
+	var li LastIndex
+	if err := json.Unmarshal([]byte(value), &li); err != nil {
+		return nil, fmt.Errorf("failed to parse last index: %w", err)
+	}
+	return &li, nil
+}
+
+// SetLastIndex stores the record of the last index, replacing any previous one.
+func (s *SQLiteStorage) SetLastIndex(ctx context.Context, li LastIndex) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.closed {
+		return ErrStorageClosed
+	}
+
+	value, err := json.Marshal(li)
+	if err != nil {
+		return fmt.Errorf("failed to marshal last index: %w", err)
+	}
+
+	if _, err := s.db.ExecContext(ctx, `
+		INSERT OR REPLACE INTO index_metadata (key, value, updated_at)
+		VALUES (?, ?, CURRENT_TIMESTAMP)
+	`, lastIndexKey, string(value)); err != nil {
+		return fmt.Errorf("failed to set last index: %w", err)
+	}
 	return nil
 }
 

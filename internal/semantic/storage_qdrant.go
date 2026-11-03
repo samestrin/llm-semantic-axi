@@ -1609,3 +1609,13 @@ func (s *QdrantStorage) SetCalibrationMetadata(ctx context.Context, meta *Calibr
 
 	return nil
 }
+
+// GetLastIndex is not supported on Qdrant: the record is kept only in sqlite.
+func (s *QdrantStorage) GetLastIndex(ctx context.Context) (*LastIndex, error) {
+	return nil, ErrLastIndexUnsupported
+}
+
+// SetLastIndex is not supported on Qdrant: the record is kept only in sqlite.
+func (s *QdrantStorage) SetLastIndex(ctx context.Context, li LastIndex) error {
+	return ErrLastIndexUnsupported
+}
