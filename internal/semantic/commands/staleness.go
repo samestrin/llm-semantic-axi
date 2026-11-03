@@ -21,9 +21,15 @@ import (
 // stored, not indexed from the working tree, so nothing can be behind.
 const stalenessNotApplicable = "not_applicable"
 
+// stalenessTimeout bounds the git commands of one staleness check, so a hung git
+// cannot hold a search. Running out reports unknown/git_failed, never fresh.
+var stalenessTimeout = 5 * time.Second
+
 // indexStaleness compares the open index with the git working tree around the
 // current directory. The index's own directory is not counted as a change.
 func indexStaleness(ctx context.Context, storage semantic.Storage) semantic.Staleness {
+	ctx, cancel := context.WithTimeout(ctx, stalenessTimeout)
+	defer cancel()
 	var ignore []string
 	if indexDir != "" {
 		ignore = append(ignore, indexDir)

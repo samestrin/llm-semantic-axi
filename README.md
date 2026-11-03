@@ -121,7 +121,7 @@ Every extension `RegisterAllChunkers` registers, and what indexes it. A test (`T
 
 `callers` and `refs` read call edges from the index, and only the Go, JavaScript, TypeScript and Python chunkers emit them (see the table above). **An empty `callers` result in a Java, Rust or any other file whose row says `no` means "not indexed for edges", not "no callers."** Do not read it as proof.
 
-JavaScript and TypeScript record a call only when the callee is a bare name (`foo()`) or has a `this.` receiver (`this.foo()`). `obj.foo()`, `a.b.foo()` and `super.foo()` are not recorded, so an empty `callers` for a method that is only called through another object is still not proof.
+JavaScript and TypeScript record a call only when the callee is a bare name (`foo()`) or has a `this.` receiver (`this.foo()`). `obj.foo()`, `a.b.foo()` and `super.foo()` are not recorded, so an empty `callers` for a method that is only called through another object is still not proof. A `this.foo()` call links only to a `foo` method of the caller's own class, in the same file; when that class has none, or the call is not inside a class, `refs` lists it as unresolved rather than linking it to some other `foo`.
 
 Python records a call when the callee is a bare name (`foo()`) or has a `self.` or `cls.` receiver, and records an `imports` edge for each imported module or name. `obj.foo()` and `a.b.foo()` are not recorded and there are no type-use edges, so an empty `callers` for a method that is only called through another object is not proof there. A call is attributed to the innermost function or method that contains it, never to the enclosing class.
 
