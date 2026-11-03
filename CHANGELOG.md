@@ -47,6 +47,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Python recursion is one rule: `self.f()` inside method `f` (and `cls.f()`) now records no self-edge, as `f()` inside `f` already did. A call to a differently named method still records its edge. An index built before this change needs `index --force`. (epic 21)
 - `search` with an unquoted multi-word query no longer embeds a trailing space; the query is the arguments joined by single spaces, as `code-search`, `docs-search` and `memory-search` already did. (epic 22)
 - `refs` lists every `imports` edge as unresolved. Before, an import linked to any lone chunk of the same name, so `import debounce from "lodash/debounce"` pointed at a local `function debounce` (and Go's `import "net/http"` at a lone `func http`). Re-indexing unlinks imports edges an older index had already linked. (epic 03.1)
 - JavaScript and TypeScript call edges: a `this.get()` call links only to a `get` method of the caller's own class, in the same file. Before, it linked to any lone chunk named `get`, so a method was reported as a caller of a top-level function or of another class's method it can never reach. With no such method, or outside a class, the call stays unresolved in `refs` and is never shown as a caller. (epic 03.1)

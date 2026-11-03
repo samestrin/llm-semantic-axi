@@ -353,3 +353,27 @@ func TestPythonRefs_CallWithNoChunkYieldsNoEdge(t *testing.T) {
 		t.Errorf("refs = %v, want none", refs)
 	}
 }
+
+// Defends recursion being one rule: f() inside f and self.f() inside method f
+// are the same act, so both write no self-edge. Before, the bare form was
+// dropped and the self. form kept as calls:self.f, so `callers f` answered
+// differently for two spellings of the same recursion. A call to a differently
+// named method must still record its edge.
+func TestPythonRefs_RecursionIsOneRuleForBareAndSelf(t *testing.T) {
+	cases := map[string]string{
+		"bare":      "def f():\n    f()\n",
+		"self":      "class C:\n    def f(self):\n        self.f()\n",
+		"cls":       "class C:\n    @classmethod\n    def f(cls):\n        cls.f()\n",
+		"other":     "class C:\n    def f(self):\n        self.g()\n    def g(self):\n        pass\n",
+		"bareOther": "def f():\n    g()\ndef g():\n    pass\n",
+	}
+	want := map[string]string{
+		"bare": "", "self": "", "cls": "",
+		"other": "f calls:self.g", "bareOther": "f calls:g",
+	}
+	for name, src := range cases {
+		if got := strings.Join(pythonRefStrings(t, src), ","); got != want[name] {
+			t.Errorf("%s: refs = %q, want %q", name, got, want[name])
+		}
+	}
+}
