@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -238,6 +239,13 @@ func ExecuteHandler(toolName string, args map[string]interface{}) (string, error
 	// waiting on the output pipe after this long rather than until it closes.
 	cmd.WaitDelay = cancelWaitDelay
 	output, err := cmd.CombinedOutput()
+
+	// os/exec also starts WaitDelay when the child exits on its own, so a
+	// child that exited 0 while a descendant held the pipe surfaces as
+	// ErrWaitDelay. The command succeeded; report it that way.
+	if errors.Is(err, exec.ErrWaitDelay) && ctx.Err() == nil && cmd.ProcessState.Success() {
+		err = nil
+	}
 
 	if ctx.Err() == context.DeadlineExceeded {
 		return "", fmt.Errorf("command %q timed out after %v", cmdName, CommandTimeout)

@@ -511,6 +511,21 @@ func TestExecuteHandler_ReportsSuccessWhenAGrandchildOutlivesASuccessfulChild(t 
 	}
 }
 
+func TestExecuteHandler_ReportsFailureWhenAGrandchildOutlivesAFailedChild(t *testing.T) {
+	// The mirror of the case above: treating a lingering descendant as success
+	// must not swallow the child's own non-zero exit.
+	script, _ := fakeBinary(t, "echo broken >&2\nsleep 5 &\nexit 3")
+	useFakeBinary(t, script)
+
+	_, err := ExecuteHandler(ToolPrefix+"index_status", map[string]interface{}{})
+	if err == nil {
+		t.Fatal("a command that exited 3 was reported as success")
+	}
+	if !strings.Contains(err.Error(), "exit status 3") {
+		t.Errorf("error does not carry the exit status: %v", err)
+	}
+}
+
 func TestExecuteHandler_RejectsAnUnknownTool(t *testing.T) {
 	// A tool name with no registry entry must be refused before anything is
 	// executed. Shelling out with an unmapped name would hand arbitrary text to
