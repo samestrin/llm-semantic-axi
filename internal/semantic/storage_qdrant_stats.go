@@ -18,6 +18,12 @@ func NewValueFloat(v float64) *qdrant.Value {
 	}
 }
 
+// Scroll page sizes for the memory stats read and the retrieval-log prune.
+const (
+	memoryStatsPageSize  uint32 = 100
+	retrievalLogPageSize uint32 = 200
+)
+
 // Ensure QdrantStorage implements MemoryStatsTracker
 var _ MemoryStatsTracker = (*QdrantStorage)(nil)
 
@@ -182,32 +188,27 @@ func (s *QdrantStorage) GetAllMemoryStats(ctx context.Context) ([]RetrievalStats
 	var nextOffset *qdrant.PointId
 
 	for {
-		scrollResult, err := s.client.Scroll(ctx, &qdrant.ScrollPoints{
+		scrollResult, next, err := s.client.ScrollAndOffset(ctx, &qdrant.ScrollPoints{
 			CollectionName: s.collectionName,
 			Filter:         filter,
 			WithPayload:    qdrant.NewWithPayload(true),
-			Limit:          qdrant.PtrOf(uint32(100)), // Batch size
+			Limit:          qdrant.PtrOf(memoryStatsPageSize),
 			Offset:         nextOffset,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to scroll memories: %w", err)
 		}
 
-		if len(scrollResult) == 0 {
-			break
-		}
-
 		for _, point := range scrollResult {
 			allStats = append(allStats, *pointToStats(point))
 		}
 
-		// Check if we reached the end
-		if len(scrollResult) < 100 {
+		// The scroll offset is inclusive, so page by the server's next-page
+		// offset rather than the last returned id, which would repeat it.
+		if next == nil {
 			break
 		}
-		// Update offset for next page
-		lastPoint := scrollResult[len(scrollResult)-1]
-		nextOffset = lastPoint.Id
+		nextOffset = next
 	}
 
 	return allStats, nil
@@ -358,19 +359,15 @@ func (s *QdrantStorage) PruneMemoryRetrievalLog(ctx context.Context, olderThanDa
 	var nextOffset *qdrant.PointId
 
 	for {
-		scrollResult, err := s.client.Scroll(ctx, &qdrant.ScrollPoints{
+		scrollResult, next, err := s.client.ScrollAndOffset(ctx, &qdrant.ScrollPoints{
 			CollectionName: s.collectionName,
 			Filter:         logFilter,
 			WithPayload:    qdrant.NewWithPayloadInclude("timestamp"),
-			Limit:          qdrant.PtrOf(uint32(200)),
+			Limit:          qdrant.PtrOf(retrievalLogPageSize),
 			Offset:         nextOffset,
 		})
 		if err != nil {
 			return 0, fmt.Errorf("failed to scroll for pruning: %w", err)
-		}
-
-		if len(scrollResult) == 0 {
-			break
 		}
 
 		for _, point := range scrollResult {
@@ -382,10 +379,12 @@ func (s *QdrantStorage) PruneMemoryRetrievalLog(ctx context.Context, olderThanDa
 			}
 		}
 
-		if len(scrollResult) < 200 {
+		// Page by the server's next-page offset: the offset is inclusive, so
+		// the last returned id would be collected (and counted) twice.
+		if next == nil {
 			break
 		}
-		nextOffset = scrollResult[len(scrollResult)-1].Id
+		nextOffset = next
 	}
 
 	if len(idsToDelete) == 0 {
