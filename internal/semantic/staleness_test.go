@@ -312,10 +312,15 @@ func TestCheckStaleness_IgnoresTheIndexItself(t *testing.T) {
 		t.Errorf("ignoring .index with new.go: State = %q, FilesChanged = %v; want stale, 1", s.State, s.FilesChanged)
 	}
 
-	// A path outside the repository is not a reason to drop anything.
+	// A path outside the repository is not a reason to drop anything: new.go plus every
+	// file under .index/ (untracked files are listed one by one).
+	entries, err := os.ReadDir(indexDir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	s = CheckStaleness(ctx, storage, repo, t.TempDir())
-	if s.FilesChanged == nil || *s.FilesChanged != 2 {
-		t.Errorf("ignore outside the repo: FilesChanged = %v, want 2", s.FilesChanged)
+	if want := 1 + len(entries); s.FilesChanged == nil || *s.FilesChanged != want {
+		t.Errorf("ignore outside the repo: FilesChanged = %v, want %d", s.FilesChanged, want)
 	}
 }
 

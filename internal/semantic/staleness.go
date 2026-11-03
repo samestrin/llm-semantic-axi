@@ -116,7 +116,7 @@ func measureStaleness(ctx context.Context, recorded, dir string, ignore []string
 		return unknownStaleness(StalenessReasonGitFailed, err)
 	}
 
-	out, err = gitOutput(ctx, dir, "status", "--porcelain", "-z")
+	out, err = gitOutput(ctx, dir, "status", "--porcelain", "-z", "--untracked-files=all")
 	if err != nil {
 		return gitFailed(ctx, err)
 	}
