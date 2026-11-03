@@ -427,3 +427,45 @@ func TestIndexManager_FileFailureLeavesLastIndex(t *testing.T) {
 		t.Errorf("after a clean update: Commit = %q, want HEAD %q", got.Commit, gitHead(t, repo))
 	}
 }
+
+// TestIndexManager_UnreadableFileLeavesLastIndex defends against a file whose state could
+// not be checked being passed over as if it were indexed: the full-scan Update and
+// UpdateGit's advance must leave the previous record unchanged when a file is unreadable.
+func TestIndexManager_UnreadableFileLeavesLastIndex(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can read a file with no permissions")
+	}
+	repo := t.TempDir()
+	gitRun(t, repo, "init")
+	commitGoFile(t, repo, "one.go", "One")
+	commitGoFile(t, repo, "two.go", "Two")
+	ctx := context.Background()
+
+	unreadable := filepath.Join(repo, "two.go")
+	if err := os.Chmod(unreadable, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(unreadable, 0644) })
+
+	storage := newFileStorage(t)
+	mgr := NewIndexManager(storage, &trackingEmbedder{embedding: []float32{0.1, 0.2, 0.3, 0.4}}, goFactory())
+	planted := LastIndex{Commit: gitHeadOf(t, repo, "HEAD~1"), IndexedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)}
+
+	for _, step := range []struct {
+		name string
+		run  func() error
+	}{
+		{"full-scan update", func() error { _, err := mgr.Update(ctx, repo, UpdateOptions{Domain: "code"}); return err }},
+		{"git update", func() error { _, err := mgr.UpdateGit(ctx, repo, "HEAD~1", UpdateOptions{Domain: "code"}); return err }},
+	} {
+		if err := storage.SetLastIndex(ctx, planted); err != nil {
+			t.Fatal(err)
+		}
+		if err := step.run(); err != nil {
+			t.Fatalf("%s error = %v", step.name, err)
+		}
+		if got := mustLastIndex(t, storage); got.Commit != planted.Commit || !got.IndexedAt.Equal(planted.IndexedAt) {
+			t.Errorf("after %s with an unreadable file: got %+v, want unchanged %+v", step.name, *got, planted)
+		}
+	}
+}

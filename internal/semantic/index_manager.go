@@ -221,6 +221,10 @@ func (m *IndexManager) Index(ctx context.Context, rootPath string, opts IndexOpt
 
 	m.resolveRefs(ctx)
 
+	// A file that failed is missing from the index, so it does not reflect HEAD.
+	if len(result.Errors) > 0 {
+		return result, nil
+	}
 	if err := m.recordLastIndex(ctx, last); err != nil {
 		return result, err
 	}
@@ -728,7 +732,8 @@ func (m *IndexManager) Update(ctx context.Context, rootPath string, opts UpdateO
 		currentFiles[file] = true
 	}
 
-	// Check for modified files
+	// Check for modified files. failed notes any file left unindexed.
+	failed := false
 	for _, file := range files {
 		select {
 		case <-ctx.Done():
@@ -738,6 +743,7 @@ func (m *IndexManager) Update(ctx context.Context, rootPath string, opts UpdateO
 
 		needsUpdate, err := m.fileNeedsUpdate(ctx, file)
 		if err != nil {
+			failed = true
 			continue
 		}
 
@@ -751,6 +757,8 @@ func (m *IndexManager) Update(ctx context.Context, rootPath string, opts UpdateO
 				if fellBack {
 					result.addFallback(file)
 				}
+			} else {
+				failed = true
 			}
 		}
 	}
@@ -766,7 +774,10 @@ func (m *IndexManager) Update(ctx context.Context, rootPath string, opts UpdateO
 
 	m.resolveRefs(ctx)
 
-	// A full scan covers every file, so the index now reflects HEAD.
+	// A full scan covers every file, so the index now reflects HEAD, unless a file failed.
+	if failed {
+		return result, nil
+	}
 	if err := m.recordLastIndex(ctx, last); err != nil {
 		return result, err
 	}
@@ -788,7 +799,9 @@ func (m *IndexManager) UpdateGit(ctx context.Context, rootPath string, gitRef st
 		return nil, fmt.Errorf("failed to get git changes: %w", err)
 	}
 
-	// Filter changed files against include/exclude patterns and supported extensions
+	// Filter changed files against include/exclude patterns and supported extensions.
+	// failed notes any changed file left unindexed.
+	failed := false
 	for _, relPath := range changed {
 		absPath := filepath.Join(rootPath, relPath)
 
@@ -803,7 +816,11 @@ func (m *IndexManager) UpdateGit(ctx context.Context, rootPath string, gitRef st
 		}
 
 		needsUpdate, err := m.fileNeedsUpdate(ctx, absPath)
-		if err != nil || !needsUpdate {
+		if err != nil {
+			failed = true
+			continue
+		}
+		if !needsUpdate {
 			continue
 		}
 
@@ -818,6 +835,8 @@ func (m *IndexManager) UpdateGit(ctx context.Context, rootPath string, gitRef st
 			for _, path := range indexResult.FallbackFiles {
 				result.addFallback(path)
 			}
+		} else {
+			failed = true
 		}
 	}
 
@@ -833,8 +852,9 @@ func (m *IndexManager) UpdateGit(ctx context.Context, rootPath string, gitRef st
 
 	m.resolveRefs(ctx)
 
-	// An unresolvable ref cannot match the recorded commit.
-	if sinceErr != nil {
+	// An unresolvable ref cannot match the recorded commit, and a failed file means
+	// the changes since it were not all applied.
+	if sinceErr != nil || failed {
 		return result, nil
 	}
 	return result, m.advanceLastIndex(ctx, since, last)

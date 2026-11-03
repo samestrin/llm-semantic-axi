@@ -131,6 +131,7 @@ The search family (`search`, its profile aliases, `multisearch`, `callers`, `ref
 - Plain output ends with a line such as `Index is stale: 3 commits behind HEAD, 1 uncommitted file changed (indexed at 1a2b3c4d5e6f on 2026-11-02T19:37:48Z). Run llm-semantic index <path> to bring it up to date.` — or `Index staleness unknown: <reason>...` when it cannot be measured.
 - `--json` and `--min` keep their stdout schema unchanged (board decision, 2026-10-31); the same line goes to **stderr** instead, so the JSON stays parseable.
 - A fresh index prints no line. Only `--axi` says `fresh`, because that is the output an agent branches on.
+- The record is written only by an `index` or `index-update` in which every file indexed. A run where any file failed leaves the previous record in place, so the index keeps reporting how far behind it was.
 
 ## For integrators
 
