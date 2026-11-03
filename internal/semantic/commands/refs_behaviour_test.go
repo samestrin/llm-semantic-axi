@@ -241,3 +241,93 @@ func TestCallersOfAPreEdgeJSTSIndexIsNotIndexedForEdges(t *testing.T) {
 		}
 	}
 }
+
+// pythonCallSource has two plain functions and a method that calls through
+// self. Names are distinct from every other fixture so attribution is unique.
+const pythonCallSource = `def py_helper():
+    return 1
+
+
+def py_run():
+    return py_helper()
+
+
+class PyService:
+    def py_start(self):
+        return self.py_stop()
+
+    def py_stop(self):
+        return py_helper()
+`
+
+// pythonWorkspace indexes pythonCallSource through the real index.
+func pythonWorkspace(t *testing.T) {
+	t.Helper()
+	dir := newWorkspace(t)
+	useEmbedder(t, newFakeEmbedder(t))
+	writeFile(t, filepath.Join(dir, "sample.py"), pythonCallSource)
+	runIndexIn(t, ".", indexOpts{skipCalibration: true})
+}
+
+// TestCallersAndRefsAnswerForPython defends against the regression where
+// Python indexed with no edges, so callers and refs answered empty for it. The
+// answer must name the real callers and the real references.
+func TestCallersAndRefsAnswerForPython(t *testing.T) {
+	pythonWorkspace(t)
+
+	callers := captureStdout(t, func() {
+		if err := runCallers(context.Background(), "py_helper", false, false); err != nil {
+			t.Fatalf("runCallers: %v", err)
+		}
+	})
+	for _, want := range []string{"2 caller(s) of py_helper", "sample.py", "py_run", "py_stop"} {
+		if !strings.Contains(callers, want) {
+			t.Errorf("callers of py_helper lacks %q:\n%s", want, callers)
+		}
+	}
+
+	refs := captureStdout(t, func() {
+		if err := runRefs(context.Background(), "py_run", false, false); err != nil {
+			t.Fatalf("runRefs: %v", err)
+		}
+	})
+	if !strings.Contains(refs, "py_helper") || strings.Contains(refs, "not indexed for edges") {
+		t.Errorf("refs from py_run does not list py_helper:\n%s", refs)
+	}
+}
+
+// TestCallersOfAPrePythonEdgeIndexIsNotIndexedForEdges defends the distinction
+// between "no callers" and "never recorded": an index built before Python call
+// edges existed holds the chunks but no chunk_refs rows, and must say so rather
+// than report none.
+func TestCallersOfAPrePythonEdgeIndexIsNotIndexedForEdges(t *testing.T) {
+	pythonWorkspace(t)
+
+	db, err := sql.Open("sqlite", filepath.Join(".index", "semantic.db"))
+	if err != nil {
+		t.Fatalf("open index: %v", err)
+	}
+	res, err := db.Exec("DELETE FROM chunk_refs")
+	if err != nil {
+		t.Fatalf("clear edges: %v", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		t.Fatal("the fixture stored no edges to clear, so the test proves nothing")
+	}
+	db.Close()
+	withAXI(t)
+
+	for name, run := range map[string]func() error{
+		"callers": func() error { return runCallers(context.Background(), "py_helper", false, false) },
+		"refs":    func() error { return runRefs(context.Background(), "py_run", false, false) },
+	} {
+		out := captureStdout(t, func() {
+			if err := run(); err != nil {
+				t.Fatalf("%s: %v", name, err)
+			}
+		})
+		if !strings.Contains(out, "status: not_indexed_for_edges\n") {
+			t.Errorf("%s over an edgeless Python index lacks not_indexed_for_edges:\n%s", name, out)
+		}
+	}
+}
