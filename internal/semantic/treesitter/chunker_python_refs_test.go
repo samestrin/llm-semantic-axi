@@ -254,3 +254,46 @@ func TestPythonRefs_LocalAndWildcardImports(t *testing.T) {
 		t.Errorf("refs = %v, want [f imports:json]", got)
 	}
 }
+
+// Defends "a wrong edge is worse than none": a call whose target the index
+// cannot resolve writes no edge. obj.get() must not become calls:get, which
+// would link it to the lone chunk named get; a dynamic call (call result,
+// subscript, chained attribute) names nothing at all. Only the bare name and
+// the self. receiver, which do resolve, are recorded.
+func TestPythonRefs_UnresolvableCallsWriteNoEdge(t *testing.T) {
+	storage, mgr, dir := newPythonIndex(t)
+	writePython(t, dir, "m.py", `def get():
+    pass
+
+def user(obj, table, handlers):
+    obj.get()
+    obj.a.get()
+    self.cache.get()
+    table["get"]()
+    handlers[0]()
+    factory()()
+    getattr(obj, "get")()
+    (lambda: 1)()
+
+class Box:
+    def run(self):
+        self.get()
+`)
+	if _, err := mgr.Index(context.Background(), dir, semantic.IndexOptions{}); err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+
+	got := storedRefs(t, storage)
+	if _, ok := got["get"]; !ok {
+		t.Fatal("precondition: the lone get chunk must be indexed")
+	}
+	// Only the calls that name a real target: the bare names factory and
+	// getattr (a genuine call to the builtin), never get.
+	if want := "calls:factory,calls:getattr"; strings.Join(got["user"], ",") != want {
+		t.Errorf("user edges = %v, want %s", got["user"], want)
+	}
+	// self.get() is resolvable, so it is still recorded.
+	if want := "calls:self.get"; strings.Join(got["run"], ",") != want {
+		t.Errorf("run edges = %v, want %s", got["run"], want)
+	}
+}
