@@ -589,30 +589,24 @@ func printFallback(count int, files []string) {
 // RegisterAllChunkers registers all supported language chunkers with the factory.
 // This is a shared function used by both index and index-update commands.
 func RegisterAllChunkers(factory *semantic.ChunkerFactory) {
+	// Every registration goes through treesitter.MustRegister, which panics if
+	// an extension is already claimed rather than silently replacing it.
+
 	// Go chunker (already AST-based via go/ast, stays as-is)
-	factory.Register("go", semantic.NewGoChunker())
+	treesitter.MustRegister(factory, semantic.NewGoChunker())
 
 	// Tree-sitter chunkers (pure Go, accurate AST parsing). Each chunker file
 	// registers itself with the treesitter registry; add new languages there.
 	treesitter.RegisterAll(factory)
 
 	// Markdown chunker for documentation files
-	mdChunker := semantic.NewMarkdownChunker(markdownMaxChunkSize)
-	for _, ext := range mdChunker.SupportedExtensions() {
-		factory.Register(ext, mdChunker)
-	}
+	treesitter.MustRegister(factory, semantic.NewMarkdownChunker(markdownMaxChunkSize))
 
 	// HTML chunker for HTML documentation
-	htmlChunker := semantic.NewHTMLChunker(htmlMaxChunkSize)
-	for _, ext := range htmlChunker.SupportedExtensions() {
-		factory.Register(ext, htmlChunker)
-	}
+	treesitter.MustRegister(factory, semantic.NewHTMLChunker(htmlMaxChunkSize))
 
 	// Generic chunker for other file types
-	generic := semantic.NewGenericChunker(genericMaxChunkSize)
-	for _, ext := range generic.SupportedExtensions() {
-		factory.Register(ext, generic)
-	}
+	treesitter.MustRegister(factory, semantic.NewGenericChunker(genericMaxChunkSize))
 }
 
 // filterExcludedPaths removes paths that contain excluded directories
