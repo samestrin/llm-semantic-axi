@@ -123,6 +123,15 @@ Every extension `RegisterAllChunkers` registers, and what indexes it. A test (`T
 
 The commands say which case an empty answer is, in plain and `--axi` output (`--axi` adds a `status` field): `symbol not indexed` when no chunk carries the name, `not indexed for edges` when the symbol is indexed only in languages the index holds no edges for, and `recorded in the call graph` only when an empty answer is genuine. `--json` keeps its old shape and does not carry this.
 
+## How stale the index is
+
+The search family (`search`, its profile aliases, `multisearch`, `callers`, `refs`) reports how far the index is behind the working tree, so a search over old code does not read like a search over current code.
+
+- `--axi` carries a `stale` object. `state` is `fresh`, `stale` or `unknown`; a stale or fresh answer that was measured adds `commits_behind`, `files_changed`, `indexed_commit` and `indexed_at`, and an `unknown` one adds a `reason` (for example `no_record` for an index built before the record existed). Counts appear only when measured, so nothing reads as "0 behind" that was never checked. `memory search` reports `state: not_applicable` — memories are stored, not indexed from the working tree.
+- Plain output ends with a line such as `Index is stale: 3 commits behind HEAD, 1 uncommitted file changed (indexed at 1a2b3c4d5e6f on 2026-11-02T19:37:48Z). Run llm-semantic index <path> to bring it up to date.` — or `Index staleness unknown: <reason>...` when it cannot be measured.
+- `--json` and `--min` keep their stdout schema unchanged (board decision, 2026-10-31); the same line goes to **stderr** instead, so the JSON stays parseable.
+- A fresh index prints no line. Only `--axi` says `fresh`, because that is the output an agent branches on.
+
 ## For integrators
 
 Tools that read `llm-semantic`'s data directly (such as [atcr](https://github.com/samestrin/atcr)) should build against the published storage contract: [docs/storage-contract.md](docs/storage-contract.md). It is `contract_version: 1` and covers the Qdrant store only — the five point kinds (chunks, `file_hash` bookkeeping, calibration metadata, memory entries, retrieval logs), their payload keys and value shapes, and the filter rule that chunks are exactly the points carrying a `chunk_id` payload key. The default sqlite file (`.index/semantic.db`) is an internal implementation detail and is not part of the contract.
