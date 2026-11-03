@@ -18,9 +18,9 @@ import (
 
 // This file stands up an in-process gRPC server that speaks enough of the
 // Qdrant wire protocol for QdrantStorage to drive it end to end: collections,
-// point upsert/get/delete/count/scroll/query and payload updates. It keeps its
-// points in a map, so no external service and no network beyond a loopback
-// listener is involved. Filter evaluation, cosine scoring and scroll paging
+// point upsert/get/delete/count/scroll/query, payload updates and payload
+// indexes. It keeps its points in a map, so no external service and no
+// network beyond a loopback listener is involved. Filter evaluation, cosine scoring and scroll paging
 // are modelled on the real server so the assertions below pin real behaviour
 // rather than the shape of a stub.
 
@@ -36,6 +36,8 @@ type fakeCollection struct {
 	dim      uint64
 	distance qdrant.Distance
 	points   map[string]*fakePoint
+	// indexes maps a payload field to the type of the index created on it.
+	indexes map[string]qdrant.FieldType
 }
 
 // fakeQdrant implements the three Qdrant gRPC services QdrantStorage calls.
@@ -50,6 +52,9 @@ type fakeQdrant struct {
 	// failRPC makes a named RPC return an error instead of a result, so the
 	// error-wrapping branches in QdrantStorage can be reached.
 	failRPC map[string]error
+	// failAfter lets a named RPC succeed this many times before failRPC
+	// applies, so a failure can land on a later page of a paged read.
+	failAfter map[string]int
 
 	// calls counts RPCs by name so tests can assert on request construction
 	// (e.g. that a large batch really was split into several Upsert calls).
@@ -73,6 +78,7 @@ func newFakeQdrant() *fakeQdrant {
 	return &fakeQdrant{
 		collections: make(map[string]*fakeCollection),
 		failRPC:     make(map[string]error),
+		failAfter:   make(map[string]int),
 		calls:       make(map[string]int),
 	}
 }
@@ -84,10 +90,20 @@ func (f *fakeQdrant) setFailure(rpc string, err error) {
 	f.failRPC[rpc] = err
 }
 
+// setFailureAfter arms one RPC name to succeed n more times and then fail
+// with the given gRPC error.
+func (f *fakeQdrant) setFailureAfter(rpc string, n int, err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.failRPC[rpc] = err
+	f.failAfter[rpc] = f.calls[rpc] + n
+}
+
 func (f *fakeQdrant) clearFailure(rpc string) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	delete(f.failRPC, rpc)
+	delete(f.failAfter, rpc)
 }
 
 func (f *fakeQdrant) callCount(rpc string) int {
@@ -101,7 +117,52 @@ func (f *fakeQdrant) enter(rpc string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls[rpc]++
+	if f.calls[rpc] <= f.failAfter[rpc] {
+		return nil
+	}
 	return f.failRPC[rpc]
+}
+
+// addCollection creates a collection directly in the fake, with no payload
+// indexes, standing in for one an older build created.
+func (f *fakeQdrant) addCollection(name string, dim uint64) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.collections[name] = &fakeCollection{dim: dim, distance: qdrant.Distance_Cosine, points: make(map[string]*fakePoint)}
+}
+
+// fieldIndex reports the type of the payload index on a field, and whether
+// one exists.
+func (f *fakeQdrant) fieldIndex(collection, field string) (qdrant.FieldType, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	c, ok := f.collections[collection]
+	if !ok {
+		return 0, false
+	}
+	t, ok := c.indexes[field]
+	return t, ok
+}
+
+// seedChunkPoints stores n chunk points, one per file, directly in the fake.
+// It reaches point counts that would take minutes through Create.
+func (f *fakeQdrant) seedChunkPoints(collection string, n int) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	c := f.collections[collection]
+	for i := 0; i < n; i++ {
+		id := fmt.Sprintf("seed-%d", i)
+		key := stringToUUID(id)
+		c.points[key] = &fakePoint{
+			id: qdrant.NewID(key),
+			payload: map[string]*qdrant.Value{
+				"chunk_id":  qdrant.NewValueString(id),
+				"file_path": qdrant.NewValueString(fmt.Sprintf("/seed/%d.go", i)),
+			},
+			seq: f.seq,
+		}
+		f.seq++
+	}
 }
 
 // pointCount reports how many points a collection holds (0 if absent).
@@ -415,6 +476,26 @@ func (f *fakeQdrant) SetPayload(_ context.Context, req *qdrant.SetPayloadPoints)
 	return &qdrant.PointsOperationResponse{Result: &qdrant.UpdateResult{Status: qdrant.UpdateStatus_Completed}}, nil
 }
 
+// CreateFieldIndex records a payload index on a field. Like Qdrant, creating
+// an index that already exists succeeds.
+func (f *fakeQdrant) CreateFieldIndex(_ context.Context, req *qdrant.CreateFieldIndexCollection) (*qdrant.PointsOperationResponse, error) {
+	if err := f.enter("CreateFieldIndex"); err != nil {
+		return nil, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	c, err := f.collectionLocked(req.GetCollectionName())
+	if err != nil {
+		return nil, err
+	}
+	if c.indexes == nil {
+		c.indexes = make(map[string]qdrant.FieldType)
+	}
+	c.indexes[req.GetFieldName()] = req.GetFieldType()
+	return &qdrant.PointsOperationResponse{Result: &qdrant.UpdateResult{Status: qdrant.UpdateStatus_Completed}}, nil
+}
+
 // Scroll pages through points in insertion order. The Offset is the id to
 // start at (inclusive), matching Qdrant, and NextPageOffset is the id of the
 // first point that did not fit in the page.
@@ -576,6 +657,10 @@ func (s *fakePointsService) Count(ctx context.Context, req *qdrant.CountPoints) 
 
 func (s *fakePointsService) SetPayload(ctx context.Context, req *qdrant.SetPayloadPoints) (*qdrant.PointsOperationResponse, error) {
 	return s.f.SetPayload(ctx, req)
+}
+
+func (s *fakePointsService) CreateFieldIndex(ctx context.Context, req *qdrant.CreateFieldIndexCollection) (*qdrant.PointsOperationResponse, error) {
+	return s.f.CreateFieldIndex(ctx, req)
 }
 
 func (s *fakePointsService) Scroll(ctx context.Context, req *qdrant.ScrollPoints) (*qdrant.ScrollResponse, error) {

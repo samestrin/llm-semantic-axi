@@ -272,16 +272,41 @@ func TestQdrantStorage_StatsDoesNotCountLastIndexAsChunk(t *testing.T) {
 	}
 }
 
-// TestQdrantStorage_StatsUncountedCollectionWithLastIndex defends against a
-// negative chunk count: when the server reports no point count, there is no
-// record point to subtract, so ChunksTotal stays 0 (and the index reads as
-// empty) rather than -1.
+// TestQdrantStorage_StatsUncountedCollectionWithLastIndex defends the file
+// count against the points that share the collection with chunks. File hashes
+// and memories carry a file_path too, so counting every point reported files
+// that have no chunk (a file whose hash was stored but whose chunks were not,
+// or a memory's source file). The server here reports no point count, so
+// nothing can come from PointsCount either: both totals are chunk-only.
 func TestQdrantStorage_StatsUncountedCollectionWithLastIndex(t *testing.T) {
 	storage, fq := newFakeQdrantStorage(t, "lastindex_uncounted", 4)
 	ctx := context.Background()
 
 	if err := storage.SetLastIndex(ctx, LastIndex{Commit: "aaaa", IndexedAt: recordedIndexTime}); err != nil {
 		t.Fatalf("SetLastIndex: %v", err)
+	}
+	if err := storage.SetCalibrationMetadata(ctx, &CalibrationMetadata{EmbeddingModel: "m", CalibrationDate: recordedIndexTime}); err != nil {
+		t.Fatalf("SetCalibrationMetadata: %v", err)
+	}
+	if err := storage.SetFileHash(ctx, "/hashed-only.go", "hash"); err != nil {
+		t.Fatalf("SetFileHash: %v", err)
+	}
+	memory := MemoryEntry{ID: "mem-1", Question: "q", Answer: "a", Status: MemoryStatusPending, FilePath: "/memory-source.md"}
+	if err := storage.StoreMemory(ctx, memory, []float32{0, 1, 0, 0}); err != nil {
+		t.Fatalf("StoreMemory: %v", err)
+	}
+	chunks := []Chunk{
+		{ID: "c-a1", FilePath: "/a.go", Type: ChunkFunction, Name: "A1", Content: "func A1() {}", Language: "go"},
+		{ID: "c-a2", FilePath: "/a.go", Type: ChunkFunction, Name: "A2", Content: "func A2() {}", Language: "go"},
+		{ID: "c-b1", FilePath: "/b.go", Type: ChunkFunction, Name: "B1", Content: "func B1() {}", Language: "go"},
+	}
+	for _, c := range chunks {
+		if err := storage.Create(ctx, c, []float32{1, 0, 0, 0}); err != nil {
+			t.Fatalf("Create: %v", err)
+		}
+		if err := storage.SetFileHash(ctx, c.FilePath, "hash"); err != nil {
+			t.Fatalf("SetFileHash: %v", err)
+		}
 	}
 	fq.mu.Lock()
 	fq.omitPointsCount = true
@@ -291,8 +316,11 @@ func TestQdrantStorage_StatsUncountedCollectionWithLastIndex(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Stats: %v", err)
 	}
-	if stats.ChunksTotal != 0 {
-		t.Errorf("Stats ChunksTotal = %d, want 0 when the server reports no point count", stats.ChunksTotal)
+	if stats.FilesIndexed != 2 {
+		t.Errorf("Stats FilesIndexed = %d, want 2: only /a.go and /b.go have chunks", stats.FilesIndexed)
+	}
+	if stats.ChunksTotal != 3 {
+		t.Errorf("Stats ChunksTotal = %d, want 3 when the server reports no point count", stats.ChunksTotal)
 	}
 	if want := recordedIndexTime.Format(time.RFC3339); stats.LastUpdated != want {
 		t.Errorf("Stats LastUpdated = %q, want %q", stats.LastUpdated, want)

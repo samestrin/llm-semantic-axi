@@ -183,22 +183,39 @@ func (s *QdrantStorage) ensureCollection() error {
 		return fmt.Errorf("failed to list collections: %w", err)
 	}
 
+	exists := false
 	for _, c := range collections {
 		if c == s.collectionName {
-			return nil // Collection exists
+			exists = true
+			break
 		}
 	}
 
-	// Create collection with cosine similarity
-	err = s.client.CreateCollection(ctx, &qdrant.CreateCollection{
+	if !exists {
+		// Create collection with cosine similarity
+		err = s.client.CreateCollection(ctx, &qdrant.CreateCollection{
+			CollectionName: s.collectionName,
+			VectorsConfig: qdrant.NewVectorsConfig(&qdrant.VectorParams{
+				Size:     uint64(s.embeddingDim),
+				Distance: qdrant.Distance_Cosine,
+			}),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to create collection: %w", err)
+		}
+	}
+
+	// Stats filters on chunk_id to tell chunks from the other points. Index it on
+	// every open, not only at creation, so collections created before the index
+	// existed get it too; creating an index that already exists succeeds.
+	_, err = s.client.CreateFieldIndex(ctx, &qdrant.CreateFieldIndexCollection{
 		CollectionName: s.collectionName,
-		VectorsConfig: qdrant.NewVectorsConfig(&qdrant.VectorParams{
-			Size:     uint64(s.embeddingDim),
-			Distance: qdrant.Distance_Cosine,
-		}),
+		FieldName:      "chunk_id",
+		FieldType:      qdrant.FieldType_FieldTypeKeyword.Enum(),
+		Wait:           qdrant.PtrOf(true),
 	})
 	if err != nil {
-		return fmt.Errorf("failed to create collection: %w", err)
+		return fmt.Errorf("failed to create chunk_id index: %w", err)
 	}
 
 	return nil
@@ -646,36 +663,43 @@ func (s *QdrantStorage) Stats(ctx context.Context) (*IndexStats, error) {
 		return nil, fmt.Errorf("failed to get collection info: %w", err)
 	}
 
-	// Count unique file paths by scrolling (expensive but necessary)
-	filesIndexed := 0
-	scrollResult, scrollErr := s.client.Scroll(ctx, &qdrant.ScrollPoints{
-		CollectionName: s.collectionName,
-		WithPayload:    qdrant.NewWithPayloadInclude("file_path"),
-		Limit:          qdrant.PtrOf(uint32(10000)),
-	})
-	if scrollErr != nil {
-		// Log but don't fail - file count is best-effort
-		slog.Warn("failed to scroll for file count in Stats", "collection", s.collectionName, "error", scrollErr)
-	} else {
-		fileSet := make(map[string]bool)
-		for _, point := range scrollResult {
-			if fp, ok := point.Payload["file_path"]; ok {
-				if str := fp.GetStringValue(); str != "" {
-					fileSet[str] = true
-				}
-			}
-		}
-		filesIndexed = len(fileSet)
+	// Only chunk points carry chunk_id. The collection also holds file hashes,
+	// calibration metadata, memories and the last index record, and file hashes
+	// and memories carry a file_path of their own.
+	chunksOnly := &qdrant.Filter{
+		MustNot: []*qdrant.Condition{qdrant.NewIsEmpty("chunk_id")},
 	}
 
-	// Only chunk points carry chunk_id. The collection's PointsCount also holds file
-	// hashes, calibration metadata, memories and the last index record.
+	// Count unique file paths by paging through every chunk point. A failed page
+	// is an error: the pages before it would be a partial count.
+	fileSet := make(map[string]bool)
+	var offset *qdrant.PointId
+	for {
+		page, nextOffset, err := s.client.ScrollAndOffset(ctx, &qdrant.ScrollPoints{
+			CollectionName: s.collectionName,
+			Filter:         chunksOnly,
+			WithPayload:    qdrant.NewWithPayloadInclude("file_path"),
+			Limit:          qdrant.PtrOf(uint32(1000)),
+			Offset:         offset,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to scroll file paths: %w", err)
+		}
+		for _, point := range page {
+			if str := point.Payload["file_path"].GetStringValue(); str != "" {
+				fileSet[str] = true
+			}
+		}
+		if nextOffset == nil {
+			break
+		}
+		offset = nextOffset
+	}
+
 	chunksTotal, err := s.client.Count(ctx, &qdrant.CountPoints{
 		CollectionName: s.collectionName,
-		Filter: &qdrant.Filter{
-			MustNot: []*qdrant.Condition{qdrant.NewIsEmpty("chunk_id")},
-		},
-		Exact: qdrant.PtrOf(true),
+		Filter:         chunksOnly,
+		Exact:          qdrant.PtrOf(true),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to count chunks: %w", err)
@@ -693,7 +717,7 @@ func (s *QdrantStorage) Stats(ctx context.Context) (*IndexStats, error) {
 
 	return &IndexStats{
 		ChunksTotal:  int(chunksTotal),
-		FilesIndexed: filesIndexed,
+		FilesIndexed: len(fileSet),
 		LastUpdated:  lastUpdated,
 	}, nil
 }
