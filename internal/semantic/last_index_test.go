@@ -429,8 +429,9 @@ func TestIndexManager_FileFailureLeavesLastIndex(t *testing.T) {
 }
 
 // TestIndexManager_UnreadableFileLeavesLastIndex defends against a file whose state could
-// not be checked being passed over as if it were indexed: the full-scan Update and
-// UpdateGit's advance must leave the previous record unchanged when a file is unreadable.
+// not be checked being passed over as if it were indexed: Index (both paths), the full-scan
+// Update and UpdateGit's advance must leave the previous record unchanged when a file is
+// unreadable.
 func TestIndexManager_UnreadableFileLeavesLastIndex(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("root can read a file with no permissions")
@@ -455,6 +456,8 @@ func TestIndexManager_UnreadableFileLeavesLastIndex(t *testing.T) {
 		name string
 		run  func() error
 	}{
+		{"index", func() error { _, err := mgr.Index(ctx, repo, IndexOptions{}); return err }},
+		{"batched index", func() error { _, err := mgr.Index(ctx, repo, IndexOptions{EmbedBatchSize: 100}); return err }},
 		{"full-scan update", func() error { _, err := mgr.Update(ctx, repo, UpdateOptions{Domain: "code"}); return err }},
 		{"git update", func() error { _, err := mgr.UpdateGit(ctx, repo, "HEAD~1", UpdateOptions{Domain: "code"}); return err }},
 	} {
