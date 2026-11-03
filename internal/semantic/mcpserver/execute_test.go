@@ -3,6 +3,7 @@ package mcpserver
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -410,6 +411,118 @@ func TestExecuteHandler_TimesOutARunawayCommand(t *testing.T) {
 	}
 	if elapsed > 10*time.Second {
 		t.Errorf("the timeout did not cut the command short: took %v", elapsed)
+	}
+}
+
+func TestExecuteHandler_TimesOutWhenAGrandchildHoldsTheOutputPipe(t *testing.T) {
+	// CommandTimeout is a promise to the MCP client. The real CLI can leave a
+	// helper process behind, and a shell wrapper around it always does: here
+	// the shell backgrounds sleep (no exec), so sleep is a grandchild holding
+	// the inherited stdout/stderr pipe. Killing only the direct child leaves
+	// that pipe open, and ExecuteHandler blocks until the grandchild exits, 30
+	// seconds later. The handler must return at the deadline instead.
+	script, _ := fakeBinary(t, "sleep 30 &\nwait")
+	useFakeBinary(t, script)
+
+	originalTimeout := CommandTimeout
+	CommandTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { CommandTimeout = originalTimeout })
+
+	start := time.Now()
+	_, err := ExecuteHandler(ToolPrefix+"index_status", map[string]interface{}{})
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("a command whose grandchild outlived the deadline was reported as success")
+	}
+	if !strings.Contains(err.Error(), "timed out") {
+		t.Errorf("error does not identify the timeout: %v", err)
+	}
+	if elapsed > CommandTimeout+3*time.Second {
+		t.Errorf("ExecuteHandler waited for the grandchild instead of the deadline: took %v", elapsed)
+	}
+}
+
+func TestExecuteHandler_TimeoutKillsTheGrandchild(t *testing.T) {
+	// Returning at the deadline is not enough if the work carries on behind
+	// the client's back: a timed-out index that keeps writing is a call the
+	// client was told failed, still taking effect. The deadline kills the
+	// child's whole process group, so the grandchild never reaches its write.
+	marker := filepath.Join(t.TempDir(), "survived")
+	script, _ := fakeBinary(t, "(sleep 1; echo survived > "+marker+") &\nwait")
+	useFakeBinary(t, script)
+
+	originalTimeout := CommandTimeout
+	CommandTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { CommandTimeout = originalTimeout })
+
+	start := time.Now()
+	if _, err := ExecuteHandler(ToolPrefix+"index_status", map[string]interface{}{}); err == nil {
+		t.Fatal("a timed-out command was reported as success")
+	}
+	time.Sleep(2*time.Second - time.Since(start))
+
+	if _, err := os.Stat(marker); err == nil {
+		t.Error("the grandchild outlived the timeout and finished its work")
+	}
+}
+
+func TestExecuteHandler_TimesOutWhenAGrandchildLeavesTheProcessGroup(t *testing.T) {
+	// A descendant that starts its own session is out of reach of the group
+	// kill but still holds the output pipe. CommandTimeout must hold anyway:
+	// the handler stops waiting on the pipe shortly after the deadline.
+	if _, err := exec.LookPath("setsid"); err != nil {
+		t.Skip("setsid is not available")
+	}
+	script, _ := fakeBinary(t, "setsid sleep 10 &\nwait")
+	useFakeBinary(t, script)
+
+	originalTimeout := CommandTimeout
+	CommandTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { CommandTimeout = originalTimeout })
+
+	start := time.Now()
+	_, err := ExecuteHandler(ToolPrefix+"index_status", map[string]interface{}{})
+	elapsed := time.Since(start)
+
+	if err == nil || !strings.Contains(err.Error(), "timed out") {
+		t.Fatalf("expected a timeout error, got %v", err)
+	}
+	if elapsed > CommandTimeout+cancelWaitDelay+3*time.Second {
+		t.Errorf("a grandchild outside the process group held the call open: took %v", elapsed)
+	}
+}
+
+func TestExecuteHandler_ReportsSuccessWhenAGrandchildOutlivesASuccessfulChild(t *testing.T) {
+	// cmd.WaitDelay is meant as a backstop for the deadline, but os/exec also
+	// starts it when the child exits on its own. A child that exits 0 while a
+	// background helper still holds the pipe must not come back as "WaitDelay
+	// expired": that reports failure for a command that succeeded, and buries
+	// its output in the error text.
+	script, _ := fakeBinary(t, "echo hello-out\nsleep 5 &\nexit 0")
+	useFakeBinary(t, script)
+
+	out, err := ExecuteHandler(ToolPrefix+"index_status", map[string]interface{}{})
+	if err != nil {
+		t.Fatalf("a command that exited 0 was reported as failed: %v", err)
+	}
+	if out != "hello-out\n" {
+		t.Errorf("output = %q, want %q", out, "hello-out\n")
+	}
+}
+
+func TestExecuteHandler_ReportsFailureWhenAGrandchildOutlivesAFailedChild(t *testing.T) {
+	// The mirror of the case above: treating a lingering descendant as success
+	// must not swallow the child's own non-zero exit.
+	script, _ := fakeBinary(t, "echo broken >&2\nsleep 5 &\nexit 3")
+	useFakeBinary(t, script)
+
+	_, err := ExecuteHandler(ToolPrefix+"index_status", map[string]interface{}{})
+	if err == nil {
+		t.Fatal("a command that exited 3 was reported as success")
+	}
+	if !strings.Contains(err.Error(), "exit status 3") {
+		t.Errorf("error does not carry the exit status: %v", err)
 	}
 }
 
