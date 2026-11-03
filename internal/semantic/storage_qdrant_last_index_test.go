@@ -261,3 +261,30 @@ func TestQdrantStorage_StatsDoesNotCountLastIndexAsChunk(t *testing.T) {
 		t.Errorf("Stats ChunksTotal = %d, want 0: the last_index record is not a chunk", stats.ChunksTotal)
 	}
 }
+
+// TestQdrantStorage_StatsUncountedCollectionWithLastIndex defends against a
+// negative chunk count: when the server reports no point count, there is no
+// record point to subtract, so ChunksTotal stays 0 (and the index reads as
+// empty) rather than -1.
+func TestQdrantStorage_StatsUncountedCollectionWithLastIndex(t *testing.T) {
+	storage, fq := newFakeQdrantStorage(t, "lastindex_uncounted", 4)
+	ctx := context.Background()
+
+	if err := storage.SetLastIndex(ctx, LastIndex{Commit: "aaaa", IndexedAt: recordedIndexTime}); err != nil {
+		t.Fatalf("SetLastIndex: %v", err)
+	}
+	fq.mu.Lock()
+	fq.omitPointsCount = true
+	fq.mu.Unlock()
+
+	stats, err := storage.Stats(ctx)
+	if err != nil {
+		t.Fatalf("Stats: %v", err)
+	}
+	if stats.ChunksTotal != 0 {
+		t.Errorf("Stats ChunksTotal = %d, want 0 when the server reports no point count", stats.ChunksTotal)
+	}
+	if want := recordedIndexTime.Format(time.RFC3339); stats.LastUpdated != want {
+		t.Errorf("Stats LastUpdated = %q, want %q", stats.LastUpdated, want)
+	}
+}
