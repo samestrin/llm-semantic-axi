@@ -121,7 +121,7 @@ Every extension `RegisterAllChunkers` registers, and what indexes it. A test (`T
 
 `callers` and `refs` read call edges from the index, and only the Go, JavaScript, TypeScript and Python chunkers emit them (see the table above). **An empty `callers` result in a Java, Rust or any other file whose row says `no` means "not indexed for edges", not "no callers."** Do not read it as proof.
 
-JavaScript and TypeScript record a call only when the callee is a bare name (`foo()`) or has a `this.` receiver (`this.foo()`). `obj.foo()`, `a.b.foo()` and `super.foo()` are not recorded, so an empty `callers` for a method that is only called through another object is still not proof.
+JavaScript and TypeScript record a call only when the callee is a bare name (`foo()`) or has a `this.` receiver (`this.foo()`). `obj.foo()`, `a.b.foo()` and `super.foo()` are not recorded, so an empty `callers` for a method that is only called through another object is still not proof. A `this.foo()` call links only to a `foo` method of the caller's own class, in the same file; when that class has none, or the call is not inside a class, `refs` lists it as unresolved rather than linking it to some other `foo`.
 
 **An index built before this change has no JavaScript, TypeScript or Python edges. Run `llm-semantic index --force` to rebuild it;** `index-update` does not re-chunk files whose hash is unchanged.
 
