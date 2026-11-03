@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/samestrin/llm-semantic-axi/internal/semantic"
@@ -294,6 +295,57 @@ func TestRegisterAllChunkers_ChunkerTypesCorrect(t *testing.T) {
 			}
 			if !tt.checkFn(chunker) {
 				t.Errorf("Extension %q should be registered with %s", tt.ext, tt.wantType)
+			}
+		})
+	}
+}
+
+// clashStubChunker stands in for a chunker that already holds an extension
+// before RegisterAllChunkers runs.
+type clashStubChunker struct{}
+
+func (clashStubChunker) Chunk(string, []byte) ([]semantic.Chunk, error) { return nil, nil }
+func (clashStubChunker) SupportedExtensions() []string                  { return nil }
+
+// Defends against a silent overwrite in RegisterAllChunkers: the Go,
+// markdown, HTML and generic chunkers used to call factory.Register bare, so a
+// chunker already holding "md" (or "html", "txt", "go") was replaced without a
+// word and that language's files were chunked by the wrong chunker.
+func TestRegisterAllChunkers_ClashPanics(t *testing.T) {
+	cases := []struct {
+		ext  string
+		want string
+	}{
+		{"md", "*semantic.MarkdownChunker"},
+		{"html", "*semantic.HTMLChunker"},
+		{"txt", "*semantic.GenericChunker"},
+		{"go", "*semantic.GoChunker"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.ext, func(t *testing.T) {
+			factory := semantic.NewChunkerFactory()
+			factory.Register(tc.ext, clashStubChunker{})
+
+			var msg string
+			panicked := func() (p bool) {
+				defer func() {
+					if r := recover(); r != nil {
+						p = true
+						msg, _ = r.(string)
+					}
+				}()
+				RegisterAllChunkers(factory)
+				return false
+			}()
+
+			if !panicked {
+				got, _ := factory.GetChunker(tc.ext)
+				t.Fatalf("RegisterAllChunkers did not panic; %q now routes to %T", tc.ext, got)
+			}
+			for _, part := range []string{`"` + tc.ext + `"`, "commands.clashStubChunker", tc.want} {
+				if !strings.Contains(msg, part) {
+					t.Errorf("panic message %q does not name %s", msg, part)
+				}
 			}
 		})
 	}

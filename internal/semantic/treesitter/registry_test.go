@@ -116,3 +116,40 @@ func TestRegistry_ExistingFactoryExtensionPanics(t *testing.T) {
 		t.Errorf("panic message %q does not name the extension", msg)
 	}
 }
+
+// Defends the shared clash check: MustRegister must decide by the factory's
+// own answer, so a chunker registered outside any Registry (markdown, HTML,
+// generic, Go) cannot silently replace one the factory already holds.
+func TestMustRegister_ExistingFactoryExtensionPanics(t *testing.T) {
+	factory := semantic.NewChunkerFactory()
+	factory.Register("dup", WithFallback(&fakeChunker{exts: []string{"dup"}}))
+
+	msg := mustPanic(t, func() { MustRegister(factory, &otherFakeChunker{exts: []string{"new", "dup"}}) })
+	for _, part := range []string{`"dup"`, "*treesitter.otherFakeChunker", "*treesitter.fakeChunker"} {
+		if !strings.Contains(msg, part) {
+			t.Errorf("panic message %q does not name %s", msg, part)
+		}
+	}
+	if _, ok := factory.GetChunker("new"); !ok {
+		t.Error(`extension "new" claimed before the clash was not registered`)
+	}
+}
+
+// Defends MustRegister's normal path: every extension the chunker supports is
+// routed to it, unwrapped as given.
+func TestMustRegister_RegistersEachExtension(t *testing.T) {
+	factory := semantic.NewChunkerFactory()
+	c := &fakeChunker{exts: []string{"x", "y"}}
+	MustRegister(factory, c)
+
+	for _, ext := range c.exts {
+		if got, ok := factory.GetChunker(ext); !ok || got != c {
+			t.Errorf("extension %q routes to %v (ok=%v), want the chunker", ext, got, ok)
+		}
+	}
+}
+
+type otherFakeChunker struct{ exts []string }
+
+func (f *otherFakeChunker) Chunk(string, []byte) ([]semantic.Chunk, error) { return nil, nil }
+func (f *otherFakeChunker) SupportedExtensions() []string                  { return f.exts }
