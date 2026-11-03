@@ -373,3 +373,57 @@ func TestCheckStaleness_RejectsNonHashRecord(t *testing.T) {
 		assertUnknown(t, CheckStaleness(ctx, storage, repo), StalenessReasonCommitUnknown)
 	}
 }
+
+// TestCheckStaleness_GitRefusalIsNotNotGit defends against git refusing a repository it
+// can see (safe.directory "dubious ownership", a broken .git) being reported as "not a
+// git repository": the directory is in git, git just could not measure it.
+func TestCheckStaleness_GitRefusalIsNotNotGit(t *testing.T) {
+	repo := t.TempDir()
+	gitRun(t, repo, "init")
+	commitGoFile(t, repo, "one.go", "One")
+	storage := newFileStorage(t)
+	ctx := context.Background()
+	if err := storage.SetLastIndex(ctx, LastIndex{Commit: gitHead(t, repo), IndexedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	// Corrupt HEAD so every git command in the repository fails, without it ceasing to be one.
+	if err := os.WriteFile(filepath.Join(repo, ".git", "HEAD"), []byte("garbage\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+
+	s := CheckStaleness(ctx, storage, repo)
+	if s.Reason == StalenessReasonNotGit {
+		t.Errorf("Reason = %q, want a failure reason: the directory is a repository git refused", s.Reason)
+	}
+	if s.State != StalenessUnknown {
+		t.Errorf("State = %q, want unknown", s.State)
+	}
+}
+
+// TestCheckStaleness_CancelledContext defends against a cancelled check being blamed on
+// the repository (not_git, no_head, commit_unknown): it is a failure to measure.
+func TestCheckStaleness_CancelledContext(t *testing.T) {
+	repo := t.TempDir()
+	gitRun(t, repo, "init")
+	commitGoFile(t, repo, "one.go", "One")
+	// The record reads regardless of ctx, so the cancellation reaches the git commands.
+	storage := fixedLastIndexStorage{Storage: newFileStorage(t), li: LastIndex{Commit: gitHead(t, repo), IndexedAt: time.Now()}}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	s := CheckStaleness(ctx, storage, repo)
+	if s.State != StalenessUnknown || s.Reason != StalenessReasonGitFailed {
+		t.Errorf("State = %q, Reason = %q; want unknown, %q", s.State, s.Reason, StalenessReasonGitFailed)
+	}
+}
+
+// fixedLastIndexStorage returns li from GetLastIndex without touching the database.
+type fixedLastIndexStorage struct {
+	Storage
+	li LastIndex
+}
+
+func (s fixedLastIndexStorage) GetLastIndex(context.Context) (*LastIndex, error) {
+	li := s.li
+	return &li, nil
+}
