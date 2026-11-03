@@ -693,7 +693,8 @@ func (s *QdrantStorage) Stats(ctx context.Context) (*IndexStats, error) {
 }
 
 // Clear removes all points from the Qdrant collection (for force re-index)
-// Preserves calibration metadata and the last index record across the clear operation.
+// Preserves calibration metadata. The last index record goes with the chunks, as in
+// sqlite: a re-index that fails after the clear must not read as current.
 func (s *QdrantStorage) Clear(ctx context.Context) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -720,9 +721,6 @@ func (s *QdrantStorage) Clear(ctx context.Context) error {
 			}
 		}
 	}
-
-	// Save the last index record too; a failed read loses it, which reads as none recorded
-	savedLastIndex, _ := s.getLastIndexLocked(ctx)
 
 	// Delete collection entirely
 	if err := s.client.DeleteCollection(ctx, s.collectionName); err != nil {
@@ -773,11 +771,6 @@ func (s *QdrantStorage) Clear(ctx context.Context) error {
 				Points:         []*qdrant.PointStruct{point},
 			})
 		}
-	}
-
-	// Restore the last index record if we had one (best effort, as for calibration)
-	if savedLastIndex != nil {
-		_ = s.setLastIndexLocked(ctx, *savedLastIndex)
 	}
 
 	// Sync to parallel FTS index
