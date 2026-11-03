@@ -2,8 +2,10 @@ package semantic
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -42,6 +44,92 @@ func TestSQLiteStorage_Close(t *testing.T) {
 	// Second close should not error
 	if err := storage.Close(); err != nil {
 		t.Errorf("Second Close() error = %v", err)
+	}
+}
+
+// TestSQLiteStorage_LastIndexDatabaseErrors defends the last-index read and write
+// against reporting a clean "nothing recorded" or a clean write when the database
+// handle itself is gone: the caller must see that the operation failed, and it must
+// not be ErrStorageClosed, which would mean the closed flag caught it first.
+//
+// Closing storage.db directly leaves the closed flag false, so these calls reach the
+// database instead of the guard.
+func TestSQLiteStorage_LastIndexDatabaseErrors(t *testing.T) {
+	storage := newFileStorage(t)
+	ctx := context.Background()
+
+	if err := storage.db.Close(); err != nil {
+		t.Fatalf("failed to close underlying database: %v", err)
+	}
+
+	if _, err := storage.GetLastIndex(ctx); err == nil {
+		t.Error("GetLastIndex() with a closed database error = nil, want the database error")
+	} else {
+		if errors.Is(err, ErrStorageClosed) {
+			t.Errorf("GetLastIndex() with a closed database error = %v, want a database error, not ErrStorageClosed", err)
+		}
+		if !strings.Contains(err.Error(), "failed to get last index") {
+			t.Errorf("GetLastIndex() with a closed database error = %v, want it wrapped as failed to get last index", err)
+		}
+	}
+
+	if err := storage.SetLastIndex(ctx, LastIndex{Commit: "aaaa"}); err == nil {
+		t.Error("SetLastIndex() with a closed database error = nil, want the database error")
+	} else {
+		if errors.Is(err, ErrStorageClosed) {
+			t.Errorf("SetLastIndex() with a closed database error = %v, want a database error, not ErrStorageClosed", err)
+		}
+		if !strings.Contains(err.Error(), "failed to set last index") {
+			t.Errorf("SetLastIndex() with a closed database error = %v, want it wrapped as failed to set last index", err)
+		}
+	}
+
+	// Clear fails at its first delete on a closed handle; the index_metadata delete's
+	// own error return is covered by the next test, which cannot rely on closing the
+	// handle because that fails earlier.
+	if err := storage.Clear(ctx); err == nil {
+		t.Error("Clear() with a closed database error = nil, want the database error")
+	} else if errors.Is(err, ErrStorageClosed) {
+		t.Errorf("Clear() with a closed database error = %v, want a database error, not ErrStorageClosed", err)
+	}
+}
+
+// TestSQLiteStorage_ClearIndexMetadataDeleteFailure defends the Clear step that drops
+// the recorded last index: when that DELETE fails, Clear must report it instead of
+// carrying on as if the index had been cleared.
+//
+// Dropping the table rather than closing the whole handle is what reaches this branch:
+// a closed handle fails at the earlier DELETE FROM chunks. The chunk is planted so the
+// test also proves that earlier delete ran before the metadata delete failed.
+func TestSQLiteStorage_ClearIndexMetadataDeleteFailure(t *testing.T) {
+	storage := newFileStorage(t)
+	ctx := context.Background()
+
+	chunk := Chunk{ID: "chunk-1", FilePath: "one.go", Type: ChunkFunction, Name: "One", Content: "func One() {}", StartLine: 1, EndLine: 1, Language: "go"}
+	if err := storage.Create(ctx, chunk, []float32{0.1, 0.2, 0.3, 0.4}); err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	if err := storage.SetLastIndex(ctx, LastIndex{Commit: "aaaa"}); err != nil {
+		t.Fatalf("SetLastIndex() error = %v", err)
+	}
+	if _, err := storage.db.ExecContext(ctx, `DROP TABLE index_metadata`); err != nil {
+		t.Fatalf("failed to drop index_metadata: %v", err)
+	}
+
+	err := storage.Clear(ctx)
+	if err == nil {
+		t.Error("Clear() error = nil, want the failed index_metadata delete")
+	} else {
+		if errors.Is(err, ErrStorageClosed) {
+			t.Errorf("Clear() error = %v, want a database error, not ErrStorageClosed", err)
+		}
+		if !strings.Contains(err.Error(), "index_metadata") {
+			t.Errorf("Clear() error = %v, want the failed DELETE FROM index_metadata", err)
+		}
+	}
+
+	if _, err := storage.Read(ctx, chunk.ID); !errors.Is(err, ErrNotFound) {
+		t.Errorf("Read(%q) after the failed Clear() error = %v, want ErrNotFound: Clear must delete the chunk before failing on the metadata", chunk.ID, err)
 	}
 }
 
