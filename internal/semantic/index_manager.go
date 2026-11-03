@@ -114,13 +114,13 @@ type UpdateOptions struct {
 
 // IndexResult contains statistics from an indexing operation
 type IndexResult struct {
-	FilesProcessed int      // Files that were indexed
-	FilesSkipped   int      // Files skipped due to errors
-	FilesUnchanged int      // Files skipped because already indexed and unchanged
-	ChunksCreated  int      // Total chunks created
-	FilesFallback  int      // Files chunked as text windows because their parse failed
-	FallbackFiles  []string // Paths of those files
-	Errors         []string // Error messages
+	FilesProcessed int      `json:"files_processed"`          // Files that were indexed
+	FilesSkipped   int      `json:"files_skipped"`            // Files skipped due to errors
+	FilesUnchanged int      `json:"files_unchanged"`          // Files skipped because already indexed and unchanged
+	ChunksCreated  int      `json:"chunks_created"`           // Total chunks created
+	FilesFallback  int      `json:"files_fallback"`           // Files chunked as text windows because their parse failed
+	FallbackFiles  []string `json:"fallback_files,omitempty"` // Paths of those files
+	Errors         []string `json:"errors"`                   // Error messages
 }
 
 // UpdateResult contains statistics from an update operation
