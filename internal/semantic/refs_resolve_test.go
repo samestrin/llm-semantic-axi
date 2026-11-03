@@ -185,3 +185,38 @@ func TestResolveRefs_ClearsDanglingTarget(t *testing.T) {
 		t.Errorf("stale edge still points at %q after its target was removed, want cleared", got)
 	}
 }
+
+// TestResolveRefs_OnlyWithinCallerLanguage defends against a Python run()
+// linking to the lone Go chunk named run: an edge must resolve only to a chunk
+// of the calling chunk's language, while a same-language target still resolves.
+func TestResolveRefs_OnlyWithinCallerLanguage(t *testing.T) {
+	storage, cleanup := createTestSQLiteStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+	chunks := []ChunkWithEmbedding{
+		{Chunk: Chunk{ID: "py-caller", FilePath: "a.py", Type: ChunkFunction, Name: "main", Content: "x", StartLine: 1, EndLine: 9, Language: "python"}, Embedding: []float32{0.1}},
+		{Chunk: Chunk{ID: "go-run", FilePath: "b.go", Type: ChunkFunction, Name: "run", Content: "x", StartLine: 1, EndLine: 3, Language: "go"}, Embedding: []float32{0.2}},
+		{Chunk: Chunk{ID: "py-helper", FilePath: "c.py", Type: ChunkFunction, Name: "helper", Content: "x", StartLine: 1, EndLine: 3, Language: "python"}, Embedding: []float32{0.3}},
+	}
+	if err := storage.CreateBatch(ctx, chunks); err != nil {
+		t.Fatalf("CreateBatch: %v", err)
+	}
+	rs := RefStorage(storage)
+	if err := rs.StoreRefs(ctx, []ChunkRef{
+		{ChunkID: "py-caller", RefType: RefCalls, RefName: "run"},
+		{ChunkID: "py-caller", RefType: RefCalls, RefName: "helper"},
+	}); err != nil {
+		t.Fatalf("StoreRefs: %v", err)
+	}
+	if err := rs.ResolveRefs(ctx); err != nil {
+		t.Fatalf("ResolveRefs: %v", err)
+	}
+
+	if got := refTarget(t, rs, "py-caller", "run"); got != "" {
+		t.Errorf("python run() resolved to %q, want unresolved (only a Go run exists)", got)
+	}
+	if got := refTarget(t, rs, "py-caller", "helper"); got != "py-helper" {
+		t.Errorf("same-language call resolved to %q, want py-helper", got)
+	}
+}
