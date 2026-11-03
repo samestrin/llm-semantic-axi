@@ -36,25 +36,26 @@ func (c *JavaChunker) Chunk(path string, content []byte) ([]semantic.Chunk, erro
 	defer tree.Release()
 
 	var chunks []semantic.Chunk
-	c.walkNode(tree.RootNode(), content, path, &chunks, false)
+	c.walkNode(tree.RootNode(), content, path, &chunks)
 	return chunks, TreeError(tree)
 }
 
 // walkNode emits a chunk for each type and method declaration it reaches.
-// inType is true once the walk is inside a type body, which is what makes a
-// method_declaration a method rather than a function.
-func (c *JavaChunker) walkNode(node *gotreesitter.Node, content []byte, path string, chunks *[]semantic.Chunk, inType bool) {
+// An annotation element (String value();) is chunked as a method: it is the
+// annotation's API, and it is declared the way an interface method is.
+func (c *JavaChunker) walkNode(node *gotreesitter.Node, content []byte, path string, chunks *[]semantic.Chunk) {
 	WalkNamedChildren(node, c.lang, func(child *gotreesitter.Node, nodeType string) {
 		switch nodeType {
 		case "class_declaration", "enum_declaration", "record_declaration":
 			c.extractType(child, content, path, chunks, semantic.ChunkStruct)
 		case "interface_declaration", "annotation_type_declaration":
 			c.extractType(child, content, path, chunks, semantic.ChunkInterface)
-		case "method_declaration", "constructor_declaration", "compact_constructor_declaration":
+		case "method_declaration", "constructor_declaration", "compact_constructor_declaration",
+			"annotation_type_element_declaration":
 			c.extractMethod(child, content, path, chunks)
 		case "enum_body_declarations":
 			// Methods of an enum sit one level below enum_body.
-			c.walkNode(child, content, path, chunks, inType)
+			c.walkNode(child, content, path, chunks)
 		}
 	})
 }
@@ -69,7 +70,7 @@ func (c *JavaChunker) extractType(node *gotreesitter.Node, content []byte, path 
 	*chunks = append(*chunks, NodeToChunk(node, content, path, "java", chunkType, name, sig))
 
 	if body := GetChildByFieldName(node, "body", c.lang); body != nil {
-		c.walkNode(body, content, path, chunks, true)
+		c.walkNode(body, content, path, chunks)
 	}
 }
 
