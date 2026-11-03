@@ -38,8 +38,6 @@ var (
 	GlobalMinOutput  bool
 )
 
-const defaultConfigPath = ".planning/.config/config.yaml"
-
 // getDefaultAPIURL returns the API URL from environment or default
 func getDefaultAPIURL() string {
 	if url := os.Getenv("LLM_SEMANTIC_API_URL"); url != "" {
@@ -142,8 +140,8 @@ Supports any OpenAI-compatible embedding API (TEI, Ollama, vLLM, OpenAI, Azure, 
 
 			// Auto-discover config if not explicitly set
 			if configPath == "" {
-				if _, err := os.Stat(defaultConfigPath); err == nil {
-					configPath = defaultConfigPath
+				if _, err := os.Stat(config.DefaultConfigPath); err == nil {
+					configPath = config.DefaultConfigPath
 				}
 			}
 
