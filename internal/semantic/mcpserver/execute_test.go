@@ -413,6 +413,35 @@ func TestExecuteHandler_TimesOutARunawayCommand(t *testing.T) {
 	}
 }
 
+func TestExecuteHandler_TimesOutWhenAGrandchildHoldsTheOutputPipe(t *testing.T) {
+	// CommandTimeout is a promise to the MCP client. The real CLI can leave a
+	// helper process behind, and a shell wrapper around it always does: here
+	// the shell backgrounds sleep (no exec), so sleep is a grandchild holding
+	// the inherited stdout/stderr pipe. Killing only the direct child leaves
+	// that pipe open, and ExecuteHandler blocks until the grandchild exits, 30
+	// seconds later. The handler must return at the deadline instead.
+	script, _ := fakeBinary(t, "sleep 30 &\nwait")
+	useFakeBinary(t, script)
+
+	originalTimeout := CommandTimeout
+	CommandTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { CommandTimeout = originalTimeout })
+
+	start := time.Now()
+	_, err := ExecuteHandler(ToolPrefix+"index_status", map[string]interface{}{})
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("a command whose grandchild outlived the deadline was reported as success")
+	}
+	if !strings.Contains(err.Error(), "timed out") {
+		t.Errorf("error does not identify the timeout: %v", err)
+	}
+	if elapsed > CommandTimeout+3*time.Second {
+		t.Errorf("ExecuteHandler waited for the grandchild instead of the deadline: took %v", elapsed)
+	}
+}
+
 func TestExecuteHandler_RejectsAnUnknownTool(t *testing.T) {
 	// A tool name with no registry entry must be refused before anything is
 	// executed. Shelling out with an unmapped name would hand arbitrary text to
