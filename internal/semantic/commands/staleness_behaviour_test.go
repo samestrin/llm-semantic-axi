@@ -3,10 +3,12 @@ package commands
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/samestrin/llm-semantic-axi/internal/semantic"
 )
@@ -385,5 +387,53 @@ func TestRefStalenessWithoutAStorageIsUnknown(t *testing.T) {
 	s := refStaleness(context.Background(), refsOnly{})
 	if s.State != semantic.StalenessUnknown || s.Reason != semantic.StalenessReasonUnsupported {
 		t.Errorf("refStaleness = %+v, want unknown/unsupported", s)
+	}
+}
+
+// lastIndexOnly is a Storage that has recorded a last index, so CheckStaleness
+// goes on to run git.
+type lastIndexOnly struct{ semantic.Storage }
+
+func (lastIndexOnly) GetLastIndex(context.Context) (*semantic.LastIndex, error) {
+	return &semantic.LastIndex{Commit: strings.Repeat("a", 40), IndexedAt: time.Now()}, nil
+}
+
+// TestIndexStalenessHasItsOwnTimeout defends against a hung git (a lock, a slow
+// network filesystem) holding a search forever: the search commands pass a
+// context with no deadline, so the staleness check must bring its own.
+func TestIndexStalenessHasItsOwnTimeout(t *testing.T) {
+	old := stalenessTimeout
+	stalenessTimeout = 100 * time.Millisecond
+	t.Cleanup(func() { stalenessTimeout = old })
+
+	// A git that never answers. exec makes sleep the process the timeout kills,
+	// so its stdout pipe closes with it.
+	bin := t.TempDir()
+	writeFile(t, filepath.Join(bin, "git"), "#!/bin/sh\nexec sleep 30\n")
+	if err := os.Chmod(filepath.Join(bin, "git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	// No deadline; cancelled only if the check overruns, so a failing run does
+	// not leave the stub sleeping.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan semantic.Staleness, 1)
+	start := time.Now()
+	go func() { done <- indexStaleness(ctx, lastIndexOnly{}) }()
+
+	select {
+	case s := <-done:
+		if elapsed := time.Since(start); elapsed > 5*time.Second {
+			t.Errorf("indexStaleness took %v with a %v timeout", elapsed, stalenessTimeout)
+		}
+		if s.State != semantic.StalenessUnknown || s.Reason != semantic.StalenessReasonGitFailed {
+			t.Errorf("indexStaleness = %+v, want unknown/git_failed", s)
+		}
+	case <-time.After(5 * time.Second):
+		cancel()
+		<-done
+		t.Fatalf("indexStaleness still running after 5s with a %v timeout", stalenessTimeout)
 	}
 }
