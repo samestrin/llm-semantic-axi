@@ -584,19 +584,25 @@ func TestQdrantStorage_StatsSurvivesScrollFailure(t *testing.T) {
 		}
 	}
 
+	indexedAt := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	if err := storage.SetLastIndex(ctx, LastIndex{Commit: "aaaa", IndexedAt: indexedAt}); err != nil {
+		t.Fatalf("SetLastIndex: %v", err)
+	}
+
 	fq.setFailure("Scroll", status.Error(codes.DeadlineExceeded, "slow"))
 	stats, err := storage.Stats(ctx)
 	if err != nil {
 		t.Fatalf("Stats should tolerate a scroll failure, got %v", err)
 	}
-	if stats.ChunksTotal != 2 {
-		t.Errorf("Stats ChunksTotal = %d, want 2", stats.ChunksTotal)
+	// Two chunks plus the last_index record point.
+	if stats.ChunksTotal != 3 {
+		t.Errorf("Stats ChunksTotal = %d, want 3", stats.ChunksTotal)
 	}
 	if stats.FilesIndexed != 0 {
 		t.Errorf("Stats FilesIndexed = %d, want 0 when the scroll failed", stats.FilesIndexed)
 	}
-	if stats.LastUpdated == "" {
-		t.Error("Stats LastUpdated is empty")
+	if want := indexedAt.Format(time.RFC3339); stats.LastUpdated != want {
+		t.Errorf("Stats LastUpdated = %q, want the recorded index time %q", stats.LastUpdated, want)
 	}
 }
 

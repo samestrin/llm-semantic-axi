@@ -1619,3 +1619,8 @@ func (s *QdrantStorage) GetLastIndex(ctx context.Context) (*LastIndex, error) {
 func (s *QdrantStorage) SetLastIndex(ctx context.Context, li LastIndex) error {
 	return ErrLastIndexUnsupported
 }
+
+// lastIndexID returns the unique ID of the last_index record point.
+func lastIndexID() string {
+	return stringToUUID("last_index")
+}

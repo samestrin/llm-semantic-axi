@@ -89,6 +89,11 @@ var contractPayloads = map[string]map[string]payloadKind{
 		"score":      kindDouble,
 		"timestamp":  kindString,
 	},
+	"last_index": {
+		"type":       kindString,
+		"commit":     kindString,
+		"indexed_at": kindString,
+	},
 }
 
 // memoryCreationOnlyKeys are the memory keys absent until the first tracked
@@ -107,6 +112,7 @@ var contractSections = map[string]string{
 	"calibration_metadata": "### 3.",
 	"memory":               "### 4.",
 	"retrieval_log":        "### 5.",
+	"last_index":           "### 6.",
 }
 
 // kindOf reports the documented type of a stored Qdrant value, or "" for a
@@ -174,7 +180,7 @@ func TestStorageContract_CollectionVectorParameters(t *testing.T) {
 	}
 }
 
-// Defends: the payload keys and types of each of the five point kinds that
+// Defends: the payload keys and types of each of the six point kinds that
 // share one collection. A consumer filtering chunks by `chunk_id`, file hashes
 // by `type`, or memories by `entry_type` breaks the moment a key is renamed,
 // removed or retyped; an undocumented key added here is a contract change too.
@@ -234,10 +240,17 @@ func TestStorageContract_PayloadKeysAndTypesPerPointKind(t *testing.T) {
 	if err := storage.StoreMemory(ctx, entry, vec); err != nil {
 		t.Fatalf("StoreMemory: %v", err)
 	}
+	if err := storage.SetLastIndex(ctx, LastIndex{
+		Commit:    "0123456789abcdef0123456789abcdef01234567",
+		IndexedAt: time.Date(2026, 10, 31, 0, 0, 0, 0, time.UTC),
+	}); err != nil {
+		t.Fatalf("SetLastIndex: %v", err)
+	}
 
 	assertPayloadContract(t, "chunk", fq.payloadOf(collection, stringToUUID(chunk.ID)), contractPayloads["chunk"])
 	assertPayloadContract(t, "file_hash", fq.payloadOf(collection, fileHashID("/repo/pkg/a.go")), contractPayloads["file_hash"])
 	assertPayloadContract(t, "calibration_metadata", fq.payloadOf(collection, calibrationMetadataID()), contractPayloads["calibration_metadata"])
+	assertPayloadContract(t, "last_index", fq.payloadOf(collection, lastIndexID()), contractPayloads["last_index"])
 	assertPayloadContract(t, "memory (before any retrieval)", fq.payloadOf(collection, memoryPointID(entry.ID)),
 		without(contractPayloads["memory"], memoryCreationOnlyKeys))
 
@@ -262,6 +275,8 @@ func TestStorageContract_PayloadKeysAndTypesPerPointKind(t *testing.T) {
 	}{
 		{"file_hash", "type", "file_hash", fq.payloadOf(collection, fileHashID("/repo/pkg/a.go"))},
 		{"calibration_metadata", "type", "calibration_metadata", fq.payloadOf(collection, calibrationMetadataID())},
+		{"last_index", "type", "last_index", fq.payloadOf(collection, lastIndexID())},
+		{"last_index", "indexed_at", "2026-10-31T00:00:00Z", fq.payloadOf(collection, lastIndexID())},
 		{"memory", "entry_type", "memory", fq.payloadOf(collection, memoryPointID(entry.ID))},
 		{"retrieval_log", "entry_type", "retrieval_log", logs[0]},
 		{"chunk", "domain", "code", fq.payloadOf(collection, stringToUUID(chunk.ID))},
