@@ -464,6 +464,43 @@ func TestMemorySearchFilterThatExcludesEverythingIsNoMatch(t *testing.T) {
 	}
 }
 
+// TestMemorySearchAXIWithResultsCarriesNoZeroStatus: the zero-result status is
+// for an empty answer only. Stamped on a list of hits, `no_match` tells an
+// agent the search found nothing when it found something.
+func TestMemorySearchAXIWithResultsCarriesNoZeroStatus(t *testing.T) {
+	newWorkspace(t)
+	useEmbedder(t, newFakeEmbedder(t))
+	seedMemories(t, newMemory("mem-auth", "How should authentication tokens be validated?", "Verify the signature"))
+	withAXI(t)
+
+	axi := runMemorySearchOutput(t, memorySearchOpts{query: "authentication tokens", topK: 5})
+	if !strings.Contains(axi, "total: 1\n") {
+		t.Fatalf("the search found nothing, so this test proves nothing:\n%s", axi)
+	}
+	for _, unwanted := range []string{"status:", "no_match", "store_empty"} {
+		if strings.Contains(axi, unwanted) {
+			t.Errorf("--axi output with a hit carries %q:\n%s", unwanted, axi)
+		}
+	}
+}
+
+// TestZeroResultsMemoryStoreEmptySurfacesAListFailure: if the store cannot be
+// asked whether it holds entries, the answer must be an error, not a guess at
+// "empty" or "no match".
+func TestZeroResultsMemoryStoreEmptySurfacesAListFailure(t *testing.T) {
+	newWorkspace(t)
+	seedMemories(t)
+	storage, err := semantic.NewSQLiteStorage(filepath.Join(".index", "semantic.db"), 0)
+	if err != nil {
+		t.Fatalf("NewSQLiteStorage: %v", err)
+	}
+	storage.Close()
+
+	if _, err := zeroResultsMemoryStoreEmpty(context.Background(), storage, 0); err == nil {
+		t.Error("a failed check over a closed memory store returned no error")
+	}
+}
+
 // ===== outputMemoryJSON / outputMemoryText =====
 
 // TestOutputMemoryTextReportsAnEmptyResultSet: no results is not an error, and
