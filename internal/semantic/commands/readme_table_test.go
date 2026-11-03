@@ -45,7 +45,7 @@ func parseReadmeLanguageTable(t *testing.T) map[string]string {
 
 // Defends against the README language table drifting from RegisterAllChunkers:
 // an extension registered without a row (or a row for one that is not
-// registered) fails, and only Go may claim call edges.
+// registered) fails, and only Go, JavaScript and TypeScript may claim call edges.
 func TestReadmeLanguageTable_MatchesRegisteredExtensions(t *testing.T) {
 	factory := semantic.NewChunkerFactory()
 	RegisterAllChunkers(factory)
@@ -76,9 +76,11 @@ func TestReadmeLanguageTable_MatchesRegisteredExtensions(t *testing.T) {
 		t.Errorf("in README language table but not registered: %v", extra)
 	}
 
+	edgeExts := map[string]bool{"go": true, "js": true, "jsx": true, "mjs": true, "cjs": true,
+		"ts": true, "tsx": true, "mts": true, "cts": true}
 	for e, edges := range table {
 		want := "no"
-		if e == "go" {
+		if edgeExts[e] {
 			want = "yes"
 		}
 		if edges != want {
