@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -23,6 +24,24 @@ import (
 // and connecting a real MCP client to the other ends of two pipes. Because
 // run() returns an exit code instead of calling os.Exit, every test can end
 // its session and read what the process would have exited with.
+
+// initializeRequest is a raw MCP initialize call, for tests that drive the
+// server's input directly instead of through a client.
+const initializeRequest = `{"jsonrpc":"2.0","id":1,"method":"initialize","params":` +
+	`{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"x","version":"1"}}}` + "\n"
+
+// runMainEnv makes the test binary act as the server: TestMain calls main()
+// instead of running tests, so a test can exec it with a real stdin and
+// stdout and observe the process exit the way a supervisor would.
+const runMainEnv = "LLM_SEMANTIC_MCP_TEST_RUN_MAIN"
+
+func TestMain(m *testing.M) {
+	if os.Getenv(runMainEnv) == "1" {
+		main()
+		return
+	}
+	os.Exit(m.Run())
+}
 
 // fakeCLI writes an executable stand-in for llm-semantic that echoes payload,
 // and points mcpserver.BinaryPath at it for the duration of the test.
@@ -331,14 +350,11 @@ func TestServer_HangUpBeforeTheReplyIsACleanExit(t *testing.T) {
 	// and server.Run returns it. Nothing failed, and the process used to exit 1.
 	// The race goes the server's way only occasionally, so it is run 20 times.
 	fakeCLI(t, "{}")
-	const initialize = `{"jsonrpc":"2.0","id":1,"method":"initialize","params":` +
-		`{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"x","version":"1"}}}` + "\n"
-
 	for i := 0; i < 20; i++ {
 		srv, stdoutR, stdinW := launch(t)
 		go func() { _, _ = io.Copy(io.Discard, stdoutR) }()
 
-		if _, err := stdinW.Write([]byte(initialize)); err != nil {
+		if _, err := stdinW.Write([]byte(initializeRequest)); err != nil {
 			t.Fatalf("write initialize: %v", err)
 		}
 		if err := stdinW.Close(); err != nil {
@@ -348,6 +364,77 @@ func TestServer_HangUpBeforeTheReplyIsACleanExit(t *testing.T) {
 		if code != 0 || strings.Contains(stderr, "Server error") {
 			t.Fatalf("attempt %d: run() = %d after the client hung up mid-request, want 0; stderr:\n%s", i, code, stderr)
 		}
+	}
+}
+
+func TestServer_ReplyToAClientThatStoppedReadingIsACleanExit(t *testing.T) {
+	// The other side of the same race, and the one CI hit second: the client
+	// closes its session, which closes the end it reads from, while the
+	// server still has a reply to write. The write fails with EPIPE, the SDK
+	// returns that, and run() exited 1 with "write |1: broken pipe". The
+	// reader going away is the client disconnecting, not the server failing.
+	fakeCLI(t, "{}")
+	for i := 0; i < 5; i++ {
+		srv, stdoutR, stdinW := launch(t)
+		if err := stdoutR.Close(); err != nil {
+			t.Fatalf("close the client's read end: %v", err)
+		}
+		if _, err := stdinW.Write([]byte(initializeRequest)); err != nil {
+			t.Fatalf("write initialize: %v", err)
+		}
+		// Give the reply time to hit the closed pipe before the input ends,
+		// so this exercises EPIPE rather than the closing-on-EOF path.
+		time.Sleep(50 * time.Millisecond)
+		if err := stdinW.Close(); err != nil {
+			t.Fatalf("close the server's input: %v", err)
+		}
+		code, stderr := srv.wait(t)
+		if code != 0 || strings.Contains(stderr, "Server error") {
+			t.Fatalf("attempt %d: run() = %d after the client stopped reading, want 0; stderr:\n%s", i, code, stderr)
+		}
+	}
+}
+
+func TestBinary_ClientThatStoppedReadingIsACleanExit(t *testing.T) {
+	// In the real binary that broken pipe is on fd 1, where Go does not return
+	// EPIPE at all: it kills the process with SIGPIPE, so the disconnect above
+	// was reported to a supervisor as a crash before run() saw an error. This
+	// re-executes the test binary as the server, so stdout is a real fd 1.
+	if runtime.GOOS == "windows" {
+		t.Skip("SIGPIPE and the fake CLI are POSIX")
+	}
+	fakeCLI(t, "{}")
+
+	cmd := exec.Command(os.Args[0], "-test.run=^$")
+	cmd.Env = append(os.Environ(),
+		runMainEnv+"=1",
+		"PATH="+filepath.Dir(mcpserver.BinaryPath)+string(os.PathListSeparator)+os.Getenv("PATH"))
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatalf("StdinPipe: %v", err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatalf("StdoutPipe: %v", err)
+	}
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	_ = stdout.Close()
+	if _, err := stdin.Write([]byte(initializeRequest)); err != nil {
+		t.Fatalf("write initialize: %v", err)
+	}
+	time.Sleep(50 * time.Millisecond)
+	_ = stdin.Close()
+
+	err = cmd.Wait()
+	if err != nil {
+		t.Errorf("server exited with %v after the client stopped reading, want exit 0; stderr:\n%s", err, stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "started with") {
+		t.Errorf("stderr is missing the startup line, so the server never ran:\n%s", stderr.String())
 	}
 }
 
