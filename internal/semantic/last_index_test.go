@@ -337,3 +337,17 @@ func gitHeadOf(t *testing.T, dir, rev string) string {
 	}
 	return strings.TrimSpace(string(out))
 }
+
+// TestQdrantStorage_LastIndexUnsupported defends against Qdrant reading as "never
+// indexed" (nil, nil) or accepting a write it drops: both calls say it cannot record.
+func TestQdrantStorage_LastIndexUnsupported(t *testing.T) {
+	storage := &QdrantStorage{}
+	ctx := context.Background()
+
+	if got, err := storage.GetLastIndex(ctx); !errors.Is(err, ErrLastIndexUnsupported) || got != nil {
+		t.Errorf("GetLastIndex() = %+v, %v; want nil, ErrLastIndexUnsupported", got, err)
+	}
+	if err := storage.SetLastIndex(ctx, LastIndex{Commit: "aaaa"}); !errors.Is(err, ErrLastIndexUnsupported) {
+		t.Errorf("SetLastIndex() error = %v, want ErrLastIndexUnsupported", err)
+	}
+}

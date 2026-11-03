@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -177,6 +178,7 @@ type pendingChunk struct {
 // Index builds or rebuilds the semantic index for a directory
 func (m *IndexManager) Index(ctx context.Context, rootPath string, opts IndexOptions) (*IndexResult, error) {
 	result := &IndexResult{}
+	last := currentLastIndex(rootPath)
 
 	// Verify path exists
 	info, err := os.Stat(rootPath)
@@ -219,7 +221,29 @@ func (m *IndexManager) Index(ctx context.Context, rootPath string, opts IndexOpt
 
 	m.resolveRefs(ctx)
 
+	if err := m.recordLastIndex(ctx, last); err != nil {
+		return result, err
+	}
+
 	return result, nil
+}
+
+// currentLastIndex captures HEAD of the repository containing rootPath, and the time,
+// before an index starts. Outside git (or before the first commit) the commit is empty.
+// Capturing before the walk means a commit landing mid-index is reported as unindexed.
+func currentLastIndex(rootPath string) LastIndex {
+	commit, _ := gitResolveCommit(rootPath, "HEAD")
+	return LastIndex{Commit: commit, IndexedAt: time.Now().UTC()}
+}
+
+// recordLastIndex stores last. A backend that cannot record it is not a failure: the
+// record stays unreadable, so the staleness check reports "unknown" rather than a value.
+func (m *IndexManager) recordLastIndex(ctx context.Context, last LastIndex) error {
+	err := m.storage.SetLastIndex(ctx, last)
+	if err == nil || errors.Is(err, ErrLastIndexUnsupported) {
+		return nil
+	}
+	return fmt.Errorf("index updated, but failed to record the last indexed commit: %w", err)
 }
 
 // indexPerFile processes files one at a time (original behavior)
@@ -679,6 +703,7 @@ func (m *IndexManager) processFileWithDiff(ctx context.Context, filePath string,
 // Update performs incremental index update
 func (m *IndexManager) Update(ctx context.Context, rootPath string, opts UpdateOptions) (*UpdateResult, error) {
 	result := &UpdateResult{}
+	last := currentLastIndex(rootPath)
 
 	// Set overlap configuration (thread-safe)
 	m.setOverlapConfig(OverlapConfig{
@@ -741,6 +766,11 @@ func (m *IndexManager) Update(ctx context.Context, rootPath string, opts UpdateO
 
 	m.resolveRefs(ctx)
 
+	// A full scan covers every file, so the index now reflects HEAD.
+	if err := m.recordLastIndex(ctx, last); err != nil {
+		return result, err
+	}
+
 	return result, nil
 }
 
@@ -749,6 +779,8 @@ func (m *IndexManager) Update(ctx context.Context, rootPath string, opts UpdateO
 // against include/exclude patterns, and only re-indexes the affected files.
 func (m *IndexManager) UpdateGit(ctx context.Context, rootPath string, gitRef string, opts UpdateOptions) (*UpdateResult, error) {
 	result := &UpdateResult{}
+	last := currentLastIndex(rootPath)
+	since, sinceErr := gitResolveCommit(rootPath, gitRef)
 
 	// Get changed files from git
 	changed, deleted, err := gitChangedFiles(rootPath, gitRef)
@@ -801,7 +833,28 @@ func (m *IndexManager) UpdateGit(ctx context.Context, rootPath string, gitRef st
 
 	m.resolveRefs(ctx)
 
-	return result, nil
+	// An unresolvable ref cannot match the recorded commit.
+	if sinceErr != nil {
+		return result, nil
+	}
+	return result, m.advanceLastIndex(ctx, since, last)
+}
+
+// advanceLastIndex records last only when the recorded commit is since. The update
+// applied the changes from since to HEAD; if the index was at some other commit, the
+// changes between that commit and since were never applied, so the record is left as is.
+func (m *IndexManager) advanceLastIndex(ctx context.Context, since string, last LastIndex) error {
+	recorded, err := m.storage.GetLastIndex(ctx)
+	if errors.Is(err, ErrLastIndexUnsupported) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("index updated, but failed to read the last indexed commit: %w", err)
+	}
+	if recorded == nil || recorded.Commit != since {
+		return nil
+	}
+	return m.recordLastIndex(ctx, last)
 }
 
 // fileMatchesFilters checks if a single file passes the include/exclude/extension filters.

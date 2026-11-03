@@ -71,3 +71,14 @@ func GitRepoRoot(path string) (string, error) {
 	}
 	return strings.TrimSpace(string(out)), nil
 }
+
+// gitResolveCommit resolves rev to a full commit hash in the repository containing dir.
+func gitResolveCommit(dir, rev string) (string, error) {
+	cmd := exec.Command("git", "rev-parse", "--verify", "--quiet", rev+"^{commit}")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(out)), nil
+}
