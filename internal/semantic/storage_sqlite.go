@@ -87,7 +87,6 @@ func (s *SQLiteStorage) initSchema() error {
 	CREATE INDEX IF NOT EXISTS idx_chunks_file_path ON chunks(file_path);
 	CREATE INDEX IF NOT EXISTS idx_chunks_type ON chunks(type);
 	CREATE INDEX IF NOT EXISTS idx_chunks_language ON chunks(language);
-	CREATE INDEX IF NOT EXISTS idx_chunks_file_mtime ON chunks(file_mtime);
 
 	CREATE TABLE IF NOT EXISTS file_hashes (
 		file_path TEXT PRIMARY KEY,
@@ -126,6 +125,8 @@ func (s *SQLiteStorage) initSchema() error {
 	}
 
 	// Migrate existing databases: add file_mtime column if missing
+	// (the file_mtime index is created by the migration, not the schema block above,
+	// because a legacy chunks table has no such column until the migration runs)
 	if err := s.migrateMtimeColumn(); err != nil {
 		return err
 	}
@@ -186,11 +187,12 @@ func (s *SQLiteStorage) migrateMtimeColumn() error {
 		if err != nil {
 			return fmt.Errorf("failed to add file_mtime column: %w", err)
 		}
-		// Create index for the new column
-		_, err = s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_chunks_file_mtime ON chunks(file_mtime)`)
-		if err != nil {
-			return fmt.Errorf("failed to create file_mtime index: %w", err)
-		}
+	}
+
+	// Always ensure the index: fresh databases have the column from CREATE TABLE
+	// but no longer get the index from the schema block.
+	if _, err = s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_chunks_file_mtime ON chunks(file_mtime)`); err != nil {
+		return fmt.Errorf("failed to create file_mtime index: %w", err)
 	}
 
 	return nil

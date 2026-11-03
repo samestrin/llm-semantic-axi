@@ -896,6 +896,36 @@ func TestQdrantStorage_ReadEmbeddings(t *testing.T) {
 	}
 }
 
+// TestQdrantStorage_ReadEmbeddingsDenseOnly pins that ReadEmbeddings reads the
+// Dense oneof; a server that leaves the deprecated flat Data field empty used
+// to yield an empty map, silently forcing every chunk to be re-embedded.
+func TestQdrantStorage_ReadEmbeddingsDenseOnly(t *testing.T) {
+	storage, fq := newFakeQdrantStorage(t, "embeddings_dense", 4)
+	ctx := context.Background()
+
+	want := []float32{0.25, 0.5, 0.75, 1}
+	if err := storage.Create(ctx, Chunk{ID: "d-1", FilePath: "/d.go", Type: ChunkFunction, Language: "go"}, want); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	fq.mu.Lock()
+	fq.denseOnly = true
+	fq.mu.Unlock()
+
+	id := stringToUUID("d-1")
+	got, err := storage.ReadEmbeddings(ctx, []string{id})
+	if err != nil {
+		t.Fatalf("ReadEmbeddings: %v", err)
+	}
+	if len(got[id]) != len(want) {
+		t.Fatalf("ReadEmbeddings returned %v, want %v", got[id], want)
+	}
+	for i := range want {
+		if got[id][i] != want[i] {
+			t.Errorf("vector[%d] = %v, want %v", i, got[id][i], want[i])
+		}
+	}
+}
+
 // TestQdrantStorage_ReadEmbeddingsEmptyInput pins the no-request short-circuit
 // for an empty id list.
 func TestQdrantStorage_ReadEmbeddingsEmptyInput(t *testing.T) {

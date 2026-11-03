@@ -343,11 +343,12 @@ func TestSearch_RerankCandidatesCapsOverFetch(t *testing.T) {
 	}
 }
 
-// TestSearch_RerankingIgnoresCallerTopK documents a defect: when reranking is on, Search
-// overwrites searchOpts.TopK with the over-fetch candidate count and then passes those
-// same options to applyReranking, so the caller's TopK is never re-applied. A TopK of 2
-// therefore yields every candidate the reranker scored.
-func TestSearch_RerankingIgnoresCallerTopK(t *testing.T) {
+// TestSearch_RerankingHonoursCallerTopK defends the caller's limit when reranking is on.
+// Search over-fetches a candidate pool for the reranker; before the fix it trimmed to
+// that pool size instead of the caller's TopK, so TopK=2 returned all three chunks with
+// no signal that the limit had been dropped. (This test previously pinned that defect
+// as TestSearch_RerankingIgnoresCallerTopK.)
+func TestSearch_RerankingHonoursCallerTopK(t *testing.T) {
 	storage := prefilterFixture(t)
 	embedder := &tableEmbedder{fallback: []float32{0.9, 0.5, 0.1, 0}}
 	reranker := &stubReranker{scores: map[string]float32{
@@ -361,11 +362,39 @@ func TestSearch_RerankingIgnoresCallerTopK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Search() error = %v", err)
 	}
-	if len(results) != 3 {
-		t.Fatalf("got %d results, want 3 - the caller's TopK=2 is currently dropped when reranking", len(results))
+	if reranker.calls != 1 {
+		t.Fatalf("reranker called %d times, want 1", reranker.calls)
 	}
-	if results[0].Chunk.ID != "b" {
-		t.Errorf("order = %v, want b first by reranker score", ids(results))
+	if len(results) != 2 {
+		t.Fatalf("got %d results %v, want 2 - the caller's TopK must survive reranking", len(results), ids(results))
+	}
+	// All three chunks were candidates; the reranker picks the best two, b then c.
+	if results[0].Chunk.ID != "b" || results[1].Chunk.ID != "c" {
+		t.Errorf("order = %v, want [b c] by reranker score", ids(results))
+	}
+}
+
+// TestSearch_RerankerErrorHonoursCallerTopK defends the caller's limit on the reranker
+// fallback path: when the reranker fails, Search returns the embedding-scored candidates,
+// and before the fix it returned the whole over-fetched pool rather than the caller's TopK.
+func TestSearch_RerankerErrorHonoursCallerTopK(t *testing.T) {
+	storage := prefilterFixture(t)
+	embedder := &tableEmbedder{fallback: []float32{0.9, 0.5, 0.1, 0}}
+	reranker := &stubReranker{err: errors.New("reranker down")}
+	searcher := NewSearcherWithReranker(storage, embedder, reranker)
+
+	results, err := searcher.Search(context.Background(), "anything", SearchOptions{TopK: 2, Rerank: true})
+	if err != nil {
+		t.Fatalf("Search() should not surface a reranker failure, got %v", err)
+	}
+	if reranker.calls != 1 {
+		t.Fatalf("reranker called %d times, want 1 (the error path must be exercised)", reranker.calls)
+	}
+	if len(results) != 2 {
+		t.Fatalf("got %d results %v, want 2 - the fallback must still honour the caller's TopK", len(results), ids(results))
+	}
+	if results[0].Chunk.ID != "a" || results[1].Chunk.ID != "b" {
+		t.Errorf("order = %v, want the embedding order [a b]", ids(results))
 	}
 }
 

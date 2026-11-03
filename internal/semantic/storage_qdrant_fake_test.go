@@ -68,6 +68,10 @@ type fakeQdrant struct {
 	// omitPointsCount makes GetCollectionInfo leave PointsCount unset, as a
 	// server may while it has not counted the collection yet.
 	omitPointsCount bool
+
+	// denseOnly makes returned vectors carry only the Dense oneof and leave
+	// the deprecated flat Data field empty, as newer servers do.
+	denseOnly bool
 }
 
 func newFakeQdrant() *fakeQdrant {
@@ -376,7 +380,7 @@ func (f *fakeQdrant) getPoints(_ context.Context, req *qdrant.GetPoints) (*qdran
 		result = append(result, &qdrant.RetrievedPoint{
 			Id:      p.id,
 			Payload: selectPayload(p.payload, req.GetWithPayload()),
-			Vectors: selectVectors(p.vector, req.GetWithVectors()),
+			Vectors: selectVectors(p.vector, req.GetWithVectors(), f.denseOnly),
 		})
 	}
 	return &qdrant.GetResponse{Result: result}, nil
@@ -542,7 +546,7 @@ func (f *fakeQdrant) Scroll(_ context.Context, req *qdrant.ScrollPoints) (*qdran
 		result = append(result, &qdrant.RetrievedPoint{
 			Id:      p.id,
 			Payload: selectPayload(p.payload, req.GetWithPayload()),
-			Vectors: selectVectors(p.vector, req.GetWithVectors()),
+			Vectors: selectVectors(p.vector, req.GetWithVectors(), f.denseOnly),
 		})
 	}
 
@@ -597,7 +601,7 @@ func (f *fakeQdrant) Query(_ context.Context, req *qdrant.QueryPoints) (*qdrant.
 		result = append(result, &qdrant.ScoredPoint{
 			Id:      h.p.id,
 			Payload: selectPayload(h.p.payload, req.GetWithPayload()),
-			Vectors: selectVectors(h.p.vector, req.GetWithVectors()),
+			Vectors: selectVectors(h.p.vector, req.GetWithVectors(), f.denseOnly),
 			Score:   h.score,
 		})
 	}
@@ -738,7 +742,7 @@ func denseOf(v *qdrant.Vector) []float32 {
 
 // selectVectors renders a stored vector the way Qdrant does when vectors are
 // requested: the deprecated flat Data field and the Dense oneof both carry it.
-func selectVectors(vec []float32, sel *qdrant.WithVectorsSelector) *qdrant.VectorsOutput {
+func selectVectors(vec []float32, sel *qdrant.WithVectorsSelector, denseOnly bool) *qdrant.VectorsOutput {
 	if sel == nil {
 		return nil
 	}
@@ -747,6 +751,15 @@ func selectVectors(vec []float32, sel *qdrant.WithVectorsSelector) *qdrant.Vecto
 		return nil
 	}
 	copied := append([]float32(nil), vec...)
+	if denseOnly {
+		return &qdrant.VectorsOutput{
+			VectorsOptions: &qdrant.VectorsOutput_Vector{
+				Vector: &qdrant.VectorOutput{
+					Vector: &qdrant.VectorOutput_Dense{Dense: &qdrant.DenseVector{Data: copied}},
+				},
+			},
+		}
+	}
 	return &qdrant.VectorsOutput{
 		VectorsOptions: &qdrant.VectorsOutput_Vector{
 			Vector: &qdrant.VectorOutput{

@@ -66,6 +66,12 @@ func (c *CppChunker) visit(node, outer *gotreesitter.Node, nodeType string, cont
 		c.extractClass(node, outer, content, path, chunks)
 	case "enum_specifier":
 		c.extractNamed(node, outer, content, path, chunks, semantic.ChunkStruct, "enumerator_list")
+	case "type_definition":
+		// Named by the typedef declarator, covering the whole typedef, as the
+		// C chunker does. This is what names `typedef struct {..} P;`.
+		if name, _ := c.declaratorName(GetChildByFieldName(node, "declarator", c.lang), content); name != "" {
+			*chunks = append(*chunks, NodeToChunk(outer, content, path, "cpp", semantic.ChunkStruct, name, ExtractSignature(outer, content)))
+		}
 	case "namespace_definition":
 		c.extractNamespace(node, content, path, chunks)
 	case "preproc_ifdef", "preproc_if", "preproc_else", "preproc_elif", "preproc_elifdef":
@@ -137,7 +143,7 @@ func (c *CppChunker) extractNamespace(node *gotreesitter.Node, content []byte, p
 func (c *CppChunker) declaratorName(d *gotreesitter.Node, content []byte) (name string, qualified bool) {
 	for d != nil {
 		switch d.Type(c.lang) {
-		case "function_declarator", "pointer_declarator", "reference_declarator", "parenthesized_declarator":
+		case "function_declarator", "pointer_declarator", "reference_declarator", "parenthesized_declarator", "array_declarator":
 			next := GetChildByFieldName(d, "declarator", c.lang)
 			if next == nil && d.NamedChildCount() > 0 {
 				next = d.NamedChild(0)

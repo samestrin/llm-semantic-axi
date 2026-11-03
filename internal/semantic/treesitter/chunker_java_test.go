@@ -204,18 +204,70 @@ func TestJavaChunker_SyntaxErrorIsReported(t *testing.T) {
 	}
 }
 
+func TestJavaChunker_AnnotationTypeElementsAreChunked(t *testing.T) {
+	// An annotation's elements are its API: without a chunk for value(), a
+	// search for "what does @A take" returns nothing for code that exists,
+	// which reads as "none exist" rather than "not indexed".
+	src := "@interface A { String value(); int n() default 1; }\n"
+	chunks, err := NewJavaChunker().Chunk("A.java", []byte(src))
+	if err != nil {
+		t.Fatalf("Chunk failed: %v", err)
+	}
+	got := map[string]semantic.Chunk{}
+	for _, c := range chunks {
+		got[c.Name] = c
+	}
+	for _, name := range []string{"value", "n"} {
+		c, ok := got[name]
+		if !ok {
+			t.Errorf("missing chunk for annotation element %q in %v", name, chunks)
+			continue
+		}
+		if c.Type != semantic.ChunkMethod {
+			t.Errorf("%q type = %s, want %s", name, c.Type, semantic.ChunkMethod)
+		}
+	}
+	if c := got["value"]; c.Signature != "String value();" {
+		t.Errorf("value signature = %q", c.Signature)
+	}
+	if len(chunks) != 3 {
+		t.Errorf("got %d chunks, want 3 (A, value, n): %v", len(chunks), chunks)
+	}
+}
+
 func TestJavaChunker_NamelessDeclarationIsDropped(t *testing.T) {
-	// The name guard: a node without a name field must not become a chunk.
+	// The name guards in extractType and extractMethod: a declaration whose name
+	// is missing must not become a chunk named "", which would be stored and
+	// returned as a hit nobody can identify. "class { }" parses to a real
+	// class_declaration whose name identifier is missing, the one way the
+	// grammar yields a nameless declaration.
+	src := []byte("class { }\n")
 	c := NewJavaChunker()
-	tree, err := ParseSource([]byte("package a;\n"), c.lang)
+
+	// Through the whole walk: the nameless class produces no chunk.
+	chunks, _ := c.Chunk("a.java", src)
+	if len(chunks) != 0 {
+		t.Errorf("Chunk emitted chunks for a nameless class: %+v", chunks)
+	}
+
+	tree, err := ParseSource(src, c.lang)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer tree.Release()
+	decl := tree.RootNode().NamedChild(0)
+	if decl == nil || decl.Type(c.lang) != "class_declaration" {
+		t.Fatalf("fixture no longer parses to a class_declaration: %v", decl)
+	}
+	if name := GetChildByFieldName(decl, "name", c.lang); GetNodeText(name, src) != "" {
+		t.Fatalf("fixture class_declaration has a name: %q", GetNodeText(name, src))
+	}
+
+	// extractMethod reads the same name field; no parse yields a nameless
+	// method_declaration (they become ERROR nodes), so it gets the same node.
 	var out []semantic.Chunk
-	c.extractType(tree.RootNode(), []byte("package a;\n"), "a.java", &out, semantic.ChunkStruct)
-	c.extractMethod(tree.RootNode(), []byte("package a;\n"), "a.java", &out)
+	c.extractMethod(decl, src, "a.java", &out)
 	if len(out) != 0 {
-		t.Errorf("emitted chunks for nameless nodes: %+v", out)
+		t.Errorf("extractMethod emitted chunks for a nameless declaration: %+v", out)
 	}
 }

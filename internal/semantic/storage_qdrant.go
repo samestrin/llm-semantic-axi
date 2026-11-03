@@ -906,8 +906,8 @@ func (s *QdrantStorage) ReadEmbeddings(ctx context.Context, ids []string) (map[s
 	result := make(map[string][]float32, len(points))
 	for _, point := range points {
 		id := point.Id.GetUuid()
-		if vec := point.Vectors.GetVector(); vec != nil {
-			result[id] = vec.Data
+		if vec := point.GetVectors().GetVector(); vec != nil {
+			result[id] = vec.GetDenseVector().GetData()
 		}
 	}
 
