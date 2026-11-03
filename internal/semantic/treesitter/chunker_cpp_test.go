@@ -136,3 +136,37 @@ func TestCppChunker_OperatorAndTemplateFunction(t *testing.T) {
 		{"operator==", semantic.ChunkMethod, 2, 2},
 	})
 }
+
+// Defends epic 09 T2: a typedef'd anonymous struct was invisible to search
+// because the struct has no tag. The chunk is named by the typedef name and
+// spans the whole type_definition; a bare nameless struct stays unchunked and
+// a named struct is unchanged.
+func TestCppChunker_TypedefStruct(t *testing.T) {
+	src := "typedef struct {\n  int x;\n} P;\n\ntypedef struct N {\n  int z;\n} N;\n\nstruct {\n  int y;\n} v;\n\nstruct S {\n  int w;\n};\n"
+	chunks, err := NewCppChunker().Chunk("t.cpp", []byte(src))
+	if err != nil {
+		t.Fatalf("Chunk: %v", err)
+	}
+	if len(chunks) != 3 {
+		t.Fatalf("got %d chunks %v, want P, N, S only", len(chunks), chunks)
+	}
+	assertChunks(t, chunks, []wantChunk{
+		{"P", semantic.ChunkStruct, 1, 3},
+		{"N", semantic.ChunkStruct, 5, 7},
+		{"S", semantic.ChunkStruct, 13, 15},
+	})
+}
+
+// Defends the review finding on epic 09 T2: an array typedef must be named by
+// its identifier, not by the whole declarator text (`Buf[256]`).
+func TestCppChunker_TypedefArrayDeclaratorNames(t *testing.T) {
+	src := "typedef char Buf[256];\n\ntypedef int (*matrix)[4];\n"
+	chunks, err := NewCppChunker().Chunk("t.cpp", []byte(src))
+	if err != nil {
+		t.Fatalf("Chunk: %v", err)
+	}
+	assertChunks(t, chunks, []wantChunk{
+		{"Buf", semantic.ChunkStruct, 1, 1},
+		{"matrix", semantic.ChunkStruct, 3, 3},
+	})
+}
