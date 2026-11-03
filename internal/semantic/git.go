@@ -2,6 +2,7 @@ package semantic
 
 import (
 	"errors"
+	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,10 @@ import (
 // gitChangedFiles returns files changed (added/modified) and deleted since gitRef.
 // Paths are returned relative to rootPath.
 func gitChangedFiles(rootPath, gitRef string) (changed, deleted []string, err error) {
+	if strings.HasPrefix(gitRef, "-") {
+		return nil, nil, fmt.Errorf("%w: %q", errFlagLikeRef, gitRef)
+	}
+
 	// git diff --name-status <ref> HEAD
 	cmd := exec.Command("git", "diff", "--name-status", gitRef, "HEAD")
 	cmd.Dir = rootPath
@@ -75,6 +80,9 @@ func GitRepoRoot(path string) (string, error) {
 
 // gitResolveCommit resolves rev to a full commit hash in the repository containing dir.
 func gitResolveCommit(dir, rev string) (string, error) {
+	if strings.HasPrefix(rev, "-") {
+		return "", fmt.Errorf("%w: %q", errFlagLikeRef, rev)
+	}
 	cmd := exec.Command("git", "rev-parse", "--verify", "--quiet", rev+"^{commit}")
 	cmd.Dir = dir
 	out, err := cmd.Output()
