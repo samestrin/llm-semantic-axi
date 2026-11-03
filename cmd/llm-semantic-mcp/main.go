@@ -7,6 +7,9 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -33,14 +36,52 @@ const codeServerClosing = -32004
 var serverVersion = "dev"
 
 func main() {
-	os.Exit(run(context.Background(), &mcp.StdioTransport{}, os.Stderr))
+	// A reply written after the client has closed our stdout would otherwise
+	// kill the process with SIGPIPE, which Go raises for a broken pipe on fd 1
+	// and a supervisor reads as a crash. Ignored, the write returns EPIPE and
+	// run() can see that the client went away.
+	signal.Ignore(syscall.SIGPIPE)
+	os.Exit(run(context.Background(), os.Stdin, nopCloser{os.Stdout}, os.Stderr))
+}
+
+// nopCloser keeps stdout open when the SDK closes the connection, as
+// mcp.StdioTransport does.
+type nopCloser struct{ io.Writer }
+
+func (nopCloser) Close() error { return nil }
+
+// recordingWriter remembers the first error its writer returned. When a write
+// fails the SDK closes the connection, and server.Run then reports the closed
+// reader instead of the write; this keeps the cause.
+type recordingWriter struct {
+	io.WriteCloser
+	mu  sync.Mutex
+	err error
+}
+
+func (w *recordingWriter) Write(p []byte) (int, error) {
+	n, err := w.WriteCloser.Write(p)
+	if err != nil {
+		w.mu.Lock()
+		if w.err == nil {
+			w.err = err
+		}
+		w.mu.Unlock()
+	}
+	return n, err
+}
+
+func (w *recordingWriter) writeErr() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.err
 }
 
 // run is the whole server: it checks the CLI is installed, registers every
-// tool, serves MCP on transport until the session ends, and returns the
+// tool, serves MCP over in and out until the session ends, and returns the
 // process exit code. It is split from main() so a test can drive a full
 // session and read the exit decision without os.Exit ending the test binary.
-func run(ctx context.Context, transport mcp.Transport, stderr io.Writer) int {
+func run(ctx context.Context, in io.ReadCloser, out io.WriteCloser, stderr io.Writer) int {
 	// Verify llm-semantic binary exists
 	if _, err := os.Stat(mcpserver.BinaryPath); os.IsNotExist(err) {
 		fmt.Fprintf(stderr, "ERROR: llm-semantic binary not found at %s\n", mcpserver.BinaryPath)
@@ -102,24 +143,42 @@ func run(ctx context.Context, transport mcp.Transport, stderr io.Writer) int {
 	fmt.Fprintf(stderr, "%s v%s started with %d tools\n", serverName, serverVersion, len(tools))
 
 	// Serve until the session ends
-	if err := server.Run(ctx, transport); err != nil && !clientDisconnected(err) {
+	w := &recordingWriter{WriteCloser: out}
+	runErr := server.Run(ctx, &mcp.IOTransport{Reader: in, Writer: w})
+	if err := sessionResult(runErr, w.writeErr()); err != nil {
 		fmt.Fprintf(stderr, "Server error: %v\n", err)
 		return 1
 	}
 	return 0
 }
 
-// clientDisconnected reports whether a server.Run error only says the client
-// went away, which is how every session ends and not a failure.
-//
-// A bare io.EOF never reaches here: the SDK drops it. What does arrive is the
-// SDK refusing a write because the read side had already hit EOF, as
-// "server is closing: EOF" — a reply that lost the race against the client's
-// hang-up. That error formats its cause with %v, so errors.Is cannot see the
-// EOF inside and the code is the only thing to match on. It is safe to treat
-// as clean because the SDK returns a broken read side ahead of it: a peer
-// that sent garbage still surfaces as its own error and still exits 1.
-func clientDisconnected(err error) bool {
+// sessionResult decides how a session ended: nil when the client simply went
+// away, which is how every session ends, or the error to report and exit 1 on.
+// writeErr is the first error from the server's output, if any.
+func sessionResult(runErr, writeErr error) error {
+	if writeErr != nil {
+		// The SDK closed the connection because a write failed, so runErr only
+		// says the reader was closed. A broken pipe means the client stopped
+		// reading; any other write failure is the server's and is the cause.
+		if errors.Is(writeErr, syscall.EPIPE) {
+			return nil
+		}
+		return writeErr
+	}
+	if runErr == nil || replyAfterHangUp(runErr) {
+		return nil
+	}
+	return runErr
+}
+
+// replyAfterHangUp reports whether runErr is the SDK refusing a write because
+// the read side had already hit EOF, as "server is closing: EOF": a reply
+// that lost the race against the client's hang-up. A bare io.EOF never
+// arrives; the SDK drops it. The error formats its cause with %v, so
+// errors.Is cannot see the EOF inside and the code is the only thing to match
+// on. That is safe because the SDK returns a broken read side ahead of it: a
+// peer that sent garbage still surfaces as its own error and still exits 1.
+func replyAfterHangUp(runErr error) bool {
 	var wireErr *jsonrpc.Error
-	return errors.As(err, &wireErr) && wireErr.Code == codeServerClosing
+	return errors.As(runErr, &wireErr) && wireErr.Code == codeServerClosing
 }
