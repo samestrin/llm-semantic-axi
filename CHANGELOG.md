@@ -50,6 +50,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `llm-semantic-mcp` exits 0 when a client disconnects, including a client that hangs up or stops reading before the server has replied. Before this, a reply that lost that race made the server print `Server error: server is closing: EOF` or `write |1: broken pipe` and exit 1, or be killed by SIGPIPE, so a supervisor saw a normal session end as a crash. A malformed message from the client, or output that fails for any reason other than a closed pipe, still exits 1 and says why. (epic 07)
 - The MCP server's instructions now give the real number of tools, taken from the tool definitions. They said 4 while 16 were registered. (epic 07)
 - `index-status` on the Qdrant backend no longer reports the moment it was asked as `Last updated`. It reports the recorded time of the last index, and nothing when no index has been recorded; a record it cannot read is an error. (epic 04)
+- An `index` or `index-update` in which any file failed to index (an embedding error, an unreadable file) no longer records the last index. It leaves the previous record as it was, so a later search reports the index as behind instead of `fresh` over files that are missing. (epic 04)
 
 ### Coverage gate
 
