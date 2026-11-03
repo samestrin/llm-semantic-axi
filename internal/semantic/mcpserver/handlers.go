@@ -157,16 +157,8 @@ func ExecuteHandler(toolName string, args map[string]interface{}) (string, error
 		return "", err
 	}
 
-	// Add --axi so the CLI emits TOON for the model; skip if already present
-	hasAXI := false
-	for _, arg := range cmdArgs {
-		if arg == "--axi" {
-			hasAXI = true
-		}
-	}
-	if !hasAXI {
-		cmdArgs = append(cmdArgs, "--axi")
-	}
+	// Add --axi so the CLI emits TOON for the model
+	cmdArgs = append(cmdArgs, "--axi")
 
 	// Forward current env vars as explicit flags to ensure subprocess gets fresh values
 	if apiURL := os.Getenv("LLM_SEMANTIC_API_URL"); apiURL != "" {
