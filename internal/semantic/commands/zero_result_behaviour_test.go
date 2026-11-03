@@ -261,23 +261,25 @@ func TestMultisearchJSONHasNoMessage(t *testing.T) {
 
 // ===== callers / refs on zero edges =====
 
-// pythonSource defines a function the Python chunker indexes. No Python
-// chunker records call edges, so `callers` over it can only ever be empty.
-const pythonSource = `def validate_token(token):
-    return token is not None
+// rubySource defines a function the Ruby chunker indexes. No Ruby chunker
+// records call edges, so `callers` over it can only ever be empty. (This was
+// Python until epic 03 gave Python call edges.)
+const rubySource = `def validate_token(token)
+  !token.nil?
+end
 
-
-def handler(token):
-    return validate_token(token)
+def handler(token)
+  validate_token(token)
+end
 `
 
-// mixedWorkspace indexes a Go file with call edges and a Python file without.
+// mixedWorkspace indexes a Go file with call edges and a Ruby file without.
 func mixedWorkspace(t *testing.T) {
 	t.Helper()
 	dir := newWorkspace(t)
 	useEmbedder(t, newFakeEmbedder(t))
 	writeFile(t, filepath.Join(dir, "sample.go"), callGraphSource)
-	writeFile(t, filepath.Join(dir, "auth.py"), pythonSource)
+	writeFile(t, filepath.Join(dir, "auth.rb"), rubySource)
 	captureStdout(t, func() {
 		if err := runIndex(context.Background(), ".", indexOpts{skipCalibration: true}); err != nil {
 			t.Fatalf("runIndex: %v", err)
@@ -286,7 +288,7 @@ func mixedWorkspace(t *testing.T) {
 }
 
 // TestZeroEdgesForANonGoSymbolSayNotIndexedForEdges is the README's sharpest
-// live instance: callers of a Python function used to print "No callers of
+// live instance: callers of a non-Go function used to print "No callers of
 // validate_token (the symbol may not be indexed)", which reads as "none
 // exist" even though the symbol is indexed and simply has no edges recorded.
 func TestZeroEdgesForANonGoSymbolSayNotIndexedForEdges(t *testing.T) {
@@ -302,10 +304,10 @@ func TestZeroEdgesForANonGoSymbolSayNotIndexedForEdges(t *testing.T) {
 			}
 		})
 		if !strings.Contains(out, "not indexed for edges") {
-			t.Errorf("%s over a Python symbol does not say it is not indexed for edges:\n%s", name, out)
+			t.Errorf("%s over a Ruby symbol does not say it is not indexed for edges:\n%s", name, out)
 		}
 		if strings.Contains(out, "symbol not indexed") {
-			t.Errorf("%s claims an indexed Python symbol is not indexed:\n%s", name, out)
+			t.Errorf("%s claims an indexed Ruby symbol is not indexed:\n%s", name, out)
 		}
 	}
 }
@@ -380,7 +382,7 @@ func TestZeroEdgesInAXICarryTheStatus(t *testing.T) {
 		}
 	})
 	if !strings.Contains(refsOut, "status: not_indexed_for_edges\n") {
-		t.Errorf("--axi refs over a Python symbol lacks the status:\n%s", refsOut)
+		t.Errorf("--axi refs over a Ruby symbol lacks the status:\n%s", refsOut)
 	}
 }
 
@@ -400,14 +402,14 @@ func TestZeroEdgesJSONKeepsItsSchema(t *testing.T) {
 	}
 }
 
-// TestZeroCallersOfANameInGoAndPythonNamesTheUncoveredLanguage: the Go chunk's
-// empty answer is genuine, but a Python chunk of the same name was never
+// TestZeroCallersOfANameInGoAndRubyNamesTheUncoveredLanguage: the Go chunk's
+// empty answer is genuine, but a Ruby chunk of the same name was never
 // indexed for edges, and saying only "none recorded" would hide that.
-func TestZeroCallersOfANameInGoAndPythonNamesTheUncoveredLanguage(t *testing.T) {
+func TestZeroCallersOfANameInGoAndRubyNamesTheUncoveredLanguage(t *testing.T) {
 	dir := newWorkspace(t)
 	useEmbedder(t, newFakeEmbedder(t))
 	writeFile(t, filepath.Join(dir, "sample.go"), callGraphSource)
-	writeFile(t, filepath.Join(dir, "caller.py"), "def Caller(token):\n    return token\n")
+	writeFile(t, filepath.Join(dir, "caller.rb"), "def Caller(token)\n  token\nend\n")
 	captureStdout(t, func() {
 		if err := runIndex(context.Background(), ".", indexOpts{skipCalibration: true}); err != nil {
 			t.Fatalf("runIndex: %v", err)
@@ -419,7 +421,7 @@ func TestZeroCallersOfANameInGoAndPythonNamesTheUncoveredLanguage(t *testing.T) 
 			t.Fatalf("runCallers: %v", err)
 		}
 	})
-	want := "No callers of Caller recorded in the call graph; its py chunks are not indexed for edges (0 callers).\n"
+	want := "No callers of Caller recorded in the call graph; its rb chunks are not indexed for edges (0 callers).\n"
 	if out := withoutStalenessNote(t, out); out != want {
 		t.Errorf("mixed-language zero callers:\n got %q\nwant %q", out, want)
 	}

@@ -248,6 +248,84 @@ func TestPrefilterSearch_AppliesReranking(t *testing.T) {
 	}
 }
 
+// TestPrefilterSearch_RerankingHonoursCallerTopK defends the caller's limit in the
+// prefilter path. PrefilterSearch over-fetches a candidate pool for the reranker and
+// before the fix returned the whole pool, so TopK=2 yielded every chunk. "func" matches all
+// three chunks lexically, so the two-stage path runs (a no-match query would fall back to
+// Search, which is already fixed, and not exercise this code).
+func TestPrefilterSearch_RerankingHonoursCallerTopK(t *testing.T) {
+	storage := prefilterFixture(t)
+	embedder := &tableEmbedder{fallback: []float32{0.9, 0.5, 0.1, 0}}
+	reranker := &stubReranker{scores: map[string]float32{
+		"func Widget() { spinner() }": 0.3,
+		"func Gadget() { lever() }":   0.8,
+		"func Doodad() { crank() }":   0.5,
+	}}
+	searcher := NewSearcherWithReranker(storage, embedder, reranker)
+
+	results, err := searcher.PrefilterSearch(context.Background(), "func", PrefilterSearchOptions{
+		SearchOptions: SearchOptions{TopK: 2, Rerank: true},
+	})
+	if err != nil {
+		t.Fatalf("PrefilterSearch() error = %v", err)
+	}
+	if reranker.calls != 1 {
+		t.Fatalf("reranker called %d times, want 1", reranker.calls)
+	}
+	if len(results) != 2 {
+		t.Fatalf("got %d results %v, want 2 - the caller's TopK must survive reranking", len(results), ids(results))
+	}
+	if results[0].Chunk.ID != "b" || results[1].Chunk.ID != "c" {
+		t.Errorf("order = %v, want [b c] by reranker score", ids(results))
+	}
+}
+
+// TestPrefilterSearch_RerankerErrorHonoursCallerTopK defends the caller's limit on the
+// reranker fallback: the embedding-scored candidates came back untrimmed before the fix.
+func TestPrefilterSearch_RerankerErrorHonoursCallerTopK(t *testing.T) {
+	storage := prefilterFixture(t)
+	embedder := &tableEmbedder{fallback: []float32{0.9, 0.5, 0.1, 0}}
+	reranker := &stubReranker{err: errors.New("reranker down")}
+	searcher := NewSearcherWithReranker(storage, embedder, reranker)
+
+	results, err := searcher.PrefilterSearch(context.Background(), "func", PrefilterSearchOptions{
+		SearchOptions: SearchOptions{TopK: 2, Rerank: true},
+	})
+	if err != nil {
+		t.Fatalf("PrefilterSearch() should not surface a reranker failure, got %v", err)
+	}
+	if reranker.calls != 1 {
+		t.Fatalf("reranker called %d times, want 1 (the error path must be exercised)", reranker.calls)
+	}
+	if len(results) != 2 || results[0].Chunk.ID != "a" || results[1].Chunk.ID != "b" {
+		t.Fatalf("got %v, want the embedding order [a b] trimmed to 2", ids(results))
+	}
+}
+
+// TestPrefilterSearch_RerankingDoesNotTruncateBelowRequest defends the other side of the
+// trim: a caller asking for more than the candidate pool holds gets every candidate, not
+// fewer than was available.
+func TestPrefilterSearch_RerankingDoesNotTruncateBelowRequest(t *testing.T) {
+	storage := prefilterFixture(t)
+	embedder := &tableEmbedder{fallback: []float32{0.9, 0.5, 0.1, 0}}
+	reranker := &stubReranker{scores: map[string]float32{
+		"func Widget() { spinner() }": 0.3,
+		"func Gadget() { lever() }":   0.8,
+		"func Doodad() { crank() }":   0.5,
+	}}
+	searcher := NewSearcherWithReranker(storage, embedder, reranker)
+
+	results, err := searcher.PrefilterSearch(context.Background(), "func", PrefilterSearchOptions{
+		SearchOptions: SearchOptions{TopK: 10, Rerank: true},
+	})
+	if err != nil {
+		t.Fatalf("PrefilterSearch() error = %v", err)
+	}
+	if len(results) != 3 {
+		t.Fatalf("got %d results %v, want all 3 candidates for TopK=10", len(results), ids(results))
+	}
+}
+
 // TestSearcher_RerankerWiring pins the three accessors that make reranking optional:
 // a plain Searcher has none, the with-reranker constructor installs one, and SetReranker
 // can both install and clear it.

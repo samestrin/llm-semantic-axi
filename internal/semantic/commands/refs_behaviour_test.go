@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"database/sql"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -156,5 +157,87 @@ func TestOpenRefStorageRejectsABackendWithNoCallGraph(t *testing.T) {
 	// the right order: an unopenable backend is the more specific complaint.
 	if !strings.Contains(err.Error(), "failed to open index") {
 		t.Errorf("error = %v, want it wrapped as an index-open failure", err)
+	}
+}
+
+// jsTSWorkspace indexes jsTSCallSource under a TypeScript and a JavaScript
+// extension, so both languages are exercised through the real index.
+func jsTSWorkspace(t *testing.T) {
+	t.Helper()
+	dir := newWorkspace(t)
+	useEmbedder(t, newFakeEmbedder(t))
+	writeFile(t, filepath.Join(dir, "sample.ts"), jsTSCallSource)
+	// Attribution needs a unique name, so the JavaScript copy renames every
+	// symbol; the same names in both files would resolve to neither.
+	jsSource := strings.NewReplacer("helper", "jsHelper", "run", "jsRun", "Service", "JsService", "start", "jsStart", "stop", "jsStop").Replace(jsTSCallSource)
+	writeFile(t, filepath.Join(dir, "other.js"), jsSource)
+	runIndexIn(t, ".", indexOpts{skipCalibration: true})
+}
+
+// TestCallersAndRefsAnswerForTypeScriptAndJavaScript defends against the
+// regression where TS/JS indexed with no edges, so callers and refs answered
+// empty for them. The answer must name real callers and real references.
+func TestCallersAndRefsAnswerForTypeScriptAndJavaScript(t *testing.T) {
+	jsTSWorkspace(t)
+
+	for _, c := range []struct{ symbol, file, caller string }{
+		{"helper", "sample.ts", "run"},
+		{"jsHelper", "other.js", "jsRun"},
+	} {
+		callers := captureStdout(t, func() {
+			if err := runCallers(context.Background(), c.symbol, false, false); err != nil {
+				t.Fatalf("runCallers: %v", err)
+			}
+		})
+		for _, want := range []string{"2 caller(s) of " + c.symbol, c.file, c.caller} {
+			if !strings.Contains(callers, want) {
+				t.Errorf("callers of %s lacks %q:\n%s", c.symbol, want, callers)
+			}
+		}
+
+		refs := captureStdout(t, func() {
+			if err := runRefs(context.Background(), c.caller, false, false); err != nil {
+				t.Fatalf("runRefs: %v", err)
+			}
+		})
+		if !strings.Contains(refs, c.symbol) || strings.Contains(refs, "not indexed for edges") {
+			t.Errorf("refs from %s does not list %s:\n%s", c.caller, c.symbol, refs)
+		}
+	}
+}
+
+// TestCallersOfAPreEdgeJSTSIndexIsNotIndexedForEdges defends the distinction
+// between "no callers" and "never recorded": an index built before TS/JS call
+// edges existed holds the chunks but no chunk_refs rows, and must say so rather
+// than report none.
+func TestCallersOfAPreEdgeJSTSIndexIsNotIndexedForEdges(t *testing.T) {
+	jsTSWorkspace(t)
+
+	db, err := sql.Open("sqlite", filepath.Join(".index", "semantic.db"))
+	if err != nil {
+		t.Fatalf("open index: %v", err)
+	}
+	res, err := db.Exec("DELETE FROM chunk_refs")
+	if err != nil {
+		t.Fatalf("clear edges: %v", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		t.Fatal("the fixture stored no edges to clear, so the test proves nothing")
+	}
+	db.Close()
+	withAXI(t)
+
+	for name, run := range map[string]func() error{
+		"callers": func() error { return runCallers(context.Background(), "helper", false, false) },
+		"refs":    func() error { return runRefs(context.Background(), "run", false, false) },
+	} {
+		out := captureStdout(t, func() {
+			if err := run(); err != nil {
+				t.Fatalf("%s: %v", name, err)
+			}
+		})
+		if !strings.Contains(out, "status: not_indexed_for_edges\n") {
+			t.Errorf("%s over an edgeless TS/JS index lacks not_indexed_for_edges:\n%s", name, out)
+		}
 	}
 }

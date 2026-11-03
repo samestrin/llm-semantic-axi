@@ -1244,14 +1244,17 @@ func (m *IndexManager) extractAndStoreRefs(ctx context.Context, chunker Chunker,
 		return
 	}
 
+	// Delete old refs for these chunks first, even when the new content has
+	// none: a chunk keeps its ID across an edit, so an edit that removes its
+	// last call would otherwise leave the old edge standing. An extraction
+	// error leaves no edges rather than ones from the previous content.
+	for _, ch := range chunks {
+		_ = rs.DeleteRefsByChunk(ctx, ch.ID)
+	}
+
 	refs, err := re.ExtractRefs(filePath, content, chunks)
 	if err != nil || len(refs) == 0 {
 		return
-	}
-
-	// Delete old refs for these chunks first
-	for _, ch := range chunks {
-		_ = rs.DeleteRefsByChunk(ctx, ch.ID)
 	}
 
 	_ = rs.StoreRefs(ctx, refs)
