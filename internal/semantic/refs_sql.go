@@ -293,18 +293,23 @@ func languageFamilySQL(expr string) string {
 
 // resolveRefsSQL links stored references to the chunks they name.
 //
-// Two rules make the result trustworthy. A reference whose target chunk has
+// Three rules make the result trustworthy. A reference whose target chunk has
 // disappeared is unlinked first, so a rename cannot leave an edge pointing at a
-// chunk that no longer exists. A reference resolves only among chunks of the
-// calling chunk's language family (refTargetEligibleSQL). A reference whose name matches more than one
-// chunk is left unresolved, because a confidently wrong edge is worse than a
-// missing one.
+// chunk that no longer exists. An imports edge names a module or package, and
+// a module has no chunk, so it never resolves: `import debounce from
+// "lodash/debounce"` would otherwise link to any lone local function debounce,
+// and Go's `import "net/http"` to a lone func http. One linked by an index
+// written before this rule is unlinked too. A reference resolves only among
+// chunks of the calling chunk's language family (refTargetEligibleSQL). A
+// reference whose name matches more than one chunk is left unresolved, because
+// a confidently wrong edge is worse than a missing one.
 func resolveRefsSQL(ctx context.Context, db *sql.DB) error {
 	_, err := db.ExecContext(ctx, `
 		UPDATE chunk_refs
 		SET ref_target_id = NULL
 		WHERE ref_target_id IS NOT NULL
-		  AND NOT EXISTS (SELECT 1 FROM chunks c WHERE c.id = chunk_refs.ref_target_id)
+		  AND (ref_type = '`+string(RefImports)+`'
+		       OR NOT EXISTS (SELECT 1 FROM chunks c WHERE c.id = chunk_refs.ref_target_id))
 	`)
 	if err != nil {
 		return err
@@ -319,6 +324,7 @@ func resolveRefsSQL(ctx context.Context, db *sql.DB) error {
 			  AND `+refTargetEligibleSQL+`
 		)
 		WHERE ref_target_id IS NULL
+		  AND ref_type <> '`+string(RefImports)+`'
 	`)
 	return err
 }
