@@ -81,15 +81,21 @@ func TestQdrantStorage_LastIndexAbsent(t *testing.T) {
 	}
 }
 
-// TestQdrantStorage_LastIndexSurvivesClear pins that Clear keeps the record, as
-// it keeps calibration_metadata, while the chunks go.
-func TestQdrantStorage_LastIndexSurvivesClear(t *testing.T) {
+// TestQdrantStorage_ClearDropsLastIndex defends against a cleared collection still
+// claiming it reflects a commit, as sqlite's Clear already guarantees: if the
+// re-index after Clear fails, the old record would sit over a partial index and
+// read as fresh. Clear drops the record and the chunks, but keeps
+// calibration_metadata.
+func TestQdrantStorage_ClearDropsLastIndex(t *testing.T) {
 	storage, _ := newFakeQdrantStorage(t, "lastindex_clear", 4)
 	ctx := context.Background()
 
-	want := LastIndex{Commit: "cafebabe", IndexedAt: recordedIndexTime}
-	if err := storage.SetLastIndex(ctx, want); err != nil {
+	if err := storage.SetLastIndex(ctx, LastIndex{Commit: "cafebabe", IndexedAt: recordedIndexTime}); err != nil {
 		t.Fatalf("SetLastIndex: %v", err)
+	}
+	calibration := &CalibrationMetadata{EmbeddingModel: "m", CalibrationDate: recordedIndexTime, HighThreshold: 0.7}
+	if err := storage.SetCalibrationMetadata(ctx, calibration); err != nil {
+		t.Fatalf("SetCalibrationMetadata: %v", err)
 	}
 	if err := storage.Create(ctx, Chunk{ID: "li-1", FilePath: "/a.go", Type: ChunkFunction, Language: "go"}, []float32{1, 0, 0, 0}); err != nil {
 		t.Fatalf("Create: %v", err)
@@ -106,11 +112,15 @@ func TestQdrantStorage_LastIndexSurvivesClear(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetLastIndex: %v", err)
 	}
-	if got == nil {
-		t.Fatal("Clear dropped the last index record")
+	if got != nil {
+		t.Errorf("GetLastIndex after Clear = %+v, want nil", got)
 	}
-	if got.Commit != want.Commit || !got.IndexedAt.Equal(want.IndexedAt) {
-		t.Errorf("GetLastIndex after Clear = %+v, want %+v", got, want)
+	meta, err := storage.GetCalibrationMetadata(ctx)
+	if err != nil {
+		t.Fatalf("GetCalibrationMetadata: %v", err)
+	}
+	if meta == nil || meta.EmbeddingModel != calibration.EmbeddingModel || meta.HighThreshold != calibration.HighThreshold {
+		t.Errorf("calibration after Clear = %+v, want %+v", meta, calibration)
 	}
 }
 
