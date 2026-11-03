@@ -65,9 +65,15 @@ var thisReceiverFiles = map[string]string{
 
 func thisReceiverWorkspace(t *testing.T) {
 	t.Helper()
+	indexFiles(t, thisReceiverFiles)
+}
+
+// indexFiles writes files into a fresh workspace and indexes it.
+func indexFiles(t *testing.T, files map[string]string) {
+	t.Helper()
 	dir := newWorkspace(t)
 	useEmbedder(t, newFakeEmbedder(t))
-	for name, src := range thisReceiverFiles {
+	for name, src := range files {
 		writeFile(t, filepath.Join(dir, name), src)
 	}
 	runIndexIn(t, ".", indexOpts{skipCalibration: true})
@@ -159,5 +165,61 @@ func TestThisCallResolvesToItsOwnClass(t *testing.T) {
 		if !strings.Contains(out, "1 caller(s) of "+symbol) || !strings.Contains(out, "left.ts") {
 			t.Errorf("callers of %s should be Left.run alone:\n%s", symbol, out)
 		}
+	}
+}
+
+// TestThisCallToAClassOfTheSameNameStaysUnresolved defends the rule that a
+// `this.` call targets a method: a class named get holds its own method m, so
+// without that rule m's this.get() links to the class itself and m is
+// reported as a caller of a class it never calls.
+func TestThisCallToAClassOfTheSameNameStaysUnresolved(t *testing.T) {
+	indexFiles(t, map[string]string{"cls.ts": `export class get {
+    m() {
+        return this.get();
+    }
+}
+`})
+
+	refs := refsOf(t, "m")
+	if len(refs.References) != 1 || refs.References[0].Ref != "this.get" {
+		t.Fatalf("refs from m should be this.get alone, so the test proves something: %+v", refs.References)
+	}
+	if refs.References[0].Resolved {
+		t.Errorf("m's this.get resolved to %s; the only get is the class, not a method", refs.References[0].File)
+	}
+
+	out := captureStdout(t, func() {
+		if err := runCallers(context.Background(), "get", false, false); err != nil {
+			t.Fatalf("runCallers(get): %v", err)
+		}
+	})
+	if strings.Contains(out, "cls.ts") {
+		t.Errorf("m is reported as a caller of the class get:\n%s", out)
+	}
+}
+
+// TestGoReceiverNamedThisStillResolves defends Go from the JS/TS `this.` rule.
+// Go records a call on a receiver named this as this.Method, and a Go method
+// is declared outside its type, so the class rule would leave the edge
+// unresolved and callers would answer empty while a caller exists.
+func TestGoReceiverNamedThisStillResolves(t *testing.T) {
+	indexFiles(t, map[string]string{"recv.go": `package sample
+
+type T struct{}
+
+func (this *T) Method() {}
+
+func (this *T) Run() {
+	this.Method()
+}
+`})
+
+	out := captureStdout(t, func() {
+		if err := runCallers(context.Background(), "Method", false, false); err != nil {
+			t.Fatalf("runCallers(Method): %v", err)
+		}
+	})
+	if !strings.Contains(out, "1 caller(s) of Method") || !strings.Contains(out, "Run") {
+		t.Errorf("callers of Method should be Run:\n%s", out)
 	}
 }
