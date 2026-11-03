@@ -472,3 +472,76 @@ func TestIndexManager_UnreadableFileLeavesLastIndex(t *testing.T) {
 		}
 	}
 }
+
+// cancellingEmbedder cancels the run's context on its first batch, as a Ctrl-C
+// arriving after the index has started (and so after a --force Clear) would.
+type cancellingEmbedder struct {
+	trackingEmbedder
+	cancel context.CancelFunc
+}
+
+func (c *cancellingEmbedder) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
+	c.cancel()
+	return nil, context.Canceled
+}
+
+// TestIndexManager_InterruptedForceIndexDropsLastIndex defends against a partial index
+// reading as current on either backend: `index --force` clears the index, so if the run
+// then stops (cancelled, or an embed error) the previous record must not survive over
+// what is left, and the staleness check must say it does not know.
+func TestIndexManager_InterruptedForceIndexDropsLastIndex(t *testing.T) {
+	backends := map[string]func(t *testing.T) Storage{
+		"sqlite": func(t *testing.T) Storage { return newFileStorage(t) },
+		"qdrant": func(t *testing.T) Storage {
+			storage, _ := newFakeQdrantStorage(t, "interrupted_force", 4)
+			return storage
+		},
+	}
+	interruptions := map[string]func(cancel context.CancelFunc) EmbedderInterface{
+		"cancelled": func(cancel context.CancelFunc) EmbedderInterface {
+			return &cancellingEmbedder{trackingEmbedder: trackingEmbedder{embedding: []float32{0.1, 0.2, 0.3, 0.4}}, cancel: cancel}
+		},
+		"embed error": func(context.CancelFunc) EmbedderInterface {
+			return &failingEmbedder{trackingEmbedder: trackingEmbedder{embedding: []float32{0.1, 0.2, 0.3, 0.4}}, marker: "One"}
+		},
+	}
+
+	for backendName, newStorage := range backends {
+		for interruption, newEmbedder := range interruptions {
+			t.Run(backendName+"/"+interruption, func(t *testing.T) {
+				repo := t.TempDir()
+				gitRun(t, repo, "init")
+				commitGoFile(t, repo, "one.go", "One")
+				storage := newStorage(t)
+
+				// A complete index records HEAD, so the staleness check has a value.
+				good := NewIndexManager(storage, &trackingEmbedder{embedding: []float32{0.1, 0.2, 0.3, 0.4}}, goFactory())
+				if _, err := good.Index(context.Background(), repo, IndexOptions{}); err != nil {
+					t.Fatalf("Index() error = %v", err)
+				}
+				if got := mustLastIndex(t, storage); got.Commit != gitHead(t, repo) {
+					t.Fatalf("after index: Commit = %q, want HEAD", got.Commit)
+				}
+
+				ctx, cancel := context.WithCancel(context.Background())
+				defer cancel()
+				bad := NewIndexManager(storage, newEmbedder(cancel), goFactory())
+				if _, err := bad.Index(ctx, repo, IndexOptions{Force: true, EmbedBatchSize: 8}); err == nil {
+					t.Fatal("Index(--force) error = nil; the test needs the run to be interrupted")
+				}
+
+				got, err := storage.GetLastIndex(context.Background())
+				if err != nil {
+					t.Fatalf("GetLastIndex() error = %v", err)
+				}
+				if got != nil {
+					t.Errorf("GetLastIndex() after interrupted --force = %+v, want nil", got)
+				}
+				s := CheckStaleness(context.Background(), storage, repo)
+				if s.State != StalenessUnknown || s.Reason != StalenessReasonNoRecord {
+					t.Errorf("CheckStaleness() = %s/%s, want %s/%s", s.State, s.Reason, StalenessUnknown, StalenessReasonNoRecord)
+				}
+			})
+		}
+	}
+}
