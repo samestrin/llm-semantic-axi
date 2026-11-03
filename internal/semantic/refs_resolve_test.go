@@ -356,16 +356,20 @@ func TestResolveRefs_ThisCallStaysInItsClass(t *testing.T) {
 // named debounce, so refs showed a confident wrong target. Go is held to the
 // same rule on purpose: `import "net/http"` is recorded as imports http and
 // has no more claim on a lone func http. A calls edge to the same name still
-// resolves, so the rule is the edge type and not the name.
+// resolves, so the rule is the edge type and not the name. An index written
+// before the rule already holds linked imports rows, and resolving must
+// unlink them rather than keep the wrong target.
 func TestResolveRefs_ImportsNeverResolve(t *testing.T) {
 	chunks := []Chunk{
 		{ID: "ts-main", FilePath: "main.ts", Type: ChunkFunction, Name: "main", Content: "x", StartLine: 3, EndLine: 5, Language: "ts"},
 		{ID: "ts-debounce", FilePath: "local.ts", Type: ChunkFunction, Name: "debounce", Content: "x", StartLine: 1, EndLine: 3, Language: "ts"},
 		{ID: "go-main", FilePath: "main.go", Type: ChunkFunction, Name: "Main", Content: "x", StartLine: 5, EndLine: 9, Language: "go"},
 		{ID: "go-http", FilePath: "local.go", Type: ChunkFunction, Name: "http", Content: "x", StartLine: 1, EndLine: 3, Language: "go"},
+		{ID: "ts-old", FilePath: "old.ts", Type: ChunkFunction, Name: "old", Content: "x", StartLine: 3, EndLine: 5, Language: "ts"},
 	}
 	refs := []ChunkRef{
 		{ChunkID: "ts-main", RefType: RefImports, RefName: "debounce"},
+		{ChunkID: "ts-old", RefType: RefImports, RefName: "debounce", RefTargetID: "ts-debounce"},
 		{ChunkID: "go-main", RefType: RefImports, RefName: "http"},
 		{ChunkID: "go-main", RefType: RefCalls, RefName: "http"},
 	}
@@ -379,6 +383,7 @@ func TestResolveRefs_ImportsNeverResolve(t *testing.T) {
 		{"ts-main", RefImports, "debounce", "", "a TS import names a module, not the lone local function debounce"},
 		{"go-main", RefImports, "http", "", "a Go import names a package, not the lone func http"},
 		{"go-main", RefCalls, "http", "go-http", "a call to the same name must keep resolving"},
+		{"ts-old", RefImports, "debounce", "", "an imports edge linked before the rule must be unlinked"},
 	}
 
 	ctx := context.Background()
