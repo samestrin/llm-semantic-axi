@@ -24,7 +24,7 @@ type ProgressEvent struct {
 	Total       int    // Total files to process
 	FilePath    string // Current file being processed
 	ChunksTotal int    // Total chunks created so far
-	Skipped     bool   // True if this file was skipped (already indexed)
+	Skipped     bool   // True if this file was not indexed in this run (unchanged, or unreadable)
 }
 
 // ProgressCallback is called during indexing to report progress
@@ -175,7 +175,13 @@ type pendingChunk struct {
 	contentHash string
 }
 
-// Index builds or rebuilds the semantic index for a directory
+// Index builds or rebuilds the semantic index for a directory.
+//
+// On success it records the HEAD commit of the repository containing rootPath. That is
+// the repository's HEAD, not the indexed scope: includes, excludes and a subdirectory
+// rootPath all narrow what was indexed without narrowing what the record claims. HEAD
+// and the time are captured before the walk (see currentLastIndex), so edits made while
+// indexing runs are not tracked by the record.
 func (m *IndexManager) Index(ctx context.Context, rootPath string, opts IndexOptions) (*IndexResult, error) {
 	result := &IndexResult{}
 	last := currentLastIndex(rootPath)
@@ -247,7 +253,7 @@ func (m *IndexManager) recordLastIndex(ctx context.Context, last LastIndex) erro
 	if err == nil || errors.Is(err, ErrLastIndexUnsupported) {
 		return nil
 	}
-	return fmt.Errorf("index updated, but failed to record the last indexed commit: %w", err)
+	return fmt.Errorf("failed to record the last indexed commit: %w", err)
 }
 
 // indexPerFile processes files one at a time (original behavior)
@@ -268,6 +274,15 @@ func (m *IndexManager) indexPerFile(ctx context.Context, files []string, opts In
 				// An unreadable file is not indexed; counting it unchanged would hide that.
 				result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", file, err))
 				result.FilesSkipped++
+				if opts.OnProgress != nil {
+					opts.OnProgress(ProgressEvent{
+						Current:     i + 1,
+						Total:       totalFiles,
+						FilePath:    file,
+						ChunksTotal: result.ChunksCreated,
+						Skipped:     true,
+					})
+				}
 				continue
 			}
 			if !needsIndex {
@@ -345,6 +360,15 @@ func (m *IndexManager) indexWithCrossFileBatching(ctx context.Context, files []s
 				// An unreadable file is not indexed; counting it unchanged would hide that.
 				result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", file, err))
 				result.FilesSkipped++
+				if opts.OnProgress != nil {
+					opts.OnProgress(ProgressEvent{
+						Current:     fileIndex,
+						Total:       totalFiles,
+						FilePath:    file,
+						ChunksTotal: result.ChunksCreated,
+						Skipped:     true,
+					})
+				}
 				continue
 			}
 			if !needsIndex {
@@ -716,7 +740,11 @@ func (m *IndexManager) processFileWithDiff(ctx context.Context, filePath string,
 	return chunksCreated, chunksRemoved, fellBack, nil
 }
 
-// Update performs incremental index update
+// Update performs an incremental update by scanning every file under rootPath.
+//
+// Like Index, on success it records the HEAD commit of the repository containing
+// rootPath, not the scope that was scanned, and captures it before the walk, so edits
+// made while the update runs are not tracked by the record.
 func (m *IndexManager) Update(ctx context.Context, rootPath string, opts UpdateOptions) (*UpdateResult, error) {
 	result := &UpdateResult{}
 	last := currentLastIndex(rootPath)
@@ -1275,7 +1303,8 @@ func (m *IndexManager) resolveRefs(ctx context.Context) {
 	_ = rs.ResolveRefs(ctx)
 }
 
-// fileNeedsUpdate checks if a file has been modified since indexing
+// fileNeedsUpdate checks if a file has been modified since indexing. It errors when the
+// file cannot be read or its stored hash cannot be fetched; callers count the file failed.
 func (m *IndexManager) fileNeedsUpdate(ctx context.Context, filePath string) (bool, error) {
 	// Get file content
 	content, err := os.ReadFile(filePath)
@@ -1288,9 +1317,10 @@ func (m *IndexManager) fileNeedsUpdate(ctx context.Context, filePath string) (bo
 	currentHash := hex.EncodeToString(hash[:])
 
 	// Get stored hash for this file
+	// A store that cannot say is an error, not "needs indexing": re-indexing would hide it.
 	storedHash, err := m.storage.GetFileHash(ctx, filePath)
 	if err != nil {
-		return true, nil // Assume needs update on error
+		return false, fmt.Errorf("failed to read stored hash: %w", err)
 	}
 
 	if storedHash == "" {
