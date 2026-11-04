@@ -527,7 +527,8 @@ func (s *hashErrStorage) GetFileHash(ctx context.Context, filePath string) (stri
 // TestIndexManager_FileHashReadFailureCountsAsFailed defends against a store that cannot
 // say whether a file is indexed being read as "needs indexing": the file was re-indexed
 // and counted processed, so the store failure vanished. It must be counted as failed and
-// named, on both Index paths, and not re-indexed by a full-scan Update either.
+// named, on both Index paths and both Update paths, and not re-indexed by a full-scan
+// Update either.
 func TestIndexManager_FileHashReadFailureCountsAsFailed(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "one.go")
@@ -580,10 +581,34 @@ func TestIndexManager_FileHashReadFailureCountsAsFailed(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Update() error = %v", err)
 		}
-		if result.FilesUpdated != 0 {
-			t.Errorf("FilesUpdated = %d, want 0", result.FilesUpdated)
+		if result.FilesUpdated != 0 || result.FilesSkipped != 1 {
+			t.Errorf("FilesUpdated = %d, FilesSkipped = %d; want 0 and 1", result.FilesUpdated, result.FilesSkipped)
+		}
+		if len(result.Errors) != 1 || !strings.Contains(result.Errors[0], file) || !strings.Contains(result.Errors[0], boom.Error()) {
+			t.Errorf("Errors = %q, want one naming %s and the store failure", result.Errors, file)
 		}
 		assertNotIndexed(t, inner)
+	})
+
+	t.Run("git update", func(t *testing.T) {
+		repo := t.TempDir()
+		gitRun(t, repo, "init")
+		commitGoFile(t, repo, "base.go", "Base")
+		commitGoFile(t, repo, "changed.go", "Changed")
+		changed := filepath.Join(repo, "changed.go")
+
+		inner := newFileStorage(t)
+		mgr := NewIndexManager(&hashErrStorage{Storage: inner, err: boom}, &trackingEmbedder{embedding: []float32{0.1, 0.2, 0.3, 0.4}}, goFactory())
+		result, err := mgr.UpdateGit(context.Background(), repo, "HEAD~1", UpdateOptions{Domain: "code"})
+		if err != nil {
+			t.Fatalf("UpdateGit() error = %v", err)
+		}
+		if result.FilesUpdated != 0 || result.FilesSkipped != 1 {
+			t.Errorf("FilesUpdated = %d, FilesSkipped = %d; want 0 and 1", result.FilesUpdated, result.FilesSkipped)
+		}
+		if len(result.Errors) != 1 || !strings.Contains(result.Errors[0], changed) || !strings.Contains(result.Errors[0], boom.Error()) {
+			t.Errorf("Errors = %q, want one naming %s and the store failure", result.Errors, changed)
+		}
 	})
 }
 
@@ -636,4 +661,26 @@ func TestIndexManager_UpdateGitUnresolvableRefLeavesLastIndex(t *testing.T) {
 	if got := mustLastIndex(t, storage); got.Commit != planted.Commit || !got.IndexedAt.Equal(planted.IndexedAt) {
 		t.Errorf("after an update from a tree ref: got %+v, want unchanged %+v", *got, planted)
 	}
+}
+
+// TestIndexManager_UpdateGit_CountsAndNamesAFailedFile is the git-path twin of
+// TestIndexManager_Update_CountsAndNamesAFailedFile: a changed file whose embed fails
+// was dropped silently, and on this path its old chunks are already deleted.
+func TestIndexManager_UpdateGit_CountsAndNamesAFailedFile(t *testing.T) {
+	repo := t.TempDir()
+	gitRun(t, repo, "init")
+	commitGoFile(t, repo, "base.go", "Base")
+	commitGoFile(t, repo, "good.go", "Good")
+	commitGoFile(t, repo, "bad.go", "Poisoned")
+
+	storage := newFileStorage(t)
+	embedder := &poisonEmbedder{trackingEmbedder: trackingEmbedder{embedding: []float32{0.1, 0.2, 0.3, 0.4}}, marker: "Poisoned"}
+	mgr := NewIndexManager(storage, embedder, goFactory())
+
+	result, err := mgr.UpdateGit(context.Background(), repo, "HEAD~2", UpdateOptions{Domain: "code"})
+	if err != nil {
+		t.Fatalf("UpdateGit() error = %v", err)
+	}
+
+	assertOneFailedFile(t, storage, result, filepath.Join(repo, "good.go"), filepath.Join(repo, "bad.go"))
 }

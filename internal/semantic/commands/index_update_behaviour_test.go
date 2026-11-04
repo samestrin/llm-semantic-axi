@@ -1,7 +1,11 @@
 package commands
 
 import (
+	"bytes"
 	"context"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -227,6 +231,127 @@ func TestIndexUpdateStaysQuietUnderAXI(t *testing.T) {
 	}
 	if !strings.Contains(out, "mode: full") {
 		t.Errorf("the TOON payload is missing the mode:\n%s", out)
+	}
+}
+
+// newPoisonedEmbedder answers like newFakeEmbedder but rejects any request whose
+// texts contain marker, so exactly one file fails to embed. 400 rather than 500
+// because the embedder retries 5xx with backoff.
+func newPoisonedEmbedder(t *testing.T, marker string) *fakeEmbedder {
+	t.Helper()
+	fe := &fakeEmbedder{}
+	fe.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if bytes.Contains(body, []byte(marker)) {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = io.WriteString(w, `{"error":{"message":"poisoned input"}}`)
+			return
+		}
+		r.Body = io.NopCloser(bytes.NewReader(body))
+		fe.handle(w, r)
+	}))
+	t.Cleanup(fe.Server.Close)
+	return fe
+}
+
+// TestIndexUpdateCountsAndNamesAFileItCouldNotProcess defends against
+// index-update telling a caller "Updated N files" while a file whose embed
+// failed vanished from the count and the output. On both the full-scan and the
+// git path, the text and --json output must carry the skipped count and name
+// the file, and the file must not be in the index.
+func TestIndexUpdateCountsAndNamesAFileItCouldNotProcess(t *testing.T) {
+	const poisonSource = "package sample\n\nfunc PoisonedSymbol() {}\n"
+
+	for _, mode := range []struct {
+		name  string
+		opts  updateOpts
+		setup func(t *testing.T, dir string)
+	}{
+		{"no-git", updateOpts{noGit: true}, func(t *testing.T, dir string) {
+			buildIndex(t)
+			writeFile(t, filepath.Join(dir, "added.go"), "package sample\n\nfunc AddedSymbol() {}\n")
+			writeFile(t, filepath.Join(dir, "poison.go"), poisonSource)
+		}},
+		{"git", updateOpts{since: "HEAD~1"}, func(t *testing.T, dir string) {
+			if _, err := exec.LookPath("git"); err != nil {
+				t.Skip("git is not installed")
+			}
+			git := func(args ...string) {
+				t.Helper()
+				cmd := exec.Command("git", args...)
+				cmd.Dir = dir
+				if out, err := cmd.CombinedOutput(); err != nil {
+					t.Skipf("git %v failed in the sandbox: %v\n%s", args, err, out)
+				}
+			}
+			git("init")
+			git("config", "user.email", "test@example.com")
+			git("config", "user.name", "Test")
+			git("add", "sample.go")
+			git("commit", "-m", "first")
+			buildIndex(t)
+			writeFile(t, filepath.Join(dir, "added.go"), "package sample\n\nfunc AddedSymbol() {}\n")
+			writeFile(t, filepath.Join(dir, "poison.go"), poisonSource)
+			git("add", "added.go", "poison.go")
+			git("commit", "-m", "second")
+		}},
+	} {
+		t.Run(mode.name, func(t *testing.T) {
+			dir := newWorkspace(t)
+			useEmbedder(t, newPoisonedEmbedder(t, "PoisonedSymbol"))
+			writeFile(t, filepath.Join(dir, "sample.go"), sampleGoSource)
+			mode.setup(t, dir)
+
+			text := captureStdout(t, func() {
+				if err := runIndexUpdate(context.Background(), ".", mode.opts); err != nil {
+					t.Fatalf("runIndexUpdate: %v", err)
+				}
+			})
+			if !strings.Contains(text, "Updated 1 files") {
+				t.Errorf("the file that embedded fine was not counted:\n%s", text)
+			}
+			if !strings.Contains(text, "Skipped 1 files with errors") {
+				t.Errorf("the failed file is not counted in the text output:\n%s", text)
+			}
+			if !strings.Contains(text, "poison.go") || !strings.Contains(text, "poisoned input") {
+				t.Errorf("the text output does not name the failed file and its error:\n%s", text)
+			}
+
+			// The failed file is still unindexed, so a second run fails it again.
+			jsonOpts := mode.opts
+			jsonOpts.jsonOutput = true
+			out := captureStdout(t, func() {
+				if err := runIndexUpdate(context.Background(), ".", jsonOpts); err != nil {
+					t.Fatalf("runIndexUpdate --json: %v", err)
+				}
+			})
+			var payload struct {
+				FilesSkipped int      `json:"files_skipped"`
+				Errors       []string `json:"errors"`
+			}
+			decodeJSON(t, out, &payload)
+			if payload.FilesSkipped != 1 || len(payload.Errors) != 1 || !strings.Contains(payload.Errors[0], "poison.go") {
+				t.Errorf("--json payload = %+v, want files_skipped 1 and an error naming poison.go", payload)
+			}
+
+			storage, err := semantic.NewSQLiteStorage(filepath.Join(".index", "semantic.db"), 0)
+			if err != nil {
+				t.Fatalf("NewSQLiteStorage: %v", err)
+			}
+			defer storage.Close()
+			indexed, err := storage.ListIndexedFiles(context.Background())
+			if err != nil {
+				t.Fatalf("ListIndexedFiles: %v", err)
+			}
+			var names []string
+			for path := range indexed {
+				names = append(names, filepath.Base(path))
+			}
+			joined := strings.Join(names, ",")
+			if !strings.Contains(joined, "added.go") || strings.Contains(joined, "poison.go") {
+				t.Errorf("indexed files = %v, want added.go and not poison.go", names)
+			}
+		})
 	}
 }
 

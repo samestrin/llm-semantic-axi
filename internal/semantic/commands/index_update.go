@@ -204,6 +204,15 @@ func reportUpdateResult(result *semantic.UpdateResult, jsonOutput bool) error {
 
 	fmt.Printf("Updated %d files, removed %d files (%s mode)\n", result.FilesUpdated, result.FilesRemoved, result.Mode)
 	fmt.Printf("Created %d chunks, removed %d chunks\n", result.ChunksCreated, result.ChunksRemoved)
+	if result.FilesSkipped > 0 {
+		fmt.Printf("Skipped %d files with errors\n", result.FilesSkipped)
+	}
 	printFallback(result.FilesFallback, result.FallbackFiles)
+	if len(result.Errors) > 0 {
+		fmt.Println("Errors:")
+		for _, e := range result.Errors {
+			fmt.Printf("  - %s\n", e)
+		}
+	}
 	return nil
 }
