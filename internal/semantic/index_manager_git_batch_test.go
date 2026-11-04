@@ -527,7 +527,8 @@ func (s *hashErrStorage) GetFileHash(ctx context.Context, filePath string) (stri
 // TestIndexManager_FileHashReadFailureCountsAsFailed defends against a store that cannot
 // say whether a file is indexed being read as "needs indexing": the file was re-indexed
 // and counted processed, so the store failure vanished. It must be counted as failed and
-// named, on both Index paths, and not re-indexed by a full-scan Update either.
+// named, on both Index paths and both Update paths, and not re-indexed by a full-scan
+// Update either.
 func TestIndexManager_FileHashReadFailureCountsAsFailed(t *testing.T) {
 	dir := t.TempDir()
 	file := filepath.Join(dir, "one.go")
@@ -580,10 +581,34 @@ func TestIndexManager_FileHashReadFailureCountsAsFailed(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Update() error = %v", err)
 		}
-		if result.FilesUpdated != 0 {
-			t.Errorf("FilesUpdated = %d, want 0", result.FilesUpdated)
+		if result.FilesUpdated != 0 || result.FilesSkipped != 1 {
+			t.Errorf("FilesUpdated = %d, FilesSkipped = %d; want 0 and 1", result.FilesUpdated, result.FilesSkipped)
+		}
+		if len(result.Errors) != 1 || !strings.Contains(result.Errors[0], file) || !strings.Contains(result.Errors[0], boom.Error()) {
+			t.Errorf("Errors = %q, want one naming %s and the store failure", result.Errors, file)
 		}
 		assertNotIndexed(t, inner)
+	})
+
+	t.Run("git update", func(t *testing.T) {
+		repo := t.TempDir()
+		gitRun(t, repo, "init")
+		commitGoFile(t, repo, "base.go", "Base")
+		commitGoFile(t, repo, "changed.go", "Changed")
+		changed := filepath.Join(repo, "changed.go")
+
+		inner := newFileStorage(t)
+		mgr := NewIndexManager(&hashErrStorage{Storage: inner, err: boom}, &trackingEmbedder{embedding: []float32{0.1, 0.2, 0.3, 0.4}}, goFactory())
+		result, err := mgr.UpdateGit(context.Background(), repo, "HEAD~1", UpdateOptions{Domain: "code"})
+		if err != nil {
+			t.Fatalf("UpdateGit() error = %v", err)
+		}
+		if result.FilesUpdated != 0 || result.FilesSkipped != 1 {
+			t.Errorf("FilesUpdated = %d, FilesSkipped = %d; want 0 and 1", result.FilesUpdated, result.FilesSkipped)
+		}
+		if len(result.Errors) != 1 || !strings.Contains(result.Errors[0], changed) || !strings.Contains(result.Errors[0], boom.Error()) {
+			t.Errorf("Errors = %q, want one naming %s and the store failure", result.Errors, changed)
+		}
 	})
 }
 

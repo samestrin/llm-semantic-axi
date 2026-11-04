@@ -621,6 +621,12 @@ func (r *UpdateResult) addFallback(path string) {
 	r.FallbackFiles = append(r.FallbackFiles, path)
 }
 
+// addSkipped records a file that could not be processed, with its error.
+func (r *UpdateResult) addSkipped(path string, err error) {
+	r.FilesSkipped++
+	r.Errors = append(r.Errors, fmt.Sprintf("%s: %v", path, err))
+}
+
 // processFileWithDiff re-indexes a file using content-aware diffing.
 // Only chunks whose content actually changed are re-embedded. Moved but
 // unchanged code has its embedding reused. Returns (chunksCreated,
@@ -776,8 +782,7 @@ func (m *IndexManager) Update(ctx context.Context, rootPath string, opts UpdateO
 		currentFiles[file] = true
 	}
 
-	// Check for modified files. failed notes any file left unindexed.
-	failed := false
+	// Check for modified files. A file that fails is counted and named in the result.
 	for _, file := range files {
 		select {
 		case <-ctx.Done():
@@ -787,7 +792,7 @@ func (m *IndexManager) Update(ctx context.Context, rootPath string, opts UpdateO
 
 		needsUpdate, err := m.fileNeedsUpdate(ctx, file)
 		if err != nil {
-			failed = true
+			result.addSkipped(file, err)
 			continue
 		}
 
@@ -802,7 +807,7 @@ func (m *IndexManager) Update(ctx context.Context, rootPath string, opts UpdateO
 					result.addFallback(file)
 				}
 			} else {
-				failed = true
+				result.addSkipped(file, err)
 			}
 		}
 	}
@@ -819,7 +824,7 @@ func (m *IndexManager) Update(ctx context.Context, rootPath string, opts UpdateO
 	m.resolveRefs(ctx)
 
 	// A full scan covers every file, so the index now reflects HEAD, unless a file failed.
-	if failed {
+	if result.FilesSkipped > 0 {
 		return result, nil
 	}
 	if err := m.recordLastIndex(ctx, last); err != nil {
@@ -844,8 +849,7 @@ func (m *IndexManager) UpdateGit(ctx context.Context, rootPath string, gitRef st
 	}
 
 	// Filter changed files against include/exclude patterns and supported extensions.
-	// failed notes any changed file left unindexed.
-	failed := false
+	// A changed file that fails is counted and named in the result.
 	for _, relPath := range changed {
 		absPath := filepath.Join(rootPath, relPath)
 
@@ -861,7 +865,7 @@ func (m *IndexManager) UpdateGit(ctx context.Context, rootPath string, gitRef st
 
 		needsUpdate, err := m.fileNeedsUpdate(ctx, absPath)
 		if err != nil {
-			failed = true
+			result.addSkipped(absPath, err)
 			continue
 		}
 		if !needsUpdate {
@@ -880,7 +884,7 @@ func (m *IndexManager) UpdateGit(ctx context.Context, rootPath string, gitRef st
 				result.addFallback(path)
 			}
 		} else {
-			failed = true
+			result.addSkipped(absPath, err)
 		}
 	}
 
@@ -898,7 +902,7 @@ func (m *IndexManager) UpdateGit(ctx context.Context, rootPath string, gitRef st
 
 	// An unresolvable ref cannot match the recorded commit, and a failed file means
 	// the changes since it were not all applied.
-	if sinceErr != nil || failed {
+	if sinceErr != nil || result.FilesSkipped > 0 {
 		return result, nil
 	}
 	return result, m.advanceLastIndex(ctx, since, last)
