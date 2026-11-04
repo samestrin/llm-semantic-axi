@@ -2,12 +2,14 @@ package semantic
 
 import (
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
+	"time"
 )
 
 // goSource returns a small compilable Go file with one function of the given name.
@@ -452,5 +454,186 @@ func TestIndexManager_CollectFiles(t *testing.T) {
 	got = rel(only)
 	if len(got) != 1 || got[0] != "internal/deep/util.go" {
 		t.Errorf("collectFiles(include util.go) = %v, want just internal/deep/util.go", got)
+	}
+}
+
+// TestIndexManager_UnreadableFileReportsProgress defends against an unreadable file
+// stalling the progress display: the count it reports skips that file's number, so a
+// run whose last file is unreadable never reaches Total. Both the per-file and the
+// batched path must report the file as Skipped.
+func TestIndexManager_UnreadableFileReportsProgress(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root can read a file with no permissions")
+	}
+	dir := t.TempDir()
+	for _, name := range []string{"one.go", "two.go"} {
+		if err := os.WriteFile(filepath.Join(dir, name), goSource(strings.ToUpper(name[:1])+name[1:3]), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	unreadable := filepath.Join(dir, "two.go")
+	if err := os.Chmod(unreadable, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Chmod(unreadable, 0644) })
+
+	for _, path := range []struct {
+		name string
+		opts IndexOptions
+	}{
+		{"per-file", IndexOptions{}},
+		{"batched", IndexOptions{EmbedBatchSize: 100}},
+	} {
+		t.Run(path.name, func(t *testing.T) {
+			var events []ProgressEvent
+			opts := path.opts
+			opts.OnProgress = func(e ProgressEvent) { events = append(events, e) }
+
+			mgr := NewIndexManager(newFileStorage(t), &trackingEmbedder{embedding: []float32{0.1, 0.2, 0.3, 0.4}}, goFactory())
+			result, err := mgr.Index(context.Background(), dir, opts)
+			if err != nil {
+				t.Fatalf("Index() error = %v", err)
+			}
+			if result.FilesSkipped != 1 {
+				t.Fatalf("FilesSkipped = %d, want 1; the test needs two.go to be unreadable", result.FilesSkipped)
+			}
+
+			var got *ProgressEvent
+			for i := range events {
+				if events[i].FilePath == unreadable {
+					got = &events[i]
+				}
+			}
+			if got == nil {
+				t.Fatalf("no progress event for the unreadable file; events = %+v", events)
+			}
+			if !got.Skipped || got.Total != 2 {
+				t.Errorf("unreadable file event = %+v, want Skipped with Total 2", *got)
+			}
+		})
+	}
+}
+
+// hashErrStorage wraps a real storage whose GetFileHash always fails.
+type hashErrStorage struct {
+	Storage
+	err error
+}
+
+func (s *hashErrStorage) GetFileHash(ctx context.Context, filePath string) (string, error) {
+	return "", s.err
+}
+
+// TestIndexManager_FileHashReadFailureCountsAsFailed defends against a store that cannot
+// say whether a file is indexed being read as "needs indexing": the file was re-indexed
+// and counted processed, so the store failure vanished. It must be counted as failed and
+// named, on both Index paths, and not re-indexed by a full-scan Update either.
+func TestIndexManager_FileHashReadFailureCountsAsFailed(t *testing.T) {
+	dir := t.TempDir()
+	file := filepath.Join(dir, "one.go")
+	if err := os.WriteFile(file, goSource("One"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	boom := errors.New("hash lookup failed")
+
+	newMgr := func(t *testing.T) (*IndexManager, *SQLiteStorage) {
+		inner := newFileStorage(t)
+		return NewIndexManager(&hashErrStorage{Storage: inner, err: boom}, &trackingEmbedder{embedding: []float32{0.1, 0.2, 0.3, 0.4}}, goFactory()), inner
+	}
+	assertNotIndexed := func(t *testing.T, inner *SQLiteStorage) {
+		t.Helper()
+		indexed, err := inner.ListIndexedFiles(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		if indexed[file] {
+			t.Errorf("%s was indexed although its stored hash could not be read", file)
+		}
+	}
+
+	for _, path := range []struct {
+		name string
+		opts IndexOptions
+	}{
+		{"per-file", IndexOptions{}},
+		{"batched", IndexOptions{EmbedBatchSize: 100}},
+	} {
+		t.Run(path.name, func(t *testing.T) {
+			mgr, inner := newMgr(t)
+			result, err := mgr.Index(context.Background(), dir, path.opts)
+			if err != nil {
+				t.Fatalf("Index() error = %v", err)
+			}
+			if result.FilesProcessed != 0 || result.FilesSkipped != 1 {
+				t.Errorf("FilesProcessed = %d, FilesSkipped = %d; want 0 and 1", result.FilesProcessed, result.FilesSkipped)
+			}
+			if len(result.Errors) != 1 || !strings.Contains(result.Errors[0], file) || !strings.Contains(result.Errors[0], boom.Error()) {
+				t.Errorf("Errors = %q, want one naming %s and the store failure", result.Errors, file)
+			}
+			assertNotIndexed(t, inner)
+		})
+	}
+
+	t.Run("full-scan update", func(t *testing.T) {
+		mgr, inner := newMgr(t)
+		result, err := mgr.Update(context.Background(), dir, UpdateOptions{Domain: "code"})
+		if err != nil {
+			t.Fatalf("Update() error = %v", err)
+		}
+		if result.FilesUpdated != 0 {
+			t.Errorf("FilesUpdated = %d, want 0", result.FilesUpdated)
+		}
+		assertNotIndexed(t, inner)
+	})
+}
+
+// TestIndexManager_LastIndexWriteFailureMessage defends against Index's error claiming
+// "index updated" when it is returned: the caller reads that as success with a footnote.
+func TestIndexManager_LastIndexWriteFailureMessage(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "one.go"), goSource("One"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	boom := errors.New("disk full")
+	storage := &lastIndexStorage{Storage: newFileStorage(t), setErr: boom}
+	mgr := NewIndexManager(storage, &trackingEmbedder{embedding: []float32{0.1, 0.2, 0.3, 0.4}}, goFactory())
+
+	_, err := mgr.Index(context.Background(), dir, IndexOptions{})
+	if !errors.Is(err, boom) {
+		t.Fatalf("Index() error = %v, want the SetLastIndex failure", err)
+	}
+	if strings.HasPrefix(err.Error(), "index updated") {
+		t.Errorf("Index() error = %q, must not begin \"index updated\"", err)
+	}
+}
+
+// TestIndexManager_UpdateGitUnresolvableRefLeavesLastIndex defends the guard on a ref
+// that git diff accepts but that names no commit (a tree). Its resolved commit is empty,
+// which matches the empty commit an index made before the first commit records, so
+// without the guard the update would claim the index is at HEAD when the changes before
+// that tree were never applied.
+func TestIndexManager_UpdateGitUnresolvableRefLeavesLastIndex(t *testing.T) {
+	repo := t.TempDir()
+	gitRun(t, repo, "init")
+	commitGoFile(t, repo, "one.go", "One")
+	commitGoFile(t, repo, "two.go", "Two")
+	ctx := context.Background()
+
+	storage := newFileStorage(t)
+	mgr := NewIndexManager(storage, &trackingEmbedder{embedding: []float32{0.1, 0.2, 0.3, 0.4}}, goFactory())
+	planted := LastIndex{Commit: "", IndexedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)}
+	if err := storage.SetLastIndex(ctx, planted); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := mgr.UpdateGit(ctx, repo, "HEAD~1^{tree}", UpdateOptions{Domain: "code"})
+	if err != nil {
+		t.Fatalf("UpdateGit() error = %v", err)
+	}
+	if result.FilesUpdated != 1 {
+		t.Fatalf("FilesUpdated = %d, want 1; the test needs git diff to accept the tree ref", result.FilesUpdated)
+	}
+	if got := mustLastIndex(t, storage); got.Commit != planted.Commit || !got.IndexedAt.Equal(planted.IndexedAt) {
+		t.Errorf("after an update from a tree ref: got %+v, want unchanged %+v", *got, planted)
 	}
 }
