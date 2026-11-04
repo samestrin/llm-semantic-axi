@@ -348,3 +348,98 @@ func TestResolveRefs_ThisCallStaysInItsClass(t *testing.T) {
 		})
 	}
 }
+
+// TestResolveRefs_ImportsNeverResolve defends against an imports edge linking
+// to a chunk that merely shares its name. An import names a module, and a
+// module has no chunk: `import debounce from "lodash/debounce"` is recorded as
+// imports debounce, and before this rule it linked to any lone local function
+// named debounce, so refs showed a confident wrong target. Go is held to the
+// same rule on purpose: `import "net/http"` is recorded as imports http and
+// has no more claim on a lone func http. A calls edge to the same name still
+// resolves, so the rule is the edge type and not the name. An index written
+// before the rule already holds linked imports rows, and resolving must
+// unlink them rather than keep the wrong target.
+func TestResolveRefs_ImportsNeverResolve(t *testing.T) {
+	chunks := []Chunk{
+		{ID: "ts-main", FilePath: "main.ts", Type: ChunkFunction, Name: "main", Content: "x", StartLine: 3, EndLine: 5, Language: "ts"},
+		{ID: "ts-debounce", FilePath: "local.ts", Type: ChunkFunction, Name: "debounce", Content: "x", StartLine: 1, EndLine: 3, Language: "ts"},
+		{ID: "go-main", FilePath: "main.go", Type: ChunkFunction, Name: "Main", Content: "x", StartLine: 5, EndLine: 9, Language: "go"},
+		{ID: "go-http", FilePath: "local.go", Type: ChunkFunction, Name: "http", Content: "x", StartLine: 1, EndLine: 3, Language: "go"},
+		{ID: "ts-old", FilePath: "old.ts", Type: ChunkFunction, Name: "old", Content: "x", StartLine: 3, EndLine: 5, Language: "ts"},
+	}
+	refs := []ChunkRef{
+		{ChunkID: "ts-main", RefType: RefImports, RefName: "debounce"},
+		{ChunkID: "ts-old", RefType: RefImports, RefName: "debounce", RefTargetID: "ts-debounce"},
+		{ChunkID: "go-main", RefType: RefImports, RefName: "http"},
+		{ChunkID: "go-main", RefType: RefCalls, RefName: "http"},
+	}
+	cases := []struct {
+		chunkID string
+		refType RefType
+		refName string
+		want    string
+		why     string
+	}{
+		{"ts-main", RefImports, "debounce", "", "a TS import names a module, not the lone local function debounce"},
+		{"go-main", RefImports, "http", "", "a Go import names a package, not the lone func http"},
+		{"go-main", RefCalls, "http", "go-http", "a call to the same name must keep resolving"},
+		{"ts-old", RefImports, "debounce", "", "an imports edge linked before the rule must be unlinked"},
+	}
+
+	ctx := context.Background()
+	stores := map[string]func(t *testing.T) RefStorage{
+		"sqlite": func(t *testing.T) RefStorage {
+			storage, cleanup := createTestSQLiteStorage(t)
+			t.Cleanup(cleanup)
+			var batch []ChunkWithEmbedding
+			for _, c := range chunks {
+				batch = append(batch, ChunkWithEmbedding{Chunk: c, Embedding: []float32{0.1}})
+			}
+			if err := storage.CreateBatch(ctx, batch); err != nil {
+				t.Fatalf("CreateBatch: %v", err)
+			}
+			return storage
+		},
+		"lexical": func(t *testing.T) RefStorage {
+			idx, err := NewLexicalIndex(":memory:", 4)
+			if err != nil {
+				t.Fatalf("NewLexicalIndex: %v", err)
+			}
+			t.Cleanup(func() { idx.Close() })
+			if err := idx.IndexBatch(ctx, chunks); err != nil {
+				t.Fatalf("IndexBatch: %v", err)
+			}
+			return idx
+		},
+	}
+	for name, open := range stores {
+		t.Run(name, func(t *testing.T) {
+			rs := open(t)
+			if err := rs.StoreRefs(ctx, refs); err != nil {
+				t.Fatalf("StoreRefs: %v", err)
+			}
+			if err := rs.ResolveRefs(ctx); err != nil {
+				t.Fatalf("ResolveRefs: %v", err)
+			}
+			for _, tc := range cases {
+				stored, err := rs.GetRefs(ctx, tc.chunkID)
+				if err != nil {
+					t.Fatalf("GetRefs(%s): %v", tc.chunkID, err)
+				}
+				found := false
+				for _, r := range stored {
+					if r.RefType != tc.refType || r.RefName != tc.refName {
+						continue
+					}
+					found = true
+					if r.RefTargetID != tc.want {
+						t.Errorf("%s: %s %q resolved to %q, want %q", tc.why, tc.refType, tc.refName, r.RefTargetID, tc.want)
+					}
+				}
+				if !found {
+					t.Fatalf("no %s %q ref on %s", tc.refType, tc.refName, tc.chunkID)
+				}
+			}
+		})
+	}
+}

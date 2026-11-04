@@ -88,7 +88,7 @@ func TestRunIndexReportsNoFallbackForACleanFixture(t *testing.T) {
 
 	out = runIndexIn(t, ".", indexOpts{jsonOutput: true, skipCalibration: true, force: true})
 	var payload struct {
-		FilesFallback *int `json:"FilesFallback"`
+		FilesFallback *int `json:"files_fallback"`
 	}
 	decodeJSON(t, out, &payload)
 	if payload.FilesFallback == nil || *payload.FilesFallback != 0 {
@@ -106,8 +106,8 @@ func TestRunIndexJSONCarriesTheFallbackCount(t *testing.T) {
 	out := runIndexIn(t, ".", indexOpts{jsonOutput: true, skipCalibration: true})
 
 	var payload struct {
-		FilesFallback int      `json:"FilesFallback"`
-		FallbackFiles []string `json:"FallbackFiles"`
+		FilesFallback int      `json:"files_fallback"`
+		FallbackFiles []string `json:"fallback_files"`
 	}
 	decodeJSON(t, out, &payload)
 	if payload.FilesFallback != 1 || len(payload.FallbackFiles) != 1 || filepath.Base(payload.FallbackFiles[0]) != "broken.py" {
