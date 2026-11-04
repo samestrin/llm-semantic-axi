@@ -2,6 +2,7 @@ package semantic
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -231,5 +232,70 @@ func TestIndexManager_Update_SkipsUnchangedFiles(t *testing.T) {
 	batchesAfter, _ := embedder.snapshot()
 	if batchesAfter != batchesBefore {
 		t.Errorf("EmbedBatch was called %d extra times for an untouched tree, want 0", batchesAfter-batchesBefore)
+	}
+}
+
+// poisonEmbedder embeds like trackingEmbedder but fails any batch holding a text that
+// contains marker, so a test can make exactly one file fail to embed.
+type poisonEmbedder struct {
+	trackingEmbedder
+	marker string
+}
+
+var errPoisoned = errors.New("embedder rejected the batch")
+
+func (p *poisonEmbedder) EmbedBatch(ctx context.Context, texts []string) ([][]float32, error) {
+	for _, text := range texts {
+		if strings.Contains(text, p.marker) {
+			return nil, errPoisoned
+		}
+	}
+	return p.trackingEmbedder.EmbedBatch(ctx, texts)
+}
+
+// TestIndexManager_Update_CountsAndNamesAFailedFile defends against the full-scan update
+// dropping a file whose embed failed without a trace: the caller was told how many files
+// were updated and the failed one vanished. It must be counted in FilesSkipped and named
+// in Errors, and the other file must still be indexed.
+func TestIndexManager_Update_CountsAndNamesAFailedFile(t *testing.T) {
+	dir := t.TempDir()
+	good := filepath.Join(dir, "good.go")
+	bad := filepath.Join(dir, "bad.go")
+	for path, fn := range map[string]string{good: "Good", bad: "Poisoned"} {
+		if err := os.WriteFile(path, goSource(fn), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	storage := newFileStorage(t)
+	embedder := &poisonEmbedder{trackingEmbedder: trackingEmbedder{embedding: []float32{0.1, 0.2, 0.3, 0.4}}, marker: "Poisoned"}
+	mgr := NewIndexManager(storage, embedder, goFactory())
+
+	result, err := mgr.Update(context.Background(), dir, UpdateOptions{Domain: "code"})
+	if err != nil {
+		t.Fatalf("Update() error = %v", err)
+	}
+
+	assertOneFailedFile(t, storage, result, good, bad)
+}
+
+// assertOneFailedFile checks an update that saw one good and one failing file: the
+// failure is counted and named, and the stored rows hold the good file only.
+func assertOneFailedFile(t *testing.T, storage Storage, result *UpdateResult, good, bad string) {
+	t.Helper()
+	if result.FilesUpdated != 1 || result.FilesSkipped != 1 {
+		t.Errorf("FilesUpdated = %d, FilesSkipped = %d; want 1 and 1", result.FilesUpdated, result.FilesSkipped)
+	}
+	if len(result.Errors) != 1 || !strings.Contains(result.Errors[0], bad) || !strings.Contains(result.Errors[0], errPoisoned.Error()) {
+		t.Errorf("Errors = %q, want one naming %s and the embed failure", result.Errors, bad)
+	}
+	indexed, err := storage.ListIndexedFiles(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !indexed[good] {
+		t.Errorf("%s was not indexed; one failing file must not stop the others", good)
+	}
+	if indexed[bad] {
+		t.Errorf("%s is recorded as indexed although its embed failed", bad)
 	}
 }

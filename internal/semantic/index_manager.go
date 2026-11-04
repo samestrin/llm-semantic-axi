@@ -125,10 +125,14 @@ type IndexResult struct {
 
 // UpdateResult contains statistics from an update operation
 type UpdateResult struct {
-	FilesUpdated  int `json:"files_updated"`
-	FilesRemoved  int `json:"files_removed"`
-	ChunksCreated int `json:"chunks_created"`
-	ChunksRemoved int `json:"chunks_removed"`
+	FilesUpdated int `json:"files_updated"`
+	FilesRemoved int `json:"files_removed"`
+	// FilesSkipped counts files that could not be processed; Errors names each
+	// one with its error.
+	FilesSkipped  int      `json:"files_skipped"`
+	Errors        []string `json:"errors"`
+	ChunksCreated int      `json:"chunks_created"`
+	ChunksRemoved int      `json:"chunks_removed"`
 	// FilesFallback counts files chunked as text windows because their parse
 	// failed; FallbackFiles names them.
 	FilesFallback int      `json:"files_fallback"`

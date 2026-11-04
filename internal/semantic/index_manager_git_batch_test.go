@@ -637,3 +637,25 @@ func TestIndexManager_UpdateGitUnresolvableRefLeavesLastIndex(t *testing.T) {
 		t.Errorf("after an update from a tree ref: got %+v, want unchanged %+v", *got, planted)
 	}
 }
+
+// TestIndexManager_UpdateGit_CountsAndNamesAFailedFile is the git-path twin of
+// TestIndexManager_Update_CountsAndNamesAFailedFile: a changed file whose embed fails
+// was dropped silently, and on this path its old chunks are already deleted.
+func TestIndexManager_UpdateGit_CountsAndNamesAFailedFile(t *testing.T) {
+	repo := t.TempDir()
+	gitRun(t, repo, "init")
+	commitGoFile(t, repo, "base.go", "Base")
+	commitGoFile(t, repo, "good.go", "Good")
+	commitGoFile(t, repo, "bad.go", "Poisoned")
+
+	storage := newFileStorage(t)
+	embedder := &poisonEmbedder{trackingEmbedder: trackingEmbedder{embedding: []float32{0.1, 0.2, 0.3, 0.4}}, marker: "Poisoned"}
+	mgr := NewIndexManager(storage, embedder, goFactory())
+
+	result, err := mgr.UpdateGit(context.Background(), repo, "HEAD~2", UpdateOptions{Domain: "code"})
+	if err != nil {
+		t.Fatalf("UpdateGit() error = %v", err)
+	}
+
+	assertOneFailedFile(t, storage, result, filepath.Join(repo, "good.go"), filepath.Join(repo, "bad.go"))
+}
