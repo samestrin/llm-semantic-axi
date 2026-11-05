@@ -9,6 +9,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -136,7 +137,12 @@ func runInstaller(t *testing.T, baseURL, downloader string, extraEnv ...string) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	cmd := exec.Command(sh, filepath.Join(work, "install-release.sh"))
+	// A hard bound, so an installer that ignores its own timeout fails here
+	// instead of hanging the suite.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, sh, filepath.Join(work, "install-release.sh"))
+	cmd.WaitDelay = 2 * time.Second
 	cmd.Dir = work
 	path := restrictedPath(t, downloader)
 	env := []string{"HOME=" + r.home, "TMPDIR=" + r.tmp, "LLM_SEMANTIC_BASE_URL=" + baseURL}
@@ -388,7 +394,7 @@ func TestInstallRelease_TimesOutOnStalledServer(t *testing.T) {
 	if r.err == nil {
 		t.Fatalf("installer exited 0 against a stalled server:\n%s", r.out)
 	}
-	if elapsed := time.Since(start); elapsed > 20*time.Second {
+	if elapsed := time.Since(start); elapsed > 15*time.Second {
 		t.Errorf("installer took %v against a stalled server; the timeout is not applied", elapsed)
 	}
 	assertNothingLeft(t, r)
