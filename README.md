@@ -16,10 +16,28 @@ Extracted from [samestrin/llm-tools](https://github.com/samestrin/llm-tools), wh
 
 ## Install
 
+The download installer fetches the latest release and installs both binaries into `~/.local/bin`. It needs no sudo, no clone and no Go — only `sh`, `curl` or `wget`, `tar` and `sha256sum` or `shasum`:
+
+```bash
+curl -fsSL https://github.com/samestrin/llm-semantic-axi/releases/latest/download/install-release.sh | sh
+```
+
+The archive is verified against the release's `SHA256SUMS.txt` before anything is written; a mismatch or a cut-off download stops the install with the existing binaries untouched. Options (each also readable from the environment variable named after it): `--version vX.Y.Z` (`LLM_SEMANTIC_VERSION`) to pin a release, `--dir DIR` (`LLM_SEMANTIC_INSTALL_DIR`) to change the install directory, `--base-url URL` (`LLM_SEMANTIC_BASE_URL`) and `--timeout SECS` (`LLM_SEMANTIC_INSTALL_TIMEOUT`).
+
+**The install directory must be on your `PATH`.** `llm-semantic-mcp` finds the CLI through `PATH`, so the MCP server cannot run until it is. If `~/.local/bin` is not already on it, add this to your shell profile and open a new shell (the installer prints the same warning when it detects this):
+
+```bash
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+### Building from source
+
+Requires Go. This is the alternative when you want to hack on the tool rather than just run it:
+
 ```bash
 git clone https://github.com/samestrin/llm-semantic-axi.git
 cd llm-semantic-axi
-sudo ./install.sh
+sudo ./install.sh   # builds and installs to /usr/local/bin
 ```
 
 Or build only:
@@ -59,11 +77,19 @@ The `--profile` flag selects which index is being addressed: `code`, `docs`, `me
 
 ### Storage backends
 
-`--storage sqlite` (default) keeps everything in `.index/semantic.db`, pure Go, no server. `--storage qdrant` points at a Qdrant instance for larger corpora.
+Two things to set up before the first `index`: a storage backend and an embedding endpoint.
 
-### Embeddings
+**Storage** defaults to sqlite and needs no setup: `--storage sqlite` keeps everything in `.index/semantic.db` inside the indexed directory, pure Go, no server. For larger corpora, `--storage qdrant` points at a Qdrant instance instead; configure it with the `QDRANT_API_URL` and `QDRANT_API_KEY` environment variables, and name the collection with `--collection` (default: `QDRANT_COLLECTION` env, or `llm_semantic`).
 
-Any OpenAI-compatible embedding endpoint works — TEI, Ollama, vLLM, OpenAI, Azure. Set `--api-url` and `--model`, or the `LLM_SEMANTIC_API_URL` / `LLM_SEMANTIC_MODEL` environment variables. `--embedder` additionally selects the Cohere, HuggingFace or OpenRouter request shapes.
+**Embeddings**: any OpenAI-compatible embedding endpoint works — TEI, Ollama, vLLM, OpenAI, Azure. There is no bundled model, so an endpoint must be reachable before indexing. Set `--api-url` and `--model` (and `--api-key` if the endpoint needs one), or the `LLM_SEMANTIC_API_URL`, `LLM_SEMANTIC_MODEL` and `LLM_SEMANTIC_API_KEY` environment variables:
+
+```bash
+export LLM_SEMANTIC_API_URL=http://localhost:8080   # your TEI / Ollama / vLLM endpoint
+export LLM_SEMANTIC_MODEL=bge-small-en-v1.5         # the model that endpoint serves
+llm-semantic index .
+```
+
+`--embedder` additionally selects the Cohere, HuggingFace or OpenRouter request shapes when the endpoint is not OpenAI-shaped.
 
 ## Output modes (AXI)
 
