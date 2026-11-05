@@ -2,3 +2,4 @@
 # the ranks file's sha256, so no line-ending conversion may touch them.
 benchmarks/outputs/** -text
 benchmarks/cl100k_base.tiktoken -text
+benchmarks/results-tokens.md -text

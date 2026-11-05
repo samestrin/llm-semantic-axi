@@ -13,6 +13,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -121,6 +123,13 @@ func (h HashEmbedder) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]any{"object": "list", "data": data, "model": "hash"})
 }
 
+// countLine finds the result count each non-JSON mode states: `total: N`
+// in --axi and `N results for "<query>"` in plain output.
+var countLine = map[string]*regexp.Regexp{
+	"axi":   regexp.MustCompile(`(?m)^total: (\d+)$`),
+	"plain": regexp.MustCompile(`(?m)^(\d+) results for "`),
+}
+
 // RunConfig drives RunQueries.
 type RunConfig struct {
 	CLI     string   // llm-semantic binary
@@ -144,6 +153,7 @@ func RunQueries(ctx context.Context, cfg RunConfig) error {
 		}
 	}
 	for i, q := range cfg.Queries {
+		var want int // results in --json; Formats runs it first
 		for _, f := range Formats {
 			args := append([]string{"search", q, "--api-url", cfg.APIURL, "--model", cfg.Model}, f.Flags...)
 			cmd := exec.CommandContext(ctx, cfg.CLI, args...)
@@ -160,6 +170,15 @@ func RunQueries(ctx context.Context, cfg RunConfig) error {
 				}
 				if len(results) == 0 {
 					return fmt.Errorf("query %d %q: no results; an empty search is not a benchmark", i+1, q)
+				}
+				want = len(results)
+			} else {
+				m := countLine[f.Dir].FindStringSubmatch(stdout.String())
+				if m == nil {
+					return fmt.Errorf("query %d %q: %s output states no result count; --json has %d", i+1, q, f.Dir, want)
+				}
+				if n, _ := strconv.Atoi(m[1]); n != want {
+					return fmt.Errorf("query %d %q: %s output has %d results; --json has %d", i+1, q, f.Dir, n, want)
 				}
 			}
 			out := stdout.String()
