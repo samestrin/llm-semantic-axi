@@ -37,6 +37,23 @@ jobs:
             GOOS=$os GOARCH=$arch go build -ldflags "$CLI_LDFLAGS" -o dist/llm-semantic-$os-$arch$ext ./cmd/llm-semantic
             GOOS=$os GOARCH=$arch go build -ldflags "$MCP_LDFLAGS" -o dist/llm-semantic-mcp-$os-$arch$ext ./cmd/llm-semantic-mcp
           done
+
+      # install-release.sh downloads one archive per platform holding both
+      # binaries under their installed names, and checks it against
+      # SHA256SUMS.txt. The asset name here and in the installer must match;
+      # install_release_test.go pins both.
+      - name: package installer archives
+        run: |
+          for platform in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
+            os=${platform%/*}; arch=${platform#*/}
+            stage="$(mktemp -d)"
+            cp "dist/llm-semantic-$os-$arch" "$stage/llm-semantic"
+            cp "dist/llm-semantic-mcp-$os-$arch" "$stage/llm-semantic-mcp"
+            chmod 755 "$stage/llm-semantic" "$stage/llm-semantic-mcp"
+            tar -czf "dist/llm-semantic-${os}-${arch}.tar.gz" -C "$stage" llm-semantic llm-semantic-mcp
+            rm -rf "$stage"
+          done
+          cp install-release.sh dist/install-release.sh
           cd dist && sha256sum * > SHA256SUMS.txt
 
       - name: publish
