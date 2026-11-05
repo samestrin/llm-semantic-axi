@@ -1,0 +1,172 @@
+[
+  {
+    "chunk": {
+      "id": "6dff0350526ad2da",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/storage_sqlite.go",
+      "type": "struct",
+      "name": "SQLiteStorage",
+      "signature": "type SQLiteStorage",
+      "content": "// SQLiteStorage implements the Storage interface using SQLite\ntype SQLiteStorage struct {\n\tdb           *sql.DB\n\tembeddingDim int\n\tmu           sync.RWMutex\n\tclosed       bool\n}",
+      "start_line": 22,
+      "end_line": 28,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.33333334,
+    "relevance": "medium",
+    "preview": "type SQLiteStorage"
+  },
+  {
+    "chunk": {
+      "id": "b95a322c18d040af",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/mcpserver/execute_test.go",
+      "type": "function",
+      "name": "TestGetToolDefinitions_EverySchemaIsAValidObjectSchema",
+      "signature": "func TestGetToolDefinitions_EverySchemaIsAValidObjectSchema(t *testing.T)",
+      "content": "func TestGetToolDefinitions_EverySchemaIsAValidObjectSchema(t *testing.T) {\n\t// InputSchema is shipped to the client as raw JSON. Anything that is not a\n\t// well-formed object schema either fails validation at the client or lets a\n\t// malformed argument map through to the CLI.\n\tfor _, tool := range GetToolDefinitions() {\n\t\tt.Run(tool.Name, func(t *testing.T) {\n\t\t\tvar schema struct {\n\t\t\t\tType       string                     `json:\"type\"`\n\t\t\t\tProperties map[string]json.RawMessage `json:\"properties\"`\n\t\t\t\tRequired   []string                   `json:\"required\"`\n\t\t\t}\n\t\t\tif err := json.Unmarshal(tool.InputSchema, \u0026schema); err != nil {\n\t\t\t\tt.Fatalf(\"InputSchema is not valid JSON: %v\\n%s\", err, tool.InputSchema)\n\t\t\t}\n\t\t\tif schema.Type != \"object\" {\n\t\t\t\tt.Errorf(`schema type = %q, want \"object\"`, schema.Type)\n\t\t\t}\n\t\t\tif schema.Properties == nil {\n\t\t\t\tt.Errorf(\"schema declares no properties: %s\", tool.InputSchema)\n\t\t\t}\n\t\t\t// Anything listed as required must actually be a declared property,\n\t\t\t// or the client rejects every call to the tool.\n\t\t\tfor _, req := range schema.Required {\n\t\t\t\tif _, ok := schema.Properties[req]; !ok {\n\t\t\t\t\tt.Errorf(\"required field %q is not a declared property\", req)\n\t\t\t\t}\n\t\t\t}\n\t\t\t// Every property must itself declare a type, which is what the\n\t\t\t// client uses to coerce the model's arguments.\n\t\t\tfor name, raw := range schema.Properties {\n\t\t\t\tvar prop struct {\n\t\t\t\t\tType string `json:\"type\"`\n\t\t\t\t}\n\t\t\t\tif err := json.Unmarshal(raw, \u0026prop); err != nil {\n\t\t\t\t\tt.Fatalf(\"property %q is not valid JSON: %v\", name, err)\n\t\t\t\t}\n\t\t\t\tif prop.Type == \"\" {\n\t\t\t\t\tt.Errorf(\"property %q declares no type: %s\", name, raw)\n\t\t\t\t}\n\t\t\t}\n\t\t})\n\t}\n}",
+      "start_line": 662,
+      "end_line": 704,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.2905884,
+    "relevance": "low",
+    "preview": "func TestGetToolDefinitions_EverySchemaIsAValidObjectSchema(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "77e55e8ac78b120a",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/mcpserver/tools.go",
+      "type": "function",
+      "name": "buildSchema",
+      "signature": "func buildSchema(toolProps map[string]schemaProperty, required []string) json.RawMessage",
+      "content": "// buildSchema creates a JSON Schema object with merged properties.\nfunc buildSchema(toolProps map[string]schemaProperty, required []string) json.RawMessage {\n\tprops := mergeProperties(toolProps, commonProperties())\n\tschema := map[string]interface{}{\n\t\t\"type\":       \"object\",\n\t\t\"properties\": props,\n\t}\n\tif len(required) \u003e 0 {\n\t\tschema[\"required\"] = required\n\t}\n\tdata, _ := json.Marshal(schema)\n\treturn data\n}",
+      "start_line": 66,
+      "end_line": 78,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.278543,
+    "relevance": "low",
+    "preview": "func buildSchema(toolProps map[string]schemaProperty, required []string) json.RawMessage"
+  },
+  {
+    "chunk": {
+      "id": "99f0cf72e0b934c4",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/storage_sqlite.go",
+      "type": "function",
+      "name": "NewSQLiteStorage",
+      "signature": "func NewSQLiteStorage(dbPath string, embeddingDim int) (*SQLiteStorage, error)",
+      "content": "// NewSQLiteStorage creates a new SQLite-based storage\nfunc NewSQLiteStorage(dbPath string, embeddingDim int) (*SQLiteStorage, error) {\n\tif dbPath == \"\" {\n\t\tdbPath = \":memory:\"\n\t}\n\n\t// Ensure parent directory exists for file-based databases\n\tif dbPath != \":memory:\" {\n\t\tdir := filepath.Dir(dbPath)\n\t\tif err := os.MkdirAll(dir, 0755); err != nil {\n\t\t\treturn nil, fmt.Errorf(\"failed to create database directory: %w\", err)\n\t\t}\n\t}\n\n\tdb, err := sql.Open(\"sqlite\", dbPath)\n\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"failed to open database: %w\", err)\n\t}\n\n\t// Enable WAL mode for better concurrent access\n\tif _, err := db.Exec(\"PRAGMA journal_mode=WAL\"); err != nil {\n\t\tdb.Close()\n\t\treturn nil, fmt.Errorf(\"failed to enable WAL mode: %w\", err)\n\t}\n\n\tstorage := \u0026SQLiteStorage{\n\t\tdb:           db,\n\t\tembeddingDim: embeddingDim,\n\t}\n\n\tif err := storage.initSchema(); err != nil {\n\t\tdb.Close()\n\t\treturn nil, fmt.Errorf(\"failed to initialize schema: %w\", err)\n\t}\n\n\treturn storage, nil\n}",
+      "start_line": 30,
+      "end_line": 66,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.25395846,
+    "relevance": "low",
+    "preview": "func NewSQLiteStorage(dbPath string, embeddingDim int) (*SQLiteStorage, error)"
+  },
+  {
+    "chunk": {
+      "id": "3d94fd553975e3fc",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/storage_sqlite.go",
+      "type": "method",
+      "name": "initChunkRefsSchema",
+      "signature": "func (s *SQLiteStorage) initChunkRefsSchema() error",
+      "content": "// initChunkRefsSchema creates the chunk_refs table for dependency/call graph tracking.\nfunc (s *SQLiteStorage) initChunkRefsSchema() error {\n\treturn initChunkRefsTables(s.db)\n}",
+      "start_line": 226,
+      "end_line": 229,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.2506402,
+    "relevance": "low",
+    "preview": "func (s *SQLiteStorage) initChunkRefsSchema() error"
+  },
+  {
+    "chunk": {
+      "id": "f3db6ffb27b31dd8",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/mcpserver/tools.go",
+      "type": "function",
+      "name": "mergeProperties",
+      "signature": "func mergeProperties(toolProps, common map[string]schemaProperty) map[string]schemaProperty",
+      "content": "// mergeProperties combines tool-specific properties with common properties.\n// Common properties can be overridden by tool-specific ones.\nfunc mergeProperties(toolProps, common map[string]schemaProperty) map[string]schemaProperty {\n\tresult := make(map[string]schemaProperty)\n\tfor k, v := range common {\n\t\tresult[k] = v\n\t}\n\tfor k, v := range toolProps {\n\t\tresult[k] = v\n\t}\n\treturn result\n}",
+      "start_line": 53,
+      "end_line": 64,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.24467726,
+    "relevance": "low",
+    "preview": "func mergeProperties(toolProps, common map[string]schemaProperty) map[string]schemaProperty"
+  },
+  {
+    "chunk": {
+      "id": "8d19f3c11ed63ce4",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/memory_entry_content_test.go",
+      "type": "function",
+      "name": "TestMemoryFileContent_ShortCreatedAt",
+      "signature": "func TestMemoryFileContent_ShortCreatedAt(t *testing.T)",
+      "content": "// TestMemoryFileContent_ShortCreatedAt pins that a CreatedAt shorter than a full date is\n// passed through verbatim rather than panicking on the [:10] slice.\nfunc TestMemoryFileContent_ShortCreatedAt(t *testing.T) {\n\tentry := \u0026MemoryEntry{Question: \"q\", Answer: \"a\", CreatedAt: \"2026\"}\n\tgot := entry.MemoryFileContent()\n\tif !strings.Contains(got, \"created: 2026\\n\") {\n\t\tt.Errorf(\"short CreatedAt should pass through unchanged, got:\\n%s\", got)\n\t}\n}",
+      "start_line": 155,
+      "end_line": 163,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.23732223,
+    "relevance": "low",
+    "preview": "func TestMemoryFileContent_ShortCreatedAt(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "d80404dc45cac4b0",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/diff_reindex_test.go",
+      "type": "function",
+      "name": "createTestSQLiteStorage",
+      "signature": "func createTestSQLiteStorage(t *testing.T) (*SQLiteStorage, func())",
+      "content": "// createTestSQLiteStorage creates an in-memory SQLite storage for testing.\nfunc createTestSQLiteStorage(t *testing.T) (*SQLiteStorage, func()) {\n\tt.Helper()\n\tstorage, err := NewSQLiteStorage(\":memory:\", 0)\n\tif err != nil {\n\t\tt.Fatalf(\"Failed to create test storage: %v\", err)\n\t}\n\treturn storage, func() { storage.Close() }\n}",
+      "start_line": 334,
+      "end_line": 342,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.2172698,
+    "relevance": "low",
+    "preview": "func createTestSQLiteStorage(t *testing.T) (*SQLiteStorage, func())"
+  },
+  {
+    "chunk": {
+      "id": "a6eb6c3ddd92d8cb",
+      "file_path": "/work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go",
+      "type": "function",
+      "name": "TestServer_EveryAdvertisedSchemaSurvivesTheRoundTrip",
+      "signature": "func TestServer_EveryAdvertisedSchemaSurvivesTheRoundTrip(t *testing.T)",
+      "content": "func TestServer_EveryAdvertisedSchemaSurvivesTheRoundTrip(t *testing.T) {\n\t// main() passes InputSchema through as raw JSON. Anything malformed would be\n\t// rejected or flattened by the SDK on the way out, so this checks what the\n\t// client actually receives rather than what the definitions hold.\n\tfakeCLI(t, \"{}\")\n\tsession := startServer(t).session\n\n\tctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)\n\tdefer cancel()\n\n\tres, err := session.ListTools(ctx, nil)\n\tif err != nil {\n\t\tt.Fatalf(\"ListTools: %v\", err)\n\t}\n\tfor _, tool := range res.Tools {\n\t\tif tool.InputSchema == nil {\n\t\t\tt.Errorf(\"tool %q arrived with no input schema\", tool.Name)\n\t\t\tcontinue\n\t\t}\n\t\traw, err := json.Marshal(tool.InputSchema)\n\t\tif err != nil {\n\t\t\tt.Errorf(\"tool %q schema will not re-marshal: %v\", tool.Name, err)\n\t\t\tcontinue\n\t\t}\n\t\tvar schema struct {\n\t\t\tType       string                     `json:\"type\"`\n\t\t\tProperties map[string]json.RawMessage `json:\"properties\"`\n\t\t}\n\t\tif err := json.Unmarshal(raw, \u0026schema); err != nil {\n\t\t\tt.Errorf(\"tool %q schema is not a JSON object: %v\", tool.Name, err)\n\t\t\tcontinue\n\t\t}\n\t\tif schema.Type != \"object\" {\n\t\t\tt.Errorf(`tool %q schema type = %q, want \"object\"`, tool.Name, schema.Type)\n\t\t}\n\t\tif len(schema.Properties) == 0 {\n\t\t\tt.Errorf(\"tool %q arrived with no properties: %s\", tool.Name, raw)\n\t\t}\n\t\tif strings.TrimSpace(tool.Description) == \"\" {\n\t\t\tt.Errorf(\"tool %q arrived with no description\", tool.Name)\n\t\t}\n\t}\n}",
+      "start_line": 259,
+      "end_line": 301,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.21687838,
+    "relevance": "low",
+    "preview": "func TestServer_EveryAdvertisedSchemaSurvivesTheRoundTrip(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "b2755a7ef2536b31",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/mcpserver/tools.go",
+      "type": "struct",
+      "name": "ToolDefinition",
+      "signature": "type ToolDefinition",
+      "content": "// ToolDefinition defines a tool for the MCP SDK\ntype ToolDefinition struct {\n\tName        string\n\tDescription string\n\tInputSchema json.RawMessage\n}",
+      "start_line": 10,
+      "end_line": 15,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.21535276,
+    "relevance": "low",
+    "preview": "type ToolDefinition"
+  }
+]

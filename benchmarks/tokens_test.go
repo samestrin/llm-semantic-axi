@@ -25,6 +25,7 @@ func TestCL100KMatchesKnownTokenIDs(t *testing.T) {
 	cases := map[string][]int{
 		"hello world":        {15339, 1917},
 		"tiktoken is great!": {83, 1609, 5963, 374, 2294, 0},
+		"1234567":            {4513, 10961, 22}, // digits split in groups of at most three
 	}
 	for text, want := range cases {
 		if got := tok.Encode(text); !reflect.DeepEqual(got, want) {
@@ -145,7 +146,7 @@ func TestCountRefusesAStrayOutput(t *testing.T) {
 // look free: an empty file is a failed render, not a cheap one.
 func TestCountRefusesAnEmptyOutput(t *testing.T) {
 	tok := loadTestTokenizer(t)
-	dir := writeOutputs(t, []string{"a"}, func(f Format, int) string {
+	dir := writeOutputs(t, []string{"a"}, func(f Format, _ int) string {
 		if f.Dir == "axi" {
 			return ""
 		}
@@ -180,6 +181,7 @@ func TestRenderNumbersAndRatios(t *testing.T) {
 		"| Plain | *(none)* | 200 | 800 | 100.0 | 50.0% |",
 		"| 1 | q one | 100 | 50 | 80 |",
 		`| 2 | q\|two | 300 | 50 | 120 |`,
+		"On these 2 queries, `--axi` printed 25.0% of the tokens `--json` printed, and plain output printed 50.0%.",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("Render missing line %q in:\n%s", want, got)

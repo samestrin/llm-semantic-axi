@@ -1,4 +1,4 @@
-.PHONY: build build-all test test-race test-cover lint vet fmt install clean hooks
+.PHONY: build build-all test test-race test-cover lint vet fmt install clean hooks bench-tokens bench-tokens-write bench-generate
 
 CLI_BINARY := llm-semantic
 MCP_BINARY := llm-semantic-mcp
@@ -55,6 +55,18 @@ install: build
 
 hooks:
 	git config core.hooksPath .githooks
+
+# Token benchmark (benchmarks/results-tokens.md). bench-tokens re-counts the
+# checked-in outputs offline and fails if the file's numbers disagree.
+bench-tokens:
+	go run ./benchmarks/cmd/count-tokens
+
+bench-tokens-write:
+	go run ./benchmarks/cmd/count-tokens -write
+
+# Regenerates the outputs from the pinned commit; needs git and go, no network.
+bench-generate:
+	go run ./benchmarks/cmd/generate
 
 clean:
 	rm -rf $(BUILD_DIR) $(DIST_DIR) coverage.txt coverage.html

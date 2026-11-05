@@ -1,0 +1,42 @@
+10 results for "how does the index decide a file needs re-indexing"
+
+1. /work/llm-semantic-axi/internal/semantic/index_manager.go:1314 - fileNeedsUpdate (method) [MEDIUM]
+   Score: 0.4070
+   func (m *IndexManager) fileNeedsUpdate(ctx context.Context, filePath string) (bool, error)
+
+2. /work/llm-semantic-axi/internal/semantic/index_manager.go:263 - indexPerFile (method) [MEDIUM]
+   Score: 0.3383
+   func (m *IndexManager) indexPerFile(ctx context.Context, files []string, opts IndexOptions, result *IndexResult) (*IndexResult, error)
+
+3. /work/llm-semantic-axi/internal/semantic/lockfile.go:13 - IndexLock (struct) [MEDIUM]
+   Score: 0.3326
+   type IndexLock
+
+4. /work/llm-semantic-axi/internal/semantic/index_manager_git_batch_test.go:523 - GetFileHash (method) [MEDIUM]
+   Score: 0.3169
+   func (s *hashErrStorage) GetFileHash(ctx context.Context, filePath string) (string, error)
+
+5. /work/llm-semantic-axi/internal/semantic/commands/index.go:482 - resolveFTSDataDir (function) [LOW]
+   Score: 0.2869
+   func resolveFTSDataDir(indexPath string) string
+
+6. /work/llm-semantic-axi/internal/semantic/index_manager.go:253 - recordLastIndex (method) [LOW]
+   Score: 0.2834
+   func (m *IndexManager) recordLastIndex(ctx context.Context, last LastIndex) error
+
+7. /work/llm-semantic-axi/internal/semantic/index_manager_git_batch_test.go:615 - TestIndexManager_LastIndexWriteFailureMessage (function) [LOW]
+   Score: 0.2788
+   func TestIndexManager_LastIndexWriteFailureMessage(t *testing.T)
+
+8. /work/llm-semantic-axi/internal/semantic/last_index_test.go:357 - TestIndexManager_FileFailureLeavesLastIndex (function) [LOW]
+   Score: 0.2765
+   func TestIndexManager_FileFailureLeavesLastIndex(t *testing.T)
+
+9. /work/llm-semantic-axi/internal/semantic/commands/search_behaviour_test.go:336 - TestFindIndexPathFallsBackToDotIndex (function) [LOW]
+   Score: 0.2750
+   func TestFindIndexPathFallsBackToDotIndex(t *testing.T)
+
+10. /work/llm-semantic-axi/CHANGELOG.md:49 - CHANGELOG > Changelog > [Unreleased] > Fixed (file) [LOW]
+   Score: 0.2664
+   ### Fixed  - `index-update` (both `--no-git` and git paths) counts a file it could not process as skipped and names it with its error, in the text out...
+

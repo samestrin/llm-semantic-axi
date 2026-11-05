@@ -1,0 +1,42 @@
+10 results for "how are memory entries stored and searched"
+
+1. /work/llm-semantic-axi/internal/semantic/memory_entry.go:178 - MemoryWithEmbedding (struct) [MEDIUM]
+   Score: 0.3769
+   type MemoryWithEmbedding
+
+2. /work/llm-semantic-axi/internal/semantic/storage_qdrant.go:1063 - StoreMemoryBatch (method) [MEDIUM]
+   Score: 0.3678
+   func (s *QdrantStorage) StoreMemoryBatch(ctx context.Context, entries []MemoryWithEmbedding) error
+
+3. /work/llm-semantic-axi/internal/semantic/memory_entry.go:184 - MemoryListOptions (struct) [MEDIUM]
+   Score: 0.3626
+   type MemoryListOptions
+
+4. /work/llm-semantic-axi/internal/semantic/memory.go:217 - MemoryStats (struct) [MEDIUM]
+   Score: 0.3571
+   type MemoryStats
+
+5. /work/llm-semantic-axi/internal/semantic/commands/memory.go:1543 - memoryResultHelp (function) [MEDIUM]
+   Score: 0.3562
+   func memoryResultHelp(total int) []string
+
+6. /work/llm-semantic-axi/internal/semantic/storage_qdrant_grpc_test.go:1060 - TestQdrantStorage_MemoryTagFiltering (function) [MEDIUM]
+   Score: 0.3543
+   func TestQdrantStorage_MemoryTagFiltering(t *testing.T)
+
+7. /work/llm-semantic-axi/internal/semantic/fts_sqlite.go:547 - backfillMemoryFTS5 (method) [MEDIUM]
+   Score: 0.3508
+   func (s *SQLiteStorage) backfillMemoryFTS5() error
+
+8. /work/llm-semantic-axi/internal/semantic/storage.go:204 - MemoryStatsTracker (interface) [MEDIUM]
+   Score: 0.3434
+   type MemoryStatsTracker
+
+9. /work/llm-semantic-axi/internal/semantic/storage_sqlite_memory_filters_test.go:365 - entryIDs (function) [MEDIUM]
+   Score: 0.3293
+   func entryIDs(entries []MemoryEntry) []string
+
+10. /work/llm-semantic-axi/internal/semantic/storage_sqlite_bench_test.go:10 - BenchmarkSearchMemory_LargeIndex (function) [MEDIUM]
+   Score: 0.3283
+   func BenchmarkSearchMemory_LargeIndex(b *testing.B)
+

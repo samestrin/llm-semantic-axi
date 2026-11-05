@@ -1,0 +1,42 @@
+10 results for "how are dense and lexical search results fused"
+
+1. /work/llm-semantic-axi/internal/semantic/fusion.go:8 - FuseRRF (function) [HIGH]
+   Score: 0.5561
+   func FuseRRF(denseResults, lexicalResults []SearchResult, k int) []SearchResult
+
+2. /work/llm-semantic-axi/internal/semantic/search.go:177 - HybridSearch (method) [HIGH]
+   Score: 0.5531
+   func (s *Searcher) HybridSearch(ctx context.Context, query string, opts HybridSearchOptions) ([]SearchResult, error)
+
+3. /work/llm-semantic-axi/internal/semantic/storage.go:68 - LexicalSearcher (interface) [HIGH]
+   Score: 0.5261
+   type LexicalSearcher
+
+4. /work/llm-semantic-axi/internal/semantic/hybrid_overlap_extra_test.go:69 - TestHybridSearch_FusesDenseAndLexical (function) [HIGH]
+   Score: 0.5220
+   func TestHybridSearch_FusesDenseAndLexical(t *testing.T)
+
+5. /work/llm-semantic-axi/internal/semantic/fusion_test.go:90 - TestRRFusion_EmptyDense (function) [HIGH]
+   Score: 0.5214
+   func TestRRFusion_EmptyDense(t *testing.T)
+
+6. /work/llm-semantic-axi/internal/semantic/fusion.go:200 - FuseRRFMemoryWithTopK (function) [HIGH]
+   Score: 0.4967
+   func FuseRRFMemoryWithTopK(denseResults, lexicalResults []MemorySearchResult, k int, topK int) []MemorySearchResult
+
+7. /work/llm-semantic-axi/internal/semantic/fusion.go:76 - FuseRRFWithTopK (function) [HIGH]
+   Score: 0.4899
+   func FuseRRFWithTopK(denseResults, lexicalResults []SearchResult, k int, topK int) []SearchResult
+
+8. /work/llm-semantic-axi/internal/semantic/fts_sqlite_rebuild_test.go:103 - TestSafeLexicalSearch_EscapesOperators (function) [HIGH]
+   Score: 0.4873
+   func TestSafeLexicalSearch_EscapesOperators(t *testing.T)
+
+9. /work/llm-semantic-axi/internal/semantic/hybrid_overlap_extra_test.go:152 - TestHybridSearch_FallsBackOnLexicalError (function) [HIGH]
+   Score: 0.4845
+   func TestHybridSearch_FallsBackOnLexicalError(t *testing.T)
+
+10. /work/llm-semantic-axi/internal/semantic/memory_search.go:19 - HybridSearchMemory (function) [HIGH]
+   Score: 0.4830
+   func HybridSearchMemory(ctx context.Context, storage Storage, embedder EmbedderInterface, query string, opts HybridMemorySearchOptions) ([]MemorySearc...
+

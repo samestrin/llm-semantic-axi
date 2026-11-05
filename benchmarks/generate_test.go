@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -40,6 +41,21 @@ func TestHashEmbedderIsDeterministicAndNormalised(t *testing.T) {
 	for _, x := range h.Vector("") {
 		if x != 0 {
 			t.Fatal("empty text gave a non-zero vector")
+		}
+	}
+}
+
+// Defends result sets that look like a code search rather than a match on
+// "the" and "is": stopwords carry no weight, and an identifier matches the
+// words it is made of.
+func TestHashEmbedderDropsStopwordsAndSplitsIdentifiers(t *testing.T) {
+	h := HashEmbedder{Dims: 256}
+	if !reflect.DeepEqual(h.Vector("where is the retry logic"), h.Vector("retry logic")) {
+		t.Error("stopwords changed the vector")
+	}
+	for _, ident := range []string{"retryLogic", "RetryLogic", "retry_logic"} {
+		if !reflect.DeepEqual(h.Vector(ident), h.Vector("retry logic")) {
+			t.Errorf("%s did not split into retry, logic", ident)
 		}
 	}
 }
@@ -107,7 +123,9 @@ func fakeCLI(t *testing.T) string {
 	path := filepath.Join(t.TempDir(), "llm-semantic")
 	script := `#!/bin/sh
 case " $* " in
-  *" --json "*) printf '%s\n' "${FAKE_JSON:-[{\"chunk\":{\"file_path\":\"$FAKE_ROOT/a.go\"}}]}" ;;
+  *" --json "*)
+    if [ -n "$FAKE_JSON" ]; then printf '%s\n' "$FAKE_JSON"
+    else printf '[{"chunk":{"file_path":"%s/a.go"}}]\n' "$FAKE_ROOT"; fi ;;
   *" --axi "*) printf 'results[1]{file}:\n  %s/a.go:1\ntotal: 1\n' "$FAKE_ROOT" ;;
   *) printf '1 results for "%s"\n\n1. %s/a.go:1\n' "$2" "$FAKE_ROOT" ;;
 esac
@@ -209,5 +227,127 @@ func TestReadQueriesSkipsBlankAndCommentLines(t *testing.T) {
 	}
 	if want := []string{"first query", "second query"}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("ReadQueries = %q, want %q", got, want)
+	}
+}
+
+// fakeRepoMain stands in for cmd/llm-semantic in a throwaway repository. Its
+// index step calls the embedding endpoint and fails unless it answers, and
+// its search prints the working directory, as the real CLI prints absolute
+// paths.
+const fakeRepoMain = `package main
+
+import (
+	"fmt"
+	"net/http"
+	"os"
+	"strings"
+)
+
+func flag(name string) string {
+	for i, a := range os.Args {
+		if a == name && i+1 < len(os.Args) {
+			return os.Args[i+1]
+		}
+	}
+	return ""
+}
+
+func main() {
+	wd, _ := os.Getwd()
+	switch os.Args[1] {
+	case "index":
+		resp, err := http.Post(flag("--api-url")+"/v1/embeddings", "application/json", strings.NewReader(` + "`" + `{"input":["x"]}` + "`" + `))
+		if err != nil || resp.StatusCode != 200 {
+			fmt.Fprintln(os.Stderr, "embedder unreachable", err)
+			os.Exit(1)
+		}
+	case "search":
+		if strings.Contains(strings.Join(os.Args, " "), "--json") {
+			fmt.Printf("[{\"file_path\":%q}]\n", wd+"/a.go")
+		} else {
+			fmt.Println(wd + "/a.go:1")
+		}
+	}
+}
+`
+
+func gitRun(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t", "GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+	return string(out)
+}
+
+func fakeRepo(t *testing.T) string {
+	t.Helper()
+	repo := t.TempDir()
+	gitRun(t, repo, "init", "-q")
+	if err := os.MkdirAll(filepath.Join(repo, "cmd", "llm-semantic"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{
+		"go.mod":                   "module fake\n\ngo 1.24\n",
+		"cmd/llm-semantic/main.go": fakeRepoMain,
+	}
+	for name, body := range files {
+		if err := os.WriteFile(filepath.Join(repo, name), []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	gitRun(t, repo, "add", ".")
+	gitRun(t, repo, "commit", "-q", "-m", "fake")
+	return repo
+}
+
+// Defends the regeneration path end to end: a pinned checkout, a CLI built
+// from it, an index step that reaches the loopback embedder, outputs with
+// the temporary path rewritten, and no worktree left behind.
+func TestGenerateBuildsIndexesAndCleansUp(t *testing.T) {
+	repo := fakeRepo(t)
+	bench := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bench, QueriesFile), []byte("one\ntwo\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var log []string
+	if err := Generate(context.Background(), repo, "HEAD", bench, func(s string) { log = append(log, s) }); err != nil {
+		t.Fatalf("Generate: %v\n%s", err, strings.Join(log, "\n"))
+	}
+	for _, f := range Formats {
+		for i := 0; i < 2; i++ {
+			data, err := os.ReadFile(OutputPath(bench, f, i))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(data), "/work/llm-semantic-axi/a.go") {
+				t.Errorf("%s q%d: root not rewritten: %q", f.Dir, i+1, data)
+			}
+		}
+	}
+	if wt := gitRun(t, repo, "worktree", "list"); strings.Count(wt, "\n") != 1 {
+		t.Errorf("worktree left behind:\n%s", wt)
+	}
+}
+
+// Defends against a bad commit producing outputs from something else: it
+// must fail, and leave neither outputs nor a worktree.
+func TestGenerateFailsOnAnUnknownCommit(t *testing.T) {
+	repo := fakeRepo(t)
+	bench := t.TempDir()
+	if err := os.WriteFile(filepath.Join(bench, QueriesFile), []byte("one\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := Generate(context.Background(), repo, "0000000000000000000000000000000000000000", bench, func(string) {}); err == nil {
+		t.Fatal("Generate with an unknown commit returned no error")
+	}
+	if _, err := os.Stat(filepath.Join(bench, OutputsDir)); !os.IsNotExist(err) {
+		t.Errorf("outputs written for an unknown commit: %v", err)
+	}
+	if err := Generate(context.Background(), repo, "HEAD", t.TempDir(), func(string) {}); err == nil {
+		t.Fatal("Generate with no query list returned no error")
 	}
 }
