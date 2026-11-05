@@ -117,7 +117,8 @@ func TestHashEmbedderServesTheOpenAIShape(t *testing.T) {
 
 // fakeCLI writes a shell script standing in for llm-semantic. It prints a
 // result naming a file under $FAKE_ROOT in the requested format, or what
-// $FAKE_JSON says for --json, and exits with $FAKE_EXIT.
+// $FAKE_JSON says for --json, and exits with $FAKE_EXIT. $FAKE_AXI_TAIL and
+// $FAKE_PLAIN_HEAD replace the result count lines of --axi and plain.
 func fakeCLI(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "llm-semantic")
@@ -126,8 +127,8 @@ case " $* " in
   *" --json "*)
     if [ -n "$FAKE_JSON" ]; then printf '%s\n' "$FAKE_JSON"
     else printf '[{"chunk":{"file_path":"%s/a.go"}}]\n' "$FAKE_ROOT"; fi ;;
-  *" --axi "*) printf 'results[1]{file}:\n  %s/a.go:1\ntotal: 1\n' "$FAKE_ROOT" ;;
-  *) printf '1 results for "%s"\n\n1. %s/a.go:1\n' "$2" "$FAKE_ROOT" ;;
+  *" --axi "*) printf 'results[1]{file}:\n  %s/a.go:1\n%s\n' "$FAKE_ROOT" "${FAKE_AXI_TAIL:-total: 1}" ;;
+  *) printf '%s\n\n1. %s/a.go:1\n' "${FAKE_PLAIN_HEAD:-1 results for \"$2\"}" "$FAKE_ROOT" ;;
 esac
 exit "${FAKE_EXIT:-0}"
 `
@@ -180,6 +181,35 @@ func TestRunQueriesRefusesAnEmptyResult(t *testing.T) {
 	t.Setenv("FAKE_JSON", "[]")
 	if err := RunQueries(context.Background(), runConfig(t, root)); err == nil || !strings.Contains(err.Error(), "no results") {
 		t.Fatalf("RunQueries with an empty result: err = %v, want no results", err)
+	}
+}
+
+// Defends the doc's "the same results in every mode": a mode that renders
+// fewer (or more) results than --json, or does not state how many, must stop
+// the run instead of being written and counted.
+func TestRunQueriesRefusesAModeThatDisagreesWithJSON(t *testing.T) {
+	cases := map[string][2]string{
+		"axi total short":   {"FAKE_AXI_TAIL", "total: 0"},
+		"axi total missing": {"FAKE_AXI_TAIL", "nothing here"},
+		"plain count long":  {"FAKE_PLAIN_HEAD", `2 results for "q"`},
+		"plain count gone":  {"FAKE_PLAIN_HEAD", "No results"},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			root := t.TempDir()
+			t.Setenv("FAKE_ROOT", root)
+			t.Setenv(c[0], c[1])
+			cfg := runConfig(t, root)
+			err := RunQueries(context.Background(), cfg)
+			if err == nil || !strings.Contains(err.Error(), "--json has 1") {
+				t.Fatalf("err = %v, want a count mismatch against --json", err)
+			}
+			for _, f := range Formats[1:] {
+				if _, statErr := os.Stat(OutputPath(cfg.OutDir, f, 0)); statErr == nil && strings.Contains(name, f.Dir) {
+					t.Errorf("%s output written despite the mismatch", f.Dir)
+				}
+			}
+		})
 	}
 }
 
@@ -265,7 +295,11 @@ func main() {
 		if strings.Contains(strings.Join(os.Args, " "), "--json") {
 			fmt.Printf("[{\"file_path\":%q}]\n", wd+"/a.go")
 		} else {
-			fmt.Println(wd + "/a.go:1")
+			if strings.Contains(strings.Join(os.Args, " "), "--axi") {
+				fmt.Println(wd + "/a.go:1\ntotal: 1")
+			} else {
+				fmt.Println("1 results for \"q\"\n\n1. " + wd + "/a.go:1")
+			}
 		}
 	}
 }
