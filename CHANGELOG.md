@@ -36,6 +36,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- `index --json` and `index --axi` now emit snake_case keys (`files_processed`, `files_skipped`, `files_unchanged`, `chunks_created`, `files_fallback`, `fallback_files`, `errors`); before they emitted the Go field names (`FilesProcessed`, ...). Anything that parsed the old keys must change. (epic 20)
 - `index-status` with no index now returns a "semantic index not found" error and exits non-zero in plain, `--json` and `--axi` modes. It previously printed a notice (or `{"error":"index not found","indexed":false}`) and exited 0. (epic 05)
 - A bare `llm-semantic` run is content-first: instead of help, it prints a one-line description, the executable path (home shown as `~`) and the index status for the current directory. A missing index is the same non-zero error as `index-status`; `--help` still prints help (its usage block gains a `llm-semantic [flags]` line). (epic 05)
 - The search family (`search`, `code-search`, `docs-search`, `memory-search`, `multisearch`) states its total and says when it found nothing. Plain output of `search` and `memory-search` opens with `N results for "query"`, and an empty search prints `No results found for "query" (0 results).` instead of `No results found.`. `--axi` output of `search` and `memory-search` is now an object with `query`, `total` and `results`, plus a `message` when there are none; `multisearch --axi` gains the `message`. `--json` and `--min` keep their old shape. (epic 05.1)
@@ -47,6 +48,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- `index-update` (both `--no-git` and git paths) counts a file it could not process as skipped and names it with its error, in the text output and in `--json`/`--axi` (`files_skipped`, `errors`); before, such a file vanished silently. A store that cannot return a file's hash now counts as a failed file instead of re-indexing it. (epic 20)
+- `index` reports progress for an unreadable file (as skipped, with the count of files already done), and the commit-record failure message no longer begins "index updated", which a caller could read as success with a footnote. (epic 20)
 - Python recursion is one rule: `self.f()` inside method `f` (and `cls.f()`) now records no self-edge, as `f()` inside `f` already did. A call to a differently named method still records its edge. An index built before this change needs `index --force`. (epic 21)
 - `search` with an unquoted multi-word query no longer embeds a trailing space; the query is the arguments joined by single spaces, as `code-search`, `docs-search` and `memory-search` already did. (epic 22)
 - `refs` lists every `imports` edge as unresolved. Before, an import linked to any lone chunk of the same name, so `import debounce from "lodash/debounce"` pointed at a local `function debounce` (and Go's `import "net/http"` at a lone `func http`). Re-indexing unlinks imports edges an older index had already linked. (epic 03.1)
