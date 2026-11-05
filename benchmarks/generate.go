@@ -193,7 +193,7 @@ func Generate(ctx context.Context, repo, commit, benchDir string, log func(strin
 	if err != nil {
 		return err
 	}
-	defer os.RemoveAll(tmp)
+	defer func() { _ = os.RemoveAll(tmp) }()
 	src := filepath.Join(tmp, "src")
 
 	run := func(dir, name string, args ...string) error {
@@ -226,8 +226,8 @@ func Generate(ctx context.Context, repo, commit, benchDir string, log func(strin
 		return err
 	}
 	srv := &http.Server{Handler: HashEmbedder{Dims: 4096}}
-	go srv.Serve(ln)
-	defer srv.Close()
+	go func() { _ = srv.Serve(ln) }()
+	defer func() { _ = srv.Close() }()
 	apiURL := "http://" + ln.Addr().String()
 	const model = "hash-4096"
 

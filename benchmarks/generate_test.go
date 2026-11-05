@@ -82,7 +82,7 @@ func TestHashEmbedderServesTheOpenAIShape(t *testing.T) {
 		if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
 			t.Fatal(err)
 		}
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		want := 1
 		if s, ok := input.([]string); ok {
 			want = len(s)
@@ -101,7 +101,7 @@ func TestHashEmbedderServesTheOpenAIShape(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("malformed request: status %d, want 400", resp.StatusCode)
 	}
@@ -109,7 +109,7 @@ func TestHashEmbedderServesTheOpenAIShape(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp.Body.Close()
+	_ = resp.Body.Close()
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("non-string input: status %d, want 400", resp.StatusCode)
 	}

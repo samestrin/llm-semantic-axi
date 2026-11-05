@@ -298,13 +298,13 @@ func RunCount(dir string, write bool, w io.Writer) error {
 		return err
 	}
 	table := Render(res)
-	fmt.Fprint(w, table)
+	_, _ = fmt.Fprint(w, table)
 	results := filepath.Join(dir, ResultsFile)
 	if write {
 		if err := WriteBlock(results, table); err != nil {
 			return err
 		}
-		fmt.Fprintf(w, "\nwrote %s\n", results)
+		_, _ = fmt.Fprintf(w, "\nwrote %s\n", results)
 		return nil
 	}
 	block, err := ReadBlock(results)
@@ -314,6 +314,6 @@ func RunCount(dir string, write bool, w io.Writer) error {
 	if block != table {
 		return fmt.Errorf("%s does not match the re-count above; run `make bench-tokens-write` if the outputs changed on purpose", results)
 	}
-	fmt.Fprintf(w, "\n%s matches this re-count.\n", results)
+	_, _ = fmt.Fprintf(w, "\n%s matches this re-count.\n", results)
 	return nil
 }
