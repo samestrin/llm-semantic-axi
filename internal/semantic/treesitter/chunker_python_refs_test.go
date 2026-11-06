@@ -59,6 +59,13 @@ func (fakeEmbedder) Model() string   { return "fake" }
 // actually sees rather than a bare PythonChunker.
 func newPythonIndex(t *testing.T) (*semantic.SQLiteStorage, *semantic.IndexManager, string) {
 	t.Helper()
+	return newRefIndex(t, "py")
+}
+
+// newRefIndex is newPythonIndex for any extension: it fails unless the
+// factory hands ext to the *Fallback wrapper the index really uses.
+func newRefIndex(t *testing.T, ext string) (*semantic.SQLiteStorage, *semantic.IndexManager, string) {
+	t.Helper()
 	storage, err := semantic.NewSQLiteStorage(filepath.Join(t.TempDir(), "semantic.db"), 4)
 	if err != nil {
 		t.Fatalf("NewSQLiteStorage: %v", err)
@@ -67,10 +74,10 @@ func newPythonIndex(t *testing.T) (*semantic.SQLiteStorage, *semantic.IndexManag
 
 	factory := semantic.NewChunkerFactory()
 	RegisterAll(factory)
-	if c, ok := factory.GetChunker("py"); !ok {
-		t.Fatal("no chunker registered for .py")
+	if c, ok := factory.GetChunker(ext); !ok {
+		t.Fatalf("no chunker registered for .%s", ext)
 	} else if _, wrapped := c.(*Fallback); !wrapped {
-		t.Fatalf("registered .py chunker is %T, want the *Fallback the index uses", c)
+		t.Fatalf("registered .%s chunker is %T, want the *Fallback the index uses", ext, c)
 	}
 	return storage, semantic.NewIndexManager(storage, fakeEmbedder{}, factory), t.TempDir()
 }
