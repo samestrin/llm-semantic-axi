@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Rust call edges: the tree-sitter Rust chunker records `calls` edges for a bare-name call (`helper()`, `helper::<T>()`) and for `self.f()` when the caller's own `impl` or trait defines a method `f`, and `imports` edges for each `use` (named by its last path segment, aliases ignored, a wildcard names nothing). Other receivers (`obj.f()`), path calls (`Type::f()`, `Self::f()`) and macros record no edge, and there are no `uses_type` edges. A call in an inline `mod` body or in a `const` or `static` initialiser has no function to belong to and records no edge, and neither does a `self.f()` whose `f` is defined in a second `impl` block; nothing tracks that last miss. An index built before this change gains Rust edges only after `index --force`. (epic 03.2)
+- README: the language table marks Rust (`.rs`) as having call edges, and the known-limit section states which Rust calls are recorded and which are not, alongside the JavaScript, TypeScript and Python paragraphs. The table guard test now allows Rust to claim call edges. (epic 03.2)
+
 ### Changed
 
 - `collection delete` without `--force` and `memory stats --prune` without `--yes` no longer prompt on stdin. They refuse with an error naming the flag and exit 1, deleting nothing; `--axi` adds the command to run. Before, answering "n" or running with closed stdin printed `Aborted` and exited 0, so a delete that did not happen reported success. Scripts that piped `y` into either command must pass the flag instead. (AXI principle 6)
