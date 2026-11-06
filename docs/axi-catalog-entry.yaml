@@ -1,0 +1,53 @@
+# DRAFT catalog entry for kunchenguid/axi `catalog.yaml`, `community` list.
+#
+# This file is a draft, not a submission. Nothing here has been sent to
+# kunchenguid/axi. The owner submits it (the PR is public).
+#
+# Steps the owner runs:
+#   1. Fork kunchenguid/axi and branch from its main.
+#   2. Append the `- name: llm-semantic-axi` entry below (without these comments)
+#      to the `community` list in catalog.yaml.
+#   3. Refresh `reviewed_revision` to the release commit (see note below).
+#   4. Run `pnpm run docs:gen` to regenerate README.md and docs/index.html, and
+#      commit all three files together (CI `docs:check` fails on drift).
+#   5. Push through the `no-mistakes` gate (`no-mistakes init --fork-url
+#      git@github.com:<you>/axi.git`, then `git push no-mistakes`; v1.30.1 or
+#      newer for forks). It runs the pipeline and opens the PR.
+#
+# `reviewed_revision` is the commit the review below was made against
+# (a4709ee, main when this was drafted). Repo PRs are squash-merged, so tag the
+# release and replace it with the tagged commit after re-checking that the
+# README "AXI conformance" table is unchanged.
+#
+# The token number is quoted from benchmarks/results-tokens.md (11020 vs 38831
+# tokens over 10 queries = 28.4%). If that file changes, re-quote it here.
+- name: llm-semantic-axi
+  url: https://github.com/samestrin/llm-semantic-axi
+  author: samestrin
+  domain: Semantic code search
+  description: "Semantic code search with call-edge lookup (`callers`, `refs`) over local embeddings; on 10 searches of its own repo, `--axi` output printed 28.4% of the tokens of `--json` (11,020 vs 38,831, cl100k, offline benchmark)."
+  admission:
+    status: exception
+    reviewed_revision: a4709ee69343dc417a394521057367ec4ad6f704
+    reviewed_components:
+      - README.md
+      - benchmarks/results-tokens.md
+      - cmd/llm-semantic/main.go
+      - pkg/output/axi.go
+      - pkg/output/exit.go
+      - internal/semantic/commands/axi.go
+      - internal/semantic/commands/root.go
+      - internal/semantic/commands/search.go
+      - internal/semantic/commands/setup.go
+      - internal/semantic/commands/index_status.go
+      - internal/semantic/commands/collection.go
+      - internal/semantic/commands/memory.go
+      - internal/semantic/commands/refs.go
+    source_observations:
+      - "README 'Output modes (AXI)': --axi selects TOON, --json JSON, --min a minimal form, and no flag plain text. TOON goes through go-axi, and pkg/output/axi.go (EncodeAXI) guards against a type the codec cannot encode emitting empty output."
+      - "README 'AXI conformance' marks principles 1, 2, 3, 4, 5, 7, 8, 9 and 10 as Met in --axi: four fields per search row, content cut at 200 characters with a note of what was left out and --full for the rest, a stated total, index_empty vs no_match empty states, a setup command writing a SessionStart hook and Agent Skill, a no-argument run that shows live index status, a help list of next steps, and --help on every subcommand."
+      - "benchmarks/results-tokens.md re-counts the three output modes offline over the same ten searches: --json 38831 tokens, --axi 11020 (28.4% of --json), plain 6007. The embeddings were a keyword stand-in, so which results come back is not representative, only the comparison between renderings. Plain is smaller than --axi because it shows less per result."
+      - "callers and refs return empty for languages other than Go, JavaScript, TypeScript and Python because only those chunkers emit call edges; the output distinguishes 'symbol not indexed' and 'not indexed for edges' from a genuine empty answer (README 'Known limit')."
+      - "Principle 6 is an exception in two parts: a malformed invocation exits 2 and plain-mode errors go to stderr (a go-axi convention), and collection delete without --force and memory stats --prune without --yes still prompt, with a declined prompt exiting 0 (tracked as technical debt)."
+      - "--json keeps its pre-AXI schema by board decision (2026-10-31): full untruncated fields and a bare result array without a total or zero-result message, so the JSON mode does not meet principles 2-5."
+    exception: "Principle 6 is not fully met: usage errors exit 2 (not 0/1) and plain-mode errors go to stderr, and two commands (collection delete without --force, memory stats --prune without --yes) still prompt on stdin and exit 0 when declined. Separately, --json deliberately keeps its pre-AXI schema (no truncation, no total), so principles 2-5 are met in --axi and plain output only."
