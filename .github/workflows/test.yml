@@ -8,9 +8,9 @@ name: test
 on:
   push:
     branches: [main]
-    paths: ['**.go', 'go.mod', 'go.sum', '**.md', 'Makefile', '.github/workflows/**']
+    paths: ['**.go', 'go.mod', 'go.sum', '**.md', '**.yaml', 'Makefile', '.github/workflows/**']
   pull_request:
-    paths: ['**.go', 'go.mod', 'go.sum', '**.md', 'Makefile', '.github/workflows/**']
+    paths: ['**.go', 'go.mod', 'go.sum', '**.md', '**.yaml', 'Makefile', '.github/workflows/**']
 
 permissions:
   contents: read
