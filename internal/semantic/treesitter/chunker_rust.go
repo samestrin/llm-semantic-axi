@@ -177,3 +177,147 @@ func (c *RustChunker) extractTypeAlias(node *gotreesitter.Node, content []byte, 
 	chunk := NodeToChunk(node, content, path, "rs", semantic.ChunkStruct, name, sig)
 	*chunks = append(*chunks, chunk)
 }
+
+var _ semantic.RefExtractor = (*RustChunker)(nil)
+
+// ExtractRefs records the calls and use imports in Rust source, in the shape
+// of PythonChunker.ExtractRefs. There are no uses_type edges: a Rust path or
+// field access is not a type use.
+//
+// A call belongs to the innermost chunk around it, and only when that chunk is
+// a function or method: an impl spans its methods and would otherwise "call"
+// everything they call, and a call in an impl const has no function to belong
+// to. A call no function holds (a static or const initialiser, the body of an
+// inline mod, a fallback text window) writes no edge. A call is recorded for a
+// bare name (helper(), helper::<T>()) and a self. receiver (self.save());
+// other forms name nothing the index can resolve.
+//
+// A use inside a function belongs to it; a top-level one to the file's first
+// chunk, as in GoChunker. A use inside an inline mod or a text window (both
+// ChunkFile chunks) writes no edge.
+func (c *RustChunker) ExtractRefs(path string, content []byte, chunks []semantic.Chunk) ([]semantic.ChunkRef, error) {
+	var owners, files []semantic.Chunk
+	for _, ch := range chunks {
+		if ch.Type != semantic.ChunkFile {
+			owners = append(owners, ch)
+		} else {
+			files = append(files, ch)
+		}
+	}
+	if len(owners) == 0 {
+		return nil, nil
+	}
+
+	tree, err := ParseSource(content, c.lang)
+	if err != nil {
+		return nil, err
+	}
+	defer tree.Release()
+
+	var refs []semantic.ChunkRef
+	c.walkRefs(tree.RootNode(), content, owners, files, &refs)
+	return refs, nil
+}
+
+func (c *RustChunker) walkRefs(node *gotreesitter.Node, content []byte, owners, files []semantic.Chunk, refs *[]semantic.ChunkRef) {
+	WalkNamedChildren(node, c.lang, func(child *gotreesitter.Node, nodeType string) {
+		switch nodeType {
+		case "call_expression":
+			id := innermostChunk(owners, nodeLine(child))
+			name := c.callName(child, content)
+			if name != "" && isFunctionChunk(owners, id) && bareName(name) != chunkName(owners, id) {
+				*refs = append(*refs, semantic.ChunkRef{ChunkID: id, RefType: semantic.RefCalls, RefName: name})
+			}
+
+		case "use_declaration":
+			id := innermostChunk(owners, nodeLine(child))
+			if id == "" {
+				if innermostChunk(files, nodeLine(child)) != "" {
+					return
+				}
+				id = owners[0].ID
+			}
+			for _, name := range c.useNames(GetChildByFieldName(child, "argument", c.lang), content) {
+				*refs = append(*refs, semantic.ChunkRef{ChunkID: id, RefType: semantic.RefImports, RefName: name})
+			}
+			return
+		}
+		c.walkRefs(child, content, owners, files, refs)
+	})
+}
+
+// isFunctionChunk reports whether the chunk with this ID is a function or
+// method.
+func isFunctionChunk(chunks []semantic.Chunk, id string) bool {
+	for _, ch := range chunks {
+		if ch.ID == id {
+			return ch.Type == semantic.ChunkFunction || ch.Type == semantic.ChunkMethod
+		}
+	}
+	return false
+}
+
+// callName returns the name a call is recorded under, or "" when its target
+// is not a bare name or a self. method.
+func (c *RustChunker) callName(call *gotreesitter.Node, content []byte) string {
+	fn := GetChildByFieldName(call, "function", c.lang)
+	if fn != nil && fn.Type(c.lang) == "generic_function" {
+		fn = GetChildByFieldName(fn, "function", c.lang)
+	}
+	if fn == nil {
+		return ""
+	}
+	switch fn.Type(c.lang) {
+	case "identifier":
+		return GetNodeText(fn, content)
+	case "field_expression":
+		value := GetChildByFieldName(fn, "value", c.lang)
+		field := GetChildByFieldName(fn, "field", c.lang)
+		if value != nil && field != nil && value.Type(c.lang) == "self" {
+			return "self." + GetNodeText(field, content)
+		}
+	}
+	return ""
+}
+
+// useNames returns the names a use tree brings in: the last segment of each
+// path, ignoring aliases, so "use a::b as c" gives "b" and
+// "use a::{b, c::d}" gives "b" and "d". A self item names its path's last
+// segment ("use a::{self}" gives "a"). A wildcard names nothing.
+func (c *RustChunker) useNames(n *gotreesitter.Node, content []byte) []string {
+	if n == nil {
+		return nil
+	}
+	switch n.Type(c.lang) {
+	case "identifier":
+		return []string{GetNodeText(n, content)}
+	case "scoped_identifier":
+		if name := GetChildByFieldName(n, "name", c.lang); name != nil && name.Type(c.lang) == "identifier" {
+			return []string{GetNodeText(name, content)}
+		}
+	case "use_as_clause":
+		return c.useNames(GetChildByFieldName(n, "path", c.lang), content)
+	case "use_list":
+		var names []string
+		for i := 0; i < n.NamedChildCount(); i++ {
+			names = append(names, c.useNames(n.NamedChild(i), content)...)
+		}
+		return names
+	case "scoped_use_list":
+		list := GetChildByFieldName(n, "list", c.lang)
+		if list == nil {
+			return nil
+		}
+		var names []string
+		for i := 0; i < list.NamedChildCount(); i++ {
+			item := list.NamedChild(i)
+			if item.Type(c.lang) == "self" {
+				names = append(names, c.useNames(GetChildByFieldName(n, "path", c.lang), content)...)
+				continue
+			}
+			names = append(names, c.useNames(item, content)...)
+		}
+		return names
+	}
+	return nil
+}

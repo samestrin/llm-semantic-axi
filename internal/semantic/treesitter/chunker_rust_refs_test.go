@@ -11,8 +11,8 @@ import (
 // rustRefsFixture covers each shape epic 03.2 T1 names: a direct call, a
 // self. method call, use imports (a plain path, an alias, a {a, b} list with
 // self, a wildcard, and one inside a function), an impl whose methods make
-// calls the impl itself does not, and calls no function chunk holds (an impl
-// const, a static, the body of an inline mod).
+// calls the impl itself does not, and calls and a use no function chunk holds
+// (an impl const, a static, the body of an inline mod).
 const rustRefsFixture = `use std::collections::HashMap;
 use crate::store::{self, load, save as persist};
 use crate::prelude::*;
@@ -43,6 +43,8 @@ fn helper() -> u32 {
 static TABLE: u32 = compute();
 
 mod inner {
+    use other::thing;
+
     fn hidden() {
         buried();
     }
@@ -77,7 +79,8 @@ func TestRustRefs_IndexedThroughTheRegisteredChunker(t *testing.T) {
 		"fetch": {},
 		// A use inside a function belongs to it; helper() is recursion.
 		"helper": {"imports:Write"},
-		// An inline mod is a ChunkFile chunk: it owns nothing.
+		// An inline mod is a ChunkFile chunk: it owns nothing, neither the
+		// call nor the use in its body.
 		"inner": {},
 	}
 	for name, edges := range want {
@@ -131,10 +134,13 @@ func TestRustRefs_RecursionIsOneRuleForBareAndSelf(t *testing.T) {
 		"other":     "impl C {\n    fn f(&self) {\n        self.g();\n    }\n}\n",
 		"bareOther": "fn f() {\n    g();\n}\n",
 		"generic":   "fn f() {\n    g::<u8>();\n}\n",
+		"receiver":  "fn f(o: O) {\n    o.g();\n    (self.g)();\n}\n",
 	}
 	want := map[string]string{
 		"bare": "", "self": "",
 		"other": "f calls:self.g", "bareOther": "f calls:g", "generic": "f calls:g",
+		// Only a self. receiver names a resolvable method.
+		"receiver": "",
 	}
 	for name, src := range cases {
 		if got := strings.Join(rustRefStrings(t, src), ","); got != want[name] {
