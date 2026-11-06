@@ -2,6 +2,8 @@ package commands
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1479,63 +1481,110 @@ func TestMemoryPruneValidatesTheWindow(t *testing.T) {
 	}
 }
 
-// TestMemoryPruneAbortsWithoutConfirmation covers both interactive answers.
-// Defaulting to yes on a destructive command is the bug this guards.
-func TestMemoryPruneAbortsWithoutConfirmation(t *testing.T) {
-	newWorkspace(t)
-	useEmbedder(t, newFakeEmbedder(t))
-	seedMemories(t, newMemory("mem-1", "q", "a"))
-	seedRetrievals(t, "mem-1", "query", 0.5, 1)
-
-	withStdin(t, "n\n")
-	declined := captureStdout(t, func() {
-		if err := runMemoryStats(context.Background(), memoryStatsOpts{
-			pruneMode: true, olderThan: 30,
-		}); err != nil {
-			t.Fatalf("prune: %v", err)
-		}
-	})
-	if !strings.Contains(declined, "Aborted.") {
-		t.Errorf("answering no did not abort:\n%s", declined)
+// ageRetrievals backdates every retrieval-log row, so a prune has something
+// it would delete. Without it a refused prune and a prune that ran look the
+// same: fresh rows survive both.
+func ageRetrievals(t *testing.T, days int) {
+	t.Helper()
+	db, err := sql.Open("sqlite", filepath.Join(".index", "semantic.db"))
+	if err != nil {
+		t.Fatalf("open index: %v", err)
 	}
-	if !strings.Contains(declined, "Are you sure?") {
-		t.Errorf("no confirmation prompt was shown:\n%s", declined)
-	}
-
-	withStdin(t, "")
-	silent := captureStdout(t, func() {
-		if err := runMemoryStats(context.Background(), memoryStatsOpts{
-			pruneMode: true, olderThan: 30,
-		}); err != nil {
-			t.Fatalf("prune: %v", err)
-		}
-	})
-	if !strings.Contains(silent, "Aborted (non-interactive input)") {
-		t.Errorf("a closed stdin did not abort:\n%s", silent)
+	defer db.Close()
+	if _, err := db.Exec(`UPDATE retrieval_log SET timestamp = datetime('now', '-' || ? || ' days')`, days); err != nil {
+		t.Fatalf("age retrieval log: %v", err)
 	}
 }
 
-// TestMemoryPruneConfirmedProceeds is the accept half of the same prompt.
-func TestMemoryPruneConfirmedProceeds(t *testing.T) {
+// retrievalRows counts the retrieval-log rows left for id.
+func retrievalRows(t *testing.T, id string) int {
+	t.Helper()
+	storage, err := semantic.NewSQLiteStorage(filepath.Join(".index", "semantic.db"), 0)
+	if err != nil {
+		t.Fatalf("reopen index: %v", err)
+	}
+	defer storage.Close()
+	rows, err := storage.GetMemoryRetrievalHistory(context.Background(), id, 50)
+	if err != nil {
+		t.Fatalf("GetMemoryRetrievalHistory: %v", err)
+	}
+	return len(rows)
+}
+
+// TestMemoryPruneWithoutYesRefusesAndNeverPrompts defends AXI principle 6 and
+// the repo rule that nothing reports success it did not achieve. --prune used
+// to prompt on stdin and return nil when the answer was "n" or stdin was
+// closed, so a prune that never ran exited 0. Whatever is on stdin, it must
+// now refuse with an error naming --yes, print no prompt, and delete nothing.
+func TestMemoryPruneWithoutYesRefusesAndNeverPrompts(t *testing.T) {
+	newWorkspace(t)
+	useEmbedder(t, newFakeEmbedder(t))
+	seedMemories(t, newMemory("mem-1", "q", "a"))
+	seedRetrievals(t, "mem-1", "query", 0.5, 2)
+	ageRetrievals(t, 60)
+
+	// "y" is included: a yes on stdin must not be read as consent either.
+	for _, stdin := range []string{"n\n", "", "y\n"} {
+		withStdin(t, stdin)
+		var err error
+		out := captureStdout(t, func() {
+			err = runMemoryStats(context.Background(), memoryStatsOpts{
+				pruneMode: true, olderThan: 30,
+			})
+		})
+		if err == nil {
+			t.Fatalf("stdin %q: prune without --yes returned nil (exit 0)", stdin)
+		}
+		if !strings.Contains(err.Error(), "--yes") {
+			t.Errorf("stdin %q: error = %v, want it to name --yes", stdin, err)
+		}
+		var he *helpError
+		if !errors.As(err, &he) || len(he.AXIHelp()) == 0 {
+			t.Errorf("stdin %q: error carries no --axi next step: %#v", stdin, err)
+		}
+		if strings.Contains(out, "Are you sure?") {
+			t.Errorf("stdin %q: a confirmation prompt was shown:\n%s", stdin, out)
+		}
+		if got := retrievalRows(t, "mem-1"); got != 2 {
+			t.Fatalf("stdin %q: a refused prune deleted %d aged rows", stdin, 2-got)
+		}
+	}
+
+	// The same rows do go with --yes, so the survival above is the refusal
+	// at work and not a window that matched nothing.
+	captureStdout(t, func() {
+		if err := runMemoryStats(context.Background(), memoryStatsOpts{
+			pruneMode: true, olderThan: 30, skipConfirm: true,
+		}); err != nil {
+			t.Fatalf("prune --yes: %v", err)
+		}
+	})
+	if got := retrievalRows(t, "mem-1"); got != 0 {
+		t.Errorf("prune --yes left %d aged rows", got)
+	}
+}
+
+// TestMemoryStatsCmdPruneWithoutYesExitsNonZero runs the cobra command, so the
+// refusal is checked at the layer that sets the exit code.
+func TestMemoryStatsCmdPruneWithoutYesExitsNonZero(t *testing.T) {
 	newWorkspace(t)
 	useEmbedder(t, newFakeEmbedder(t))
 	seedMemories(t, newMemory("mem-1", "q", "a"))
 	seedRetrievals(t, "mem-1", "query", 0.5, 1)
+	ageRetrievals(t, 60)
 
 	withStdin(t, "y\n")
-	out := captureStdout(t, func() {
-		if err := runMemoryStats(context.Background(), memoryStatsOpts{
-			pruneMode: true, olderThan: 30,
-		}); err != nil {
-			t.Fatalf("prune: %v", err)
-		}
-	})
-
-	if strings.Contains(out, "Aborted") {
-		t.Errorf("answering yes still aborted:\n%s", out)
+	cmd := memoryStatsCmd()
+	cmd.SetArgs([]string{"--prune", "--older-than", "30"})
+	cmd.SetOut(&strings.Builder{})
+	cmd.SetErr(&strings.Builder{})
+	var err error
+	captureStdout(t, func() { err = cmd.Execute() })
+	if err == nil || !strings.Contains(err.Error(), "--yes") {
+		t.Fatalf("memory stats --prune without --yes: err = %v, want a refusal naming --yes", err)
 	}
-	if !strings.Contains(out, "No log entries to delete.") {
-		t.Errorf("the confirmed prune did not run:\n%s", out)
+	if retrievalRows(t, "mem-1") != 1 {
+		t.Error("the refused prune deleted the aged row")
 	}
 }
 

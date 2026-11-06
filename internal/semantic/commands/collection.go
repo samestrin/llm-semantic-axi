@@ -41,7 +41,9 @@ func collectionDeleteCmd() *cobra.Command {
 This removes all embedded content for the given profile (e.g., "code", "docs", "memory", "sprints").
 
 Example:
-  llm-semantic collection delete --profile memory`,
+  llm-semantic collection delete --profile memory --force
+
+Without --force the command refuses and exits 1; it never prompts.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if profile == "" {
 				return fmt.Errorf("--profile is required")
@@ -56,7 +58,7 @@ Example:
 	}
 
 	cmd.Flags().StringVar(&profile, "profile", "", "Profile to delete (code, docs, memory, sprints)")
-	cmd.Flags().BoolVar(&force, "force", false, "Skip confirmation")
+	cmd.Flags().BoolVar(&force, "force", false, "Confirm the delete (required; the command never prompts)")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 	cmd.Flags().BoolVar(&minOutput, "min", false, "Minimal output format")
 
@@ -73,6 +75,15 @@ type collectionDeleteOpts struct {
 }
 
 func runCollectionDelete(ctx context.Context, opts collectionDeleteOpts) error {
+	// Never prompt (AXI principle 6). A prompt answered "n", or a closed stdin,
+	// used to return nil, so a delete that never happened exited 0.
+	if !opts.force {
+		return withHelp(
+			fmt.Errorf("refusing to delete domain '%s' without --force: the delete removes every chunk in it and is never confirmed interactively", opts.domain),
+			fmt.Sprintf("Run `llm-semantic collection delete --profile %s --force` to delete it", opts.domain),
+		)
+	}
+
 	// Find index path (only needed for sqlite)
 	indexPath := ""
 	if storageType == "" || storageType == "sqlite" {
@@ -99,24 +110,6 @@ func runCollectionDelete(ctx context.Context, opts collectionDeleteOpts) error {
 		return fmt.Errorf("failed to open storage: %w", err)
 	}
 	defer storage.Close()
-
-	// Confirm deletion
-	if !opts.force {
-		fmt.Printf("This will delete all chunks for domain '%s'.\n", opts.domain)
-		fmt.Print("Are you sure? [y/N]: ")
-
-		var response string
-		_, err = fmt.Scanln(&response)
-		// If stdin is closed/redirected, abort
-		if err != nil {
-			fmt.Println("Aborted (non-interactive input). Use --force to confirm automatically.")
-			return nil
-		}
-		if response != "y" && response != "Y" {
-			fmt.Println("Aborted.")
-			return nil
-		}
-	}
 
 	// Delete by domain
 	count, err := storage.DeleteByDomain(ctx, opts.domain)

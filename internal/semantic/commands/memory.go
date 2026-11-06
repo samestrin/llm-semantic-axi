@@ -1129,7 +1129,7 @@ Examples:
 	cmd.Flags().BoolVar(&showHistory, "history", false, "Show retrieval history for a memory")
 	cmd.Flags().BoolVar(&pruneMode, "prune", false, "Run prune operation")
 	cmd.Flags().IntVar(&olderThan, "older-than", 0, "Prune logs older than N days")
-	cmd.Flags().BoolVar(&skipConfirm, "yes", false, "Skip confirmation for prune")
+	cmd.Flags().BoolVar(&skipConfirm, "yes", false, "Confirm the prune (required with --prune; the command never prompts)")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 	cmd.Flags().BoolVar(&minOutput, "min", false, "Minimal output format")
 
@@ -1475,22 +1475,13 @@ func runMemoryPrune(ctx context.Context, tracker semantic.MemoryStatsTracker, op
 		return fmt.Errorf("invalid value for --older-than: must be <= 36500 (100 years)")
 	}
 
-	// Confirm deletion
+	// Never prompt (AXI principle 6). A prompt answered "n", or a closed stdin,
+	// used to return nil, so a prune that never ran exited 0.
 	if !opts.skipConfirm {
-		fmt.Printf("This will delete retrieval log entries older than %d days.\n", opts.olderThan)
-		fmt.Print("Are you sure? [y/N]: ")
-
-		var response string
-		_, err := fmt.Scanln(&response)
-		// If stdin is closed/redirected, abort (require explicit --yes for automation)
-		if err != nil {
-			fmt.Println("Aborted (non-interactive input). Use --yes to confirm automatically.")
-			return nil
-		}
-		if strings.ToLower(response) != "y" {
-			fmt.Println("Aborted.")
-			return nil
-		}
+		return withHelp(
+			fmt.Errorf("refusing to prune retrieval log entries older than %d days without --yes: the prune is never confirmed interactively", opts.olderThan),
+			fmt.Sprintf("Run `llm-semantic memory stats --prune --older-than %d --yes` to prune them", opts.olderThan),
+		)
 	}
 
 	count, err := tracker.PruneMemoryRetrievalLog(ctx, opts.olderThan)
