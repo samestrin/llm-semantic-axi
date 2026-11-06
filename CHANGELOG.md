@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-06
+
+First standalone release, extracted from [samestrin/llm-tools](https://github.com/samestrin/llm-tools). Installs with `install-release.sh` (no sudo, no clone, no Go; checksum-verified) or from source with `install.sh`. Support is best effort (see the README).
+
 ### Added
 
 - Token benchmark (`benchmarks/results-tokens.md`): ten fixed searches of this repository at a pinned commit, rendered as `--json`, `--axi` and plain output, with the outputs checked in and counted with a vendored `cl100k_base` tokenizer (an approximation of any given model's tokenizer). `make bench-tokens` re-counts them offline and fails if the file's numbers disagree; `make bench-generate` regenerates the outputs against a local stand-in embedder. On these searches `--axi` prints 28.4% of the tokens `--json` prints, and plain output 15.5%, because plain shows the least of each result. (epic 06)
