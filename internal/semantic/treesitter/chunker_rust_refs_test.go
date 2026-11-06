@@ -131,7 +131,7 @@ func TestRustRefs_RecursionIsOneRuleForBareAndSelf(t *testing.T) {
 	cases := map[string]string{
 		"bare":      "fn f() {\n    f();\n}\n",
 		"self":      "impl C {\n    fn f(&self) {\n        self.f();\n    }\n}\n",
-		"other":     "impl C {\n    fn f(&self) {\n        self.g();\n    }\n}\n",
+		"other":     "impl C {\n    fn f(&self) {\n        self.g();\n    }\n\n    fn g(&self) {}\n}\n",
 		"bareOther": "fn f() {\n    g();\n}\n",
 		"generic":   "fn f() {\n    g::<u8>();\n}\n",
 		"receiver":  "fn f(o: O) {\n    o.g();\n    (self.g)();\n}\n",
@@ -141,6 +141,116 @@ func TestRustRefs_RecursionIsOneRuleForBareAndSelf(t *testing.T) {
 		"other": "f calls:self.g", "bareOther": "f calls:g", "generic": "f calls:g",
 		// Only a self. receiver names a resolvable method.
 		"receiver": "",
+	}
+	for name, src := range cases {
+		if got := strings.Join(rustRefStrings(t, src), ","); got != want[name] {
+			t.Errorf("%s: refs = %q, want %q", name, got, want[name])
+		}
+	}
+}
+
+// rustUnresolvableFixture holds a lone free fn get and, around it, every call
+// form epic 03.2 T2 says must write no edge: a non-self receiver, path calls,
+// macros (one with get() in its arguments), self.get() from an impl with no
+// get of its own, a call in a mod tests body, and f(); self.f(); inside a free
+// fn f. used() is the control that proves edges are stored and resolved at all.
+const rustUnresolvableFixture = `fn get() -> u32 {
+    0
+}
+
+impl Obj {
+    fn run(&self, obj: Obj) {
+        obj.get();
+        Obj::get();
+        Self::get();
+        store::get();
+        get!();
+        println!("{}", get());
+        self.get();
+        used();
+    }
+}
+
+fn used() {}
+
+fn f() {
+    f();
+    self.f();
+}
+
+mod tests {
+    fn t() {
+        get();
+    }
+}
+`
+
+// Defends the epic 03.2 T2 success line: the resolver links a call to the
+// only rs chunk carrying the last-dot name, so obj.get(), Obj::get(),
+// self.get() from an impl without get, or a get() inside a macro or a test
+// mod stored as "get" would all make the free fn get their callee. Each must
+// write no edge, so get has no callers, while run's call to used resolves.
+func TestRustRefs_UnresolvableCallsWriteNoEdge(t *testing.T) {
+	storage, mgr, dir := newRefIndex(t, "rs")
+	writePython(t, dir, "lib.rs", rustUnresolvableFixture)
+	if _, err := mgr.Index(context.Background(), dir, semantic.IndexOptions{}); err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+
+	got := storedRefs(t, storage)
+	want := map[string][]string{
+		"get":   {},
+		"Obj":   {},
+		"run":   {"calls:used"},
+		"used":  {},
+		"f":     {},
+		"tests": {},
+	}
+	for name, edges := range want {
+		if strings.Join(got[name], ",") != strings.Join(edges, ",") {
+			t.Errorf("%s edges = %v, want %v", name, got[name], edges)
+		}
+	}
+	for name, edges := range got {
+		if _, ok := want[name]; !ok {
+			t.Errorf("unexpected chunk %q with edges %v", name, edges)
+		}
+	}
+
+	ctx := context.Background()
+	chunks, err := storage.List(ctx, semantic.ListOptions{})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	ids := map[string]string{}
+	for _, c := range chunks {
+		ids[c.Name] = c.ID
+	}
+	if callers, err := storage.GetCallers(ctx, ids["get"]); err != nil || len(callers) != 0 {
+		t.Errorf("get callers = %+v, err = %v; want none", callers, err)
+	}
+	if callers, err := storage.GetCallers(ctx, ids["used"]); err != nil || len(callers) != 1 || callers[0].ChunkID != ids["run"] {
+		t.Errorf("used callers = %+v, err = %v; want run (the control edge did not resolve)", callers, err)
+	}
+}
+
+// Defends recording self.f only when the caller's own impl or trait holds a
+// method f: the resolver would otherwise link self.f to any lone chunk named
+// f, a free fn or another type's method.
+func TestRustRefs_SelfCallNeedsAMethodInTheCallersContainer(t *testing.T) {
+	cases := map[string]string{
+		"sameImpl":   "impl A {\n    fn f(&self) {\n        self.g();\n    }\n\n    fn g(&self) {}\n}\n",
+		"otherImpl":  "impl A {\n    fn f(&self) {\n        self.g();\n    }\n}\n\nimpl B {\n    fn g(&self) {}\n}\n",
+		"freeFn":     "fn g() {}\n\nimpl A {\n    fn f(&self) {\n        self.g();\n    }\n}\n",
+		"trait":      "trait T {\n    fn f(&self) {\n        self.g();\n    }\n\n    fn g(&self) {}\n}\n",
+		"traitDecl":  "trait T {\n    fn f(&self) {\n        self.g();\n    }\n\n    fn g(&self);\n}\n",
+		"noReceiver": "impl A {\n    fn g(&self) {}\n}\n\nfn f() {\n    self.g();\n}\n",
+	}
+	want := map[string]string{
+		"sameImpl": "f calls:self.g", "trait": "f calls:self.g",
+		"otherImpl": "", "freeFn": "", "noReceiver": "",
+		// A declaration without a body is not a chunk, so nothing holds g.
+		"traitDecl": "",
 	}
 	for name, src := range cases {
 		if got := strings.Join(rustRefStrings(t, src), ","); got != want[name] {
