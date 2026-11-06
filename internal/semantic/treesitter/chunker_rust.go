@@ -1,6 +1,8 @@
 package treesitter
 
 import (
+	"strings"
+
 	"github.com/odvcencio/gotreesitter"
 	"github.com/odvcencio/gotreesitter/grammars"
 	"github.com/samestrin/llm-semantic-axi/internal/semantic"
@@ -189,8 +191,11 @@ var _ semantic.RefExtractor = (*RustChunker)(nil)
 // everything they call, and a call in an impl const has no function to belong
 // to. A call no function holds (a static or const initialiser, the body of an
 // inline mod, a fallback text window) writes no edge. A call is recorded for a
-// bare name (helper(), helper::<T>()) and a self. receiver (self.save());
-// other forms name nothing the index can resolve.
+// bare name (helper(), helper::<T>()) and for a self. receiver (self.save())
+// whose method the caller's own impl or trait defines. Other receivers
+// (obj.get()), path calls (Foo::new(), Self::f()) and macros write no edge:
+// the resolver links on the last name alone, so they would link to whatever
+// lone chunk shares that name.
 //
 // A use inside a function belongs to it; a top-level one to the file's first
 // chunk, as in GoChunker. A use inside an inline mod or a text window (both
@@ -225,6 +230,9 @@ func (c *RustChunker) walkRefs(node *gotreesitter.Node, content []byte, owners, 
 		case "call_expression":
 			id := innermostChunk(owners, nodeLine(child))
 			name := c.callName(child, content)
+			if strings.HasPrefix(name, "self.") && !containerHasMethod(owners, id, bareName(name)) {
+				name = ""
+			}
 			if name != "" && isFunctionChunk(owners, id) && bareName(name) != chunkName(owners, id) {
 				*refs = append(*refs, semantic.ChunkRef{ChunkID: id, RefType: semantic.RefCalls, RefName: name})
 			}
@@ -252,6 +260,47 @@ func isFunctionChunk(chunks []semantic.Chunk, id string) bool {
 	for _, ch := range chunks {
 		if ch.ID == id {
 			return ch.Type == semantic.ChunkFunction || ch.Type == semantic.ChunkMethod
+		}
+	}
+	return false
+}
+
+// containerHasMethod reports whether the impl or trait chunk around the method
+// with this ID also holds a method chunk named name. The resolver links
+// self.name to any lone rs chunk called name, so a self. call is only worth
+// recording when the caller's own container defines it. A free function has
+// no container and so no self. call.
+func containerHasMethod(chunks []semantic.Chunk, id, name string) bool {
+	var caller *semantic.Chunk
+	for i := range chunks {
+		if chunks[i].ID == id {
+			caller = &chunks[i]
+			break
+		}
+	}
+	if caller == nil || caller.Type != semantic.ChunkMethod {
+		return false
+	}
+	var container *semantic.Chunk
+	for i := range chunks {
+		ch := &chunks[i]
+		if ch.Type != semantic.ChunkStruct && ch.Type != semantic.ChunkInterface {
+			continue
+		}
+		if ch.StartLine > caller.StartLine || ch.EndLine < caller.EndLine {
+			continue
+		}
+		if container == nil || ch.EndLine-ch.StartLine < container.EndLine-container.StartLine {
+			container = ch
+		}
+	}
+	if container == nil {
+		return false
+	}
+	for _, ch := range chunks {
+		if ch.Type == semantic.ChunkMethod && ch.Name == name &&
+			ch.StartLine >= container.StartLine && ch.EndLine <= container.EndLine {
+			return true
 		}
 	}
 	return false
