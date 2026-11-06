@@ -380,3 +380,110 @@ export function onResize() {
 		t.Errorf("refs from onResize lacks the imports debounce edge:\n%s", out)
 	}
 }
+
+// rustCallSource has two plain functions and a method that calls a sibling
+// through self. Names are distinct from every other fixture so attribution is
+// unique.
+const rustCallSource = `fn rs_helper() -> i32 {
+    1
+}
+
+fn rs_run() -> i32 {
+    rs_helper()
+}
+
+struct RsService;
+
+impl RsService {
+    fn rs_start(&self) -> i32 {
+        self.rs_stop()
+    }
+
+    fn rs_stop(&self) -> i32 {
+        rs_helper()
+    }
+}
+`
+
+// rustWorkspace indexes rustCallSource through the real index.
+func rustWorkspace(t *testing.T) {
+	t.Helper()
+	dir := newWorkspace(t)
+	useEmbedder(t, newFakeEmbedder(t))
+	writeFile(t, filepath.Join(dir, "sample.rs"), rustCallSource)
+	runIndexIn(t, ".", indexOpts{skipCalibration: true})
+}
+
+// TestCallersAndRefsAnswerForRust defends against the regression where Rust
+// indexed with no edges, so callers and refs answered empty for it. The answer
+// must name the real callers (including the self.f one) and real references.
+func TestCallersAndRefsAnswerForRust(t *testing.T) {
+	rustWorkspace(t)
+
+	callers := captureStdout(t, func() {
+		if err := runCallers(context.Background(), "rs_helper", false, false); err != nil {
+			t.Fatalf("runCallers: %v", err)
+		}
+	})
+	for _, want := range []string{"2 caller(s) of rs_helper", "sample.rs", "rs_run", "rs_stop"} {
+		if !strings.Contains(callers, want) {
+			t.Errorf("callers of rs_helper lacks %q:\n%s", want, callers)
+		}
+	}
+
+	selfCallers := captureStdout(t, func() {
+		if err := runCallers(context.Background(), "rs_stop", false, false); err != nil {
+			t.Fatalf("runCallers: %v", err)
+		}
+	})
+	for _, want := range []string{"1 caller(s) of rs_stop", "rs_start"} {
+		if !strings.Contains(selfCallers, want) {
+			t.Errorf("callers of rs_stop lacks %q:\n%s", want, selfCallers)
+		}
+	}
+
+	refs := captureStdout(t, func() {
+		if err := runRefs(context.Background(), "rs_run", false, false); err != nil {
+			t.Fatalf("runRefs: %v", err)
+		}
+	})
+	if !strings.Contains(refs, "rs_helper") || strings.Contains(refs, "not indexed for edges") {
+		t.Errorf("refs from rs_run does not list rs_helper:\n%s", refs)
+	}
+}
+
+// TestCallersOfAPreRustEdgeIndexIsNotIndexedForEdges defends the distinction
+// between "no callers" and "never recorded": an index built before Rust call
+// edges existed holds the chunks but no chunk_refs rows, and must say so rather
+// than report none.
+func TestCallersOfAPreRustEdgeIndexIsNotIndexedForEdges(t *testing.T) {
+	rustWorkspace(t)
+
+	db, err := sql.Open("sqlite", filepath.Join(".index", "semantic.db"))
+	if err != nil {
+		t.Fatalf("open index: %v", err)
+	}
+	res, err := db.Exec("DELETE FROM chunk_refs")
+	if err != nil {
+		t.Fatalf("clear edges: %v", err)
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		t.Fatal("the fixture stored no edges to clear, so the test proves nothing")
+	}
+	db.Close()
+	withAXI(t)
+
+	for name, run := range map[string]func() error{
+		"callers": func() error { return runCallers(context.Background(), "rs_helper", false, false) },
+		"refs":    func() error { return runRefs(context.Background(), "rs_run", false, false) },
+	} {
+		out := captureStdout(t, func() {
+			if err := run(); err != nil {
+				t.Fatalf("%s: %v", name, err)
+			}
+		})
+		if !strings.Contains(out, "status: not_indexed_for_edges\n") {
+			t.Errorf("%s over an edgeless Rust index lacks not_indexed_for_edges:\n%s", name, out)
+		}
+	}
+}
