@@ -1,0 +1,42 @@
+10 results for "how does the MCP server run the CLI"
+
+1. /work/llm-semantic-axi/cmd/llm-semantic-mcp/main.go:80 - run (function) [MEDIUM]
+   Score: 0.4275
+   func run(ctx context.Context, in io.ReadCloser, out io.WriteCloser, stderr io.Writer) int
+
+2. /work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go:65 - server (struct) [MEDIUM]
+   Score: 0.4102
+   type server
+
+3. /work/llm-semantic-axi/VISION.md:17 - VISION > Vision > The CLI is the product (file) [MEDIUM]
+   Score: 0.3522
+   ## The CLI is the product  `llm-semantic` is the primary surface. The MCP server shells out to the CLI, and it is a fallback for hosts that cannot run...
+
+4. /work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go:175 - TestServer_ReportsTheStampedVersion (function) [MEDIUM]
+   Score: 0.3496
+   func TestServer_ReportsTheStampedVersion(t *testing.T)
+
+5. /work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go:49 - fakeCLI (function) [MEDIUM]
+   Score: 0.3348
+   func fakeCLI(t *testing.T, payload string)
+
+6. /work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go:117 - startServer (function) [LOW]
+   Score: 0.3126
+   func startServer(t *testing.T) *server
+
+7. /work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go:303 - TestServer_ClientDisconnectIsACleanExit (function) [LOW]
+   Score: 0.3112
+   func TestServer_ClientDisconnectIsACleanExit(t *testing.T)
+
+8. /work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go:349 - TestServer_HangUpBeforeTheReplyIsACleanExit (function) [LOW]
+   Score: 0.3046
+   func TestServer_HangUpBeforeTheReplyIsACleanExit(t *testing.T)
+
+9. /work/llm-semantic-axi/cmd/llm-semantic-mcp/main.go:21 - serverInstructions (function) [LOW]
+   Score: 0.3013
+   func serverInstructions(toolCount int) string
+
+10. /work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go:331 - TestServer_ClosedInputIsACleanExit (function) [LOW]
+   Score: 0.2970
+   func TestServer_ClosedInputIsACleanExit(t *testing.T)
+

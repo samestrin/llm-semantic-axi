@@ -1,0 +1,13 @@
+# Fixed query list for the token benchmark. One query per line; the line
+# number among non-comment lines is the output file number (q01, q02, ...).
+# Changing this list means regenerating the outputs (make bench-generate).
+where is the retry logic for embedding requests
+how does the index decide a file needs re-indexing
+where are call edges extracted from Go source
+how is TOON output encoded
+how are dense and lexical search results fused
+where is the sqlite schema created
+how does the lock file stop two indexers running at once
+how are memory entries stored and searched
+how does the MCP server run the CLI
+where are the tree-sitter chunkers registered

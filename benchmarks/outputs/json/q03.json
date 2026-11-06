@@ -1,0 +1,172 @@
+[
+  {
+    "chunk": {
+      "id": "5ba9021516c2ff71",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/chunker_go.go",
+      "type": "function",
+      "name": "NewGoChunker",
+      "signature": "func NewGoChunker() *GoChunker",
+      "content": "// NewGoChunker creates a new Go AST-based chunker\nfunc NewGoChunker() *GoChunker {\n\treturn \u0026GoChunker{}\n}",
+      "start_line": 16,
+      "end_line": 19,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.35370642,
+    "relevance": "medium",
+    "preview": "func NewGoChunker() *GoChunker"
+  },
+  {
+    "chunk": {
+      "id": "508af5c66f2b9fd4",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/chunker_go.go",
+      "type": "struct",
+      "name": "GoChunker",
+      "signature": "type GoChunker",
+      "content": "// GoChunker implements the Chunker interface for Go source code\ntype GoChunker struct{}",
+      "start_line": 13,
+      "end_line": 14,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.33873445,
+    "relevance": "medium",
+    "preview": "type GoChunker"
+  },
+  {
+    "chunk": {
+      "id": "4ec8ddd2576ada22",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/treesitter/refs_javascript_test.go",
+      "type": "function",
+      "name": "TestJSRefs_OneLineClassAttributesTheCallToTheMethod",
+      "signature": "func TestJSRefs_OneLineClassAttributesTheCallToTheMethod(t *testing.T)",
+      "content": "// Defends \"a class does not call what its methods call\" where line ranges\n// alone cannot tell them apart: on one line, the class and its method span\n// the same lines, and the call must still go to the method.\nfunc TestJSRefs_OneLineClassAttributesTheCallToTheMethod(t *testing.T) {\n\tassertRows(t, refRows(t, \"a.js\", \"class A { m() { go(); } }\\n\"), \"m calls go\")\n}",
+      "start_line": 54,
+      "end_line": 59,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.3010593,
+    "relevance": "low",
+    "preview": "func TestJSRefs_OneLineClassAttributesTheCallToTheMethod(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "dd54ba6e73b972f5",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/refs_go.go",
+      "type": "function",
+      "name": "extractCallName",
+      "signature": "func extractCallName(call *ast.CallExpr) string",
+      "content": "// extractCallName extracts the function/method name from a call expression.\nfunc extractCallName(call *ast.CallExpr) string {\n\tswitch fn := call.Fun.(type) {\n\tcase *ast.Ident:\n\t\treturn fn.Name\n\tcase *ast.SelectorExpr:\n\t\tif ident, ok := fn.X.(*ast.Ident); ok {\n\t\t\treturn ident.Name + \".\" + fn.Sel.Name\n\t\t}\n\t\treturn fn.Sel.Name\n\t}\n\treturn \"\"\n}",
+      "start_line": 94,
+      "end_line": 106,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.29768336,
+    "relevance": "low",
+    "preview": "func extractCallName(call *ast.CallExpr) string"
+  },
+  {
+    "chunk": {
+      "id": "297314fcd2d39166",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/commands/zero_result_behaviour_test.go",
+      "type": "function",
+      "name": "mixedWorkspace",
+      "signature": "func mixedWorkspace(t *testing.T)",
+      "content": "// mixedWorkspace indexes a Go file with call edges and a Ruby file without.\nfunc mixedWorkspace(t *testing.T) {\n\tt.Helper()\n\tdir := newWorkspace(t)\n\tuseEmbedder(t, newFakeEmbedder(t))\n\twriteFile(t, filepath.Join(dir, \"sample.go\"), callGraphSource)\n\twriteFile(t, filepath.Join(dir, \"auth.rb\"), rubySource)\n\tcaptureStdout(t, func() {\n\t\tif err := runIndex(context.Background(), \".\", indexOpts{skipCalibration: true}); err != nil {\n\t\t\tt.Fatalf(\"runIndex: %v\", err)\n\t\t}\n\t})\n}",
+      "start_line": 276,
+      "end_line": 288,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.29401532,
+    "relevance": "low",
+    "preview": "func mixedWorkspace(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "2c5638aa883e493d",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/index_manager_git_batch_test.go",
+      "type": "function",
+      "name": "goSource",
+      "signature": "func goSource(fnName string) []byte",
+      "content": "// goSource returns a small compilable Go file with one function of the given name.\nfunc goSource(fnName string) []byte {\n\treturn []byte(\"package sample\\n\\nfunc \" + fnName + \"(a, b int) int {\\n\\treturn a + b\\n}\\n\")\n}",
+      "start_line": 15,
+      "end_line": 18,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.29123315,
+    "relevance": "low",
+    "preview": "func goSource(fnName string) []byte"
+  },
+  {
+    "chunk": {
+      "id": "f89da17acf16f6b1",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/treesitter/chunker_python_refs_test.go",
+      "type": "function",
+      "name": "TestPythonRefs_IndexedThroughTheRegisteredChunker",
+      "signature": "func TestPythonRefs_IndexedThroughTheRegisteredChunker(t *testing.T)",
+      "content": "// Defends the epic 03 T1 success line: Python files indexed the way the CLI\n// indexes them get call and import edges. Before T1 the Fallback wrapper hid\n// any RefExtractor, so even a PythonChunker that extracted refs would have\n// stored none. It also pins two ways copying GoChunker would go wrong for\n// Python: an attribute access is not a type use, so no uses_type row; and a\n// class chunk spans its methods, so attributing by line range alone would\n// make Repo a caller of everything get and make call.\nfunc TestPythonRefs_IndexedThroughTheRegisteredChunker(t *testing.T) {\n\tstorage, mgr, dir := newPythonIndex(t)\n\twritePython(t, dir, \"repo.py\", pythonRefsFixture)\n\tif _, err := mgr.Index(context.Background(), dir, semantic.IndexOptions{}); err != nil {\n\t\tt.Fatalf(\"Index: %v\", err)\n\t}\n\n\tgot := storedRefs(t, storage)\n\twant := map[string][]string{\n\t\t// Top-level imports go to the file's first chunk, as GoChunker does.\n\t\t\"top\":       {\"calls:helper\", \"calls:load\", \"imports:load\", \"imports:path\", \"imports:save\"},\n\t\t\"decorated\": {\"calls:helper\", \"calls:register\"},\n\t\t\"Repo\":      {},\n\t\t\"get\":       {\"calls:helper\", \"calls:self.fetch\"},\n\t\t\"make\":      {\"calls:cls.build\"},\n\t\t// A call to itself is not an edge, as in GoChunker.\n\t\t\"helper\": {},\n\t}\n\tfor name, edges := range want {\n\t\tif strings.Join(got[name], \",\") != strings.Join(edges, \",\") {\n\t\t\tt.Errorf(\"%s edges = %v, want %v\", name, got[name], edges)\n\t\t}\n\t}\n\tfor name, edges := range got {\n\t\tif _, ok := want[name]; !ok {\n\t\t\tt.Errorf(\"unexpected chunk %q with edges %v\", name, edges)\n\t\t}\n\t\tfor _, e := range edges {\n\t\t\tif strings.HasPrefix(e, string(semantic.RefUsesType)+\":\") {\n\t\t\t\tt.Errorf(\"%s has a uses_type edge %q; a Python attribute access is not a type use\", name, e)\n\t\t\t}\n\t\t}\n\t}\n}",
+      "start_line": 110,
+      "end_line": 150,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.28862545,
+    "relevance": "low",
+    "preview": "func TestPythonRefs_IndexedThroughTheRegisteredChunker(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "585486882003de48",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/commands/refs_behaviour_test.go",
+      "type": "function",
+      "name": "callGraphWorkspace",
+      "signature": "func callGraphWorkspace(t *testing.T)",
+      "content": "// callGraphWorkspace indexes a file whose call edges the Go chunker records.\nfunc callGraphWorkspace(t *testing.T) {\n\tt.Helper()\n\tdir := newWorkspace(t)\n\tuseEmbedder(t, newFakeEmbedder(t))\n\twriteFile(t, filepath.Join(dir, \"sample.go\"), callGraphSource)\n\tcaptureStdout(t, func() {\n\t\tif err := runIndex(context.Background(), \".\", indexOpts{skipCalibration: true}); err != nil {\n\t\t\tt.Fatalf(\"runIndex: %v\", err)\n\t\t}\n\t})\n}",
+      "start_line": 24,
+      "end_line": 35,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.27371994,
+    "relevance": "low",
+    "preview": "func callGraphWorkspace(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "31e70a537510c655",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/chunker_go_test.go",
+      "type": "function",
+      "name": "TestGoChunker_SupportedExtensions",
+      "signature": "func TestGoChunker_SupportedExtensions(t *testing.T)",
+      "content": "func TestGoChunker_SupportedExtensions(t *testing.T) {\n\tchunker := NewGoChunker()\n\n\texts := chunker.SupportedExtensions()\n\n\tif len(exts) == 0 {\n\t\tt.Error(\"SupportedExtensions() should return at least one extension\")\n\t}\n\n\tfoundGo := false\n\tfor _, ext := range exts {\n\t\tif ext == \"go\" {\n\t\t\tfoundGo = true\n\t\t\tbreak\n\t\t}\n\t}\n\n\tif !foundGo {\n\t\tt.Error(\"SupportedExtensions() should include 'go'\")\n\t}\n}",
+      "start_line": 258,
+      "end_line": 278,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.26344737,
+    "relevance": "low",
+    "preview": "func TestGoChunker_SupportedExtensions(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "e01e054d70159b94",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/commands/refs.go",
+      "type": "function",
+      "name": "diagnoseZeroEdges",
+      "signature": "func diagnoseZeroEdges(ctx context.Context, rs semantic.RefStorage, symbol, noun string, count int) (*zeroEdges, error)",
+      "content": "// diagnoseZeroEdges looks up the chunks named symbol when an answer came back\n// empty, and returns nil when it did not. noun reads \"callers of\" or\n// \"references from\".\nfunc diagnoseZeroEdges(ctx context.Context, rs semantic.RefStorage, symbol, noun string, count int) (*zeroEdges, error) {\n\tif count \u003e 0 {\n\t\treturn nil, nil\n\t}\n\n\tlangs, err := rs.SymbolLanguages(ctx, symbol)\n\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"failed to look up %s: %w\", symbol, err)\n\t}\n\tif len(langs) == 0 {\n\t\treturn \u0026zeroEdges{\n\t\t\tStatus:  zeroSymbolNotIndexed,\n\t\t\tMessage: fmt.Sprintf(\"No %s %s: symbol not indexed, no chunk is named %s\", noun, symbol, symbol),\n\t\t}, nil\n\t}\n\n\tvar withEdges, without []string\n\tfor _, l := range langs {\n\t\tname := l.Language\n\t\tif name == \"\" {\n\t\t\tname = \"unknown language\"\n\t\t}\n\t\tif l.HasEdges {\n\t\t\twithEdges = append(withEdges, name)\n\t\t} else {\n\t\t\twithout = append(without, name)\n\t\t}\n\t}\n\n\tif len(withEdges) == 0 {\n\t\treturn \u0026zeroEdges{\n\t\t\tStatus: zeroNotIndexedForEdges,\n\t\t\tMessage: fmt.Sprintf(\"No %s %s: not indexed for edges (%s is indexed as %s, and the index records no edges for it), so this does not mean none exist\",\n\t\t\t\tnoun, symbol, symbol, strings.Join(without, \", \")),\n\t\t}, nil\n\t}\n\n\tmsg := fmt.Sprintf(\"No %s %s recorded in the call graph\", noun, symbol)\n\tif len(without) \u003e 0 {\n\t\tmsg += fmt.Sprintf(\"; its %s chunks are not indexed for edges\", strings.Join(without, \", \"))\n\t}\n\treturn \u0026zeroEdges{Status: zeroNoneRecorded, Message: msg}, nil\n}",
+      "start_line": 148,
+      "end_line": 193,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.26143116,
+    "relevance": "low",
+    "preview": "func diagnoseZeroEdges(ctx context.Context, rs semantic.RefStorage, symbol, noun string, count int) (*zeroEdges, error)"
+  }
+]

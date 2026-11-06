@@ -1,0 +1,20 @@
+help[2]: Run `llm-semantic callers <name>` or `llm-semantic refs <name>` on a result to see its call sites (Go only),"Narrow with `--path <prefix>` or `--type <kind>`, or raise `--top` for more results"
+query: how does the index decide a file needs re-indexing
+results[10]{content,file,name,score}:
+  "// fileNeedsUpdate checks if a file has been modified since indexing. It errors when the\n// file cannot be read or its stored hash cannot be fetched; callers count the file failed.\nfunc (m *IndexManag… (732 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/index_manager.go:1314",fileNeedsUpdate,0.4070401
+  "// indexPerFile processes files one at a time (original behavior)\nfunc (m *IndexManager) indexPerFile(ctx context.Context, files []string, opts IndexOptions, result *IndexResult) (*IndexResult, error)… (1622 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/index_manager.go:263",indexPerFile,0.33830345
+  "// IndexLock provides cross-process file locking for index operations.\n// Prevents concurrent index/index-update processes from corrupting shared state.\ntype IndexLock struct {\n\tflock *flock.Flock\n\tpa… (12 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/lockfile.go:13",IndexLock,0.3325644
+  "func (s *hashErrStorage) GetFileHash(ctx context.Context, filePath string) (string, error) {\n\treturn \"\", s.err\n}","/work/llm-semantic-axi/internal/semantic/index_manager_git_batch_test.go:523",GetFileHash,0.31688863
+  "// resolveFTSDataDir returns the directory holding a Qdrant collection's\n// parallel index, which carries its lexical index and its call graph.\n//\n// Qdrant keeps no local index file of its own, so th… (542 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/commands/index.go:482",resolveFTSDataDir,0.28690952
+  "// recordLastIndex stores last. A backend that cannot record it is not a failure: the\n// record stays unreadable, so the staleness check reports \"unknown\" rather than a value.\nfunc (m *IndexManager) r… (251 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/index_manager.go:253",recordLastIndex,0.2834243
+  "// TestIndexManager_LastIndexWriteFailureMessage defends against Index's error claiming\n// \"index updated\" when it is returned: the caller reads that as success with a footnote.\nfunc TestIndexManager_… (681 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/index_manager_git_batch_test.go:615",TestIndexManager_LastIndexWriteFailureMessage,0.27877152
+  "// TestIndexManager_FileFailureLeavesLastIndex defends against an index with files that\n// failed to embed recording HEAD: a later search would then report the index fresh when\n// part of it is missin… (2609 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/last_index_test.go:357",TestIndexManager_FileFailureLeavesLastIndex,0.27646017
+  "// TestFindIndexPathFallsBackToDotIndex covers priority 2, which is what every\n// default invocation actually uses.\nfunc TestFindIndexPathFallsBackToDotIndex(t *testing.T) {\n\tdir := newWorkspace(t)\n\tw… (231 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/commands/search_behaviour_test.go:336",TestFindIndexPathFallsBackToDotIndex,0.27496335
+  "### Fixed\n\n- `index-update` (both `--no-git` and git paths) counts a file it could not process as skipped and names it with its error, in the text output and in `--json`/`--axi` (`files_skipped`, `err… (3446 more chars, use --full for all)","/work/llm-semantic-axi/CHANGELOG.md:49","CHANGELOG > Changelog > [Unreleased] > Fixed",0.26635942
+stale:
+  commits_behind: 0
+  files_changed: 0
+  indexed_at: "2026-11-05T22:28:38Z"
+  indexed_commit: 573311bad7007b55c009ec0d8746244a94038fc4
+  state: fresh
+total: 10

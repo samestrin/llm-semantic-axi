@@ -1,0 +1,172 @@
+[
+  {
+    "chunk": {
+      "id": "f6bd9482a3760133",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/fusion.go",
+      "type": "function",
+      "name": "FuseRRF",
+      "signature": "func FuseRRF(denseResults, lexicalResults []SearchResult, k int) []SearchResult",
+      "content": "// FuseRRF combines dense and lexical search results using Reciprocal Rank Fusion.\n// The formula is: score = sum(1 / (k + rank)) for each result list.\n// Parameter k controls the smoothing - larger k reduces the impact of rank differences.\n// Default k=60 is commonly used in literature.\n// Returns results sorted by fused score in descending order.\nfunc FuseRRF(denseResults, lexicalResults []SearchResult, k int) []SearchResult {\n\tresults, _ := FuseRRFWithError(denseResults, lexicalResults, k)\n\treturn results\n}",
+      "start_line": 8,
+      "end_line": 16,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.556128,
+    "relevance": "high",
+    "preview": "func FuseRRF(denseResults, lexicalResults []SearchResult, k int) []SearchResult"
+  },
+  {
+    "chunk": {
+      "id": "9abe9abb6465e78c",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/search.go",
+      "type": "method",
+      "name": "HybridSearch",
+      "signature": "func (s *Searcher) HybridSearch(ctx context.Context, query string, opts HybridSearchOptions) ([]SearchResult, error)",
+      "content": "// HybridSearch performs combined dense (vector) and lexical (FTS5) search.\n// Results are fused using Reciprocal Rank Fusion (RRF) for improved recall.\n// Returns an error if the storage doesn't support lexical search.\nfunc (s *Searcher) HybridSearch(ctx context.Context, query string, opts HybridSearchOptions) ([]SearchResult, error) {\n\tif query == \"\" {\n\t\treturn nil, errors.New(\"query cannot be empty\")\n\t}\n\tif opts.Threshold \u003c 0 || opts.Threshold \u003e 1 {\n\t\treturn nil, errors.New(\"threshold must be between 0.0 and 1.0\")\n\t}\n\tif opts.TopK \u003c 0 {\n\t\treturn nil, errors.New(\"topK must be non-negative\")\n\t}\n\n\t// Check if storage supports lexical search\n\tlexicalSearcher, ok := s.storage.(LexicalSearcher)\n\tif !ok {\n\t\treturn nil, errors.New(\"hybrid search requires storage with lexical search support\")\n\t}\n\n\t// Set defaults\n\tk := opts.FusionK\n\tif k \u003c= 0 {\n\t\tk = 60\n\t}\n\talpha := opts.FusionAlpha\n\tif alpha == 0 {\n\t\talpha = 0.7 // Default when not specified; alpha=0 (lexical-only) is still achievable via explicit negative\n\t}\n\n\t// Perform dense (vector) search\n\tqueryEmbedding, err := s.embedder.Embed(ctx, query)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\n\tdenseResults, err := s.storage.Search(ctx, queryEmbedding, opts.SearchOptions)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\n\t// Perform lexical search\n\tlexicalOpts := LexicalSearchOptions{\n\t\tTopK:       opts.TopK,\n\t\tType:       opts.Type,\n\t\tPathFilter: opts.PathFilter,\n\t}\n\tlexicalResults, err := lexicalSearcher.LexicalSearch(ctx, query, lexicalOpts)\n\tif err != nil {\n\t\t// Log and fall back to dense-only search\n\t\tslog.Warn(\"lexical search failed, falling back to dense-only\", \"error\", err)\n\t\treturn denseResults, nil\n\t}\n\n\t// Fuse results\n\tvar results []SearchResult\n\tif opts.UseWeighted {\n\t\tresults, err = FuseWeighted(denseResults, lexicalResults, alpha)\n\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t} else {\n\t\tresults = FuseRRF(denseResults, lexicalResults, k)\n\t}\n\n\t// Apply TopK limit\n\tif opts.TopK \u003e 0 \u0026\u0026 len(results) \u003e opts.TopK {\n\t\tresults = results[:opts.TopK]\n\t}\n\n\t// Apply relevance labels\n\ts.applyRelevanceLabels(ctx, results)\n\n\treturn results, nil\n}",
+      "start_line": 177,
+      "end_line": 251,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.5530629,
+    "relevance": "high",
+    "preview": "func (s *Searcher) HybridSearch(ctx context.Context, query string, opts HybridSearchOptions) ([]SearchResult, error)"
+  },
+  {
+    "chunk": {
+      "id": "f2a3adcc7c581378",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/storage.go",
+      "type": "interface",
+      "name": "LexicalSearcher",
+      "signature": "type LexicalSearcher",
+      "content": "// LexicalSearcher is an optional interface for storage backends that support\n// full-text search. Backends implementing this interface can be used with\n// hybrid search (dense + lexical fusion).\ntype LexicalSearcher interface {\n\t// LexicalSearch performs full-text search using FTS5.\n\t// Returns results ranked by BM25 relevance score.\n\tLexicalSearch(ctx context.Context, query string, opts LexicalSearchOptions) ([]SearchResult, error)\n}",
+      "start_line": 68,
+      "end_line": 75,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.52613366,
+    "relevance": "high",
+    "preview": "type LexicalSearcher"
+  },
+  {
+    "chunk": {
+      "id": "934ade8bb689e154",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/hybrid_overlap_extra_test.go",
+      "type": "function",
+      "name": "TestHybridSearch_FusesDenseAndLexical",
+      "signature": "func TestHybridSearch_FusesDenseAndLexical(t *testing.T)",
+      "content": "// TestHybridSearch_FusesDenseAndLexical pins that hybrid search returns the union of the\n// dense and lexical hits: a chunk only the FTS5 stage can find still reaches the caller.\nfunc TestHybridSearch_FusesDenseAndLexical(t *testing.T) {\n\tstorage := prefilterFixture(t)\n\t// Query vector aligns with chunk a only; \"lever\" is lexical-only and hits chunk b.\n\tembedder := \u0026tableEmbedder{fallback: []float32{1, 0, 0, 0}}\n\tsearcher := NewSearcher(storage, embedder)\n\n\tresults, err := searcher.HybridSearch(context.Background(), \"lever\", HybridSearchOptions{\n\t\tSearchOptions: SearchOptions{TopK: 10, Threshold: 0.5},\n\t})\n\tif err != nil {\n\t\tt.Fatalf(\"HybridSearch() error = %v\", err)\n\t}\n\n\tgot := map[string]bool{}\n\tfor _, r := range results {\n\t\tgot[r.Chunk.ID] = true\n\t}\n\tif !got[\"a\"] {\n\t\tt.Error(\"chunk a (the dense hit) is missing from the fused results\")\n\t}\n\tif !got[\"b\"] {\n\t\tt.Error(\"chunk b (the lexical-only hit for \\\"lever\\\") is missing from the fused results\")\n\t}\n\tif len(results) != 2 {\n\t\tt.Errorf(\"fused results = %v, want exactly a and b\", ids(results))\n\t}\n\tif results[0].Preview == \"\" {\n\t\tt.Error(\"hybrid results should carry previews from applyRelevanceLabels\")\n\t}\n}",
+      "start_line": 69,
+      "end_line": 100,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.5220393,
+    "relevance": "high",
+    "preview": "func TestHybridSearch_FusesDenseAndLexical(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "508e3432ac6f3d0e",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/fusion_test.go",
+      "type": "function",
+      "name": "TestRRFusion_EmptyDense",
+      "signature": "func TestRRFusion_EmptyDense(t *testing.T)",
+      "content": "// TestRRFusion_EmptyDense verifies handling when dense search returns no results.\nfunc TestRRFusion_EmptyDense(t *testing.T) {\n\tdenseResults := []SearchResult{} // empty\n\tlexicalResults := makeTestResults(\"A\", \"B\", \"C\")\n\n\tresults := FuseRRF(denseResults, lexicalResults, 60)\n\n\tif len(results) != 3 {\n\t\tt.Errorf(\"expected 3 results from lexical-only, got %d\", len(results))\n\t}\n\n\t// Results should be from lexical with adjusted RRF scores\n\tfor i, r := range results {\n\t\tif r.Score \u003c= 0 {\n\t\t\tt.Errorf(\"result %d should have positive score, got %f\", i, r.Score)\n\t\t}\n\t}\n\n\t// Order should be preserved (A, B, C)\n\tif results[0].Chunk.ID != \"A\" {\n\t\tt.Errorf(\"expected A first, got %s\", results[0].Chunk.ID)\n\t}\n}",
+      "start_line": 90,
+      "end_line": 112,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.52139515,
+    "relevance": "high",
+    "preview": "func TestRRFusion_EmptyDense(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "14eeb01cbdee95b2",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/fusion.go",
+      "type": "function",
+      "name": "FuseRRFMemoryWithTopK",
+      "signature": "func FuseRRFMemoryWithTopK(denseResults, lexicalResults []MemorySearchResult, k int, topK int) []MemorySearchResult",
+      "content": "// FuseRRFMemoryWithTopK is FuseRRFMemory with a result count limit.\nfunc FuseRRFMemoryWithTopK(denseResults, lexicalResults []MemorySearchResult, k int, topK int) []MemorySearchResult {\n\tresults := FuseRRFMemory(denseResults, lexicalResults, k)\n\tif topK \u003e 0 \u0026\u0026 len(results) \u003e topK {\n\t\tresults = results[:topK]\n\t}\n\treturn results\n}",
+      "start_line": 200,
+      "end_line": 207,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.49671578,
+    "relevance": "high",
+    "preview": "func FuseRRFMemoryWithTopK(denseResults, lexicalResults []MemorySearchResult, k int, topK int) []MemorySearchResult"
+  },
+  {
+    "chunk": {
+      "id": "8725bed43f81436f",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/fusion.go",
+      "type": "function",
+      "name": "FuseRRFWithTopK",
+      "signature": "func FuseRRFWithTopK(denseResults, lexicalResults []SearchResult, k int, topK int) []SearchResult",
+      "content": "// FuseRRFWithTopK combines results using RRF and limits to top K results.\n// If topK is 0 or negative, all results are returned.\nfunc FuseRRFWithTopK(denseResults, lexicalResults []SearchResult, k int, topK int) []SearchResult {\n\tresults := FuseRRF(denseResults, lexicalResults, k)\n\tif topK \u003e 0 \u0026\u0026 len(results) \u003e topK {\n\t\tresults = results[:topK]\n\t}\n\treturn results\n}",
+      "start_line": 76,
+      "end_line": 84,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.48989794,
+    "relevance": "high",
+    "preview": "func FuseRRFWithTopK(denseResults, lexicalResults []SearchResult, k int, topK int) []SearchResult"
+  },
+  {
+    "chunk": {
+      "id": "bae7cf9d27a208ec",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/fts_sqlite_rebuild_test.go",
+      "type": "function",
+      "name": "TestSafeLexicalSearch_EscapesOperators",
+      "signature": "func TestSafeLexicalSearch_EscapesOperators(t *testing.T)",
+      "content": "// TestSafeLexicalSearch_EscapesOperators pins the difference between the raw and the safe\n// entry points: a query containing an FTS5 operator character is a syntax error through\n// LexicalSearch but is treated as literal text through SafeLexicalSearch.\nfunc TestSafeLexicalSearch_EscapesOperators(t *testing.T) {\n\tstorage := ftsFixture(t)\n\tctx := context.Background()\n\n\tif _, err := storage.LexicalSearch(ctx, `spinner\"`, LexicalSearchOptions{TopK: 5}); err == nil {\n\t\tt.Fatal(\"LexicalSearch() with an unbalanced quote should fail\")\n\t}\n\n\tresults, err := storage.SafeLexicalSearch(ctx, `spinner\"`, LexicalSearchOptions{TopK: 5})\n\tif err != nil {\n\t\tt.Fatalf(\"SafeLexicalSearch() should escape the quote, got %v\", err)\n\t}\n\tif len(results) != 1 || results[0].Chunk.ID != \"a\" {\n\t\tt.Errorf(\"SafeLexicalSearch() = %v, want chunk a\", ids(results))\n\t}\n}",
+      "start_line": 103,
+      "end_line": 121,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.48730588,
+    "relevance": "high",
+    "preview": "func TestSafeLexicalSearch_EscapesOperators(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "917d5e9d0e1f4f62",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/hybrid_overlap_extra_test.go",
+      "type": "function",
+      "name": "TestHybridSearch_FallsBackOnLexicalError",
+      "signature": "func TestHybridSearch_FallsBackOnLexicalError(t *testing.T)",
+      "content": "// TestHybridSearch_FallsBackOnLexicalError pins that an FTS5 syntax error degrades to\n// dense-only results instead of failing the whole search.\nfunc TestHybridSearch_FallsBackOnLexicalError(t *testing.T) {\n\tstorage := prefilterFixture(t)\n\tsearcher := NewSearcher(storage, \u0026tableEmbedder{fallback: []float32{1, 0, 0, 0}})\n\n\tresults, err := searcher.HybridSearch(context.Background(), `lever\"`, HybridSearchOptions{\n\t\tSearchOptions: SearchOptions{TopK: 10, Threshold: 0.5},\n\t})\n\tif err != nil {\n\t\tt.Fatalf(\"HybridSearch() should swallow the lexical error, got %v\", err)\n\t}\n\tif len(results) != 1 || results[0].Chunk.ID != \"a\" {\n\t\tt.Errorf(\"results = %v, want only the dense hit a\", ids(results))\n\t}\n}",
+      "start_line": 152,
+      "end_line": 167,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.4844814,
+    "relevance": "high",
+    "preview": "func TestHybridSearch_FallsBackOnLexicalError(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "d84583c0b36cf8b0",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/memory_search.go",
+      "type": "function",
+      "name": "HybridSearchMemory",
+      "signature": "func HybridSearchMemory(ctx context.Context, storage Storage, embedder EmbedderInterface, query string, opts HybridMemorySearchOptions) ([]MemorySearchResult, error)",
+      "content": "// HybridSearchMemory performs hybrid search (dense + lexical) on memory entries.\n// Requires storage to implement MemoryLexicalSearcher.\nfunc HybridSearchMemory(\n\tctx context.Context,\n\tstorage Storage,\n\tembedder EmbedderInterface,\n\tquery string,\n\topts HybridMemorySearchOptions,\n) ([]MemorySearchResult, error) {\n\tif query == \"\" {\n\t\treturn nil, errors.New(\"query cannot be empty\")\n\t}\n\n\t// Verify storage supports lexical search\n\tlexicalSearcher, ok := storage.(MemoryLexicalSearcher)\n\tif !ok {\n\t\treturn nil, errors.New(\"storage does not support lexical memory search\")\n\t}\n\n\t// Set defaults\n\tfusionK := opts.FusionK\n\tif fusionK \u003c= 0 {\n\t\tfusionK = 60\n\t}\n\ttopK := opts.TopK\n\tif topK \u003c= 0 {\n\t\ttopK = 10\n\t}\n\n\t// Over-fetch for better fusion results\n\toverFetchK := topK * 3\n\tif overFetchK \u003c 50 {\n\t\toverFetchK = 50\n\t}\n\n\t// Generate query embedding\n\tqueryEmbedding, err := embedder.Embed(ctx, query)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\n\t// Dense search\n\tdenseOpts := opts.MemorySearchOptions\n\tdenseOpts.TopK = overFetchK\n\tdenseResults, err := storage.SearchMemory(ctx, queryEmbedding, denseOpts)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\n\t// Lexical search\n\tlexicalOpts := MemoryLexicalSearchOptions{\n\t\tTopK:   overFetchK,\n\t\tTags:   opts.Tags,\n\t\tSource: opts.Source,\n\t\tStatus: opts.Status,\n\t}\n\tlexicalResults, err := lexicalSearcher.LexicalSearchMemory(ctx, query, lexicalOpts)\n\tif err != nil {\n\t\t// Degrade gracefully: use dense-only results\n\t\tlexicalResults = []MemorySearchResult{}\n\t}\n\n\t// Fuse results\n\tvar results []MemorySearchResult\n\tif opts.UseWeighted {\n\t\talpha := opts.FusionAlpha\n\t\t// Note: alpha=0 is valid (100% lexical) but uncommon.\n\t\t// Callers must explicitly set UseWeighted=true to use weighted fusion.\n\t\tresults, err = FuseWeightedMemory(denseResults, lexicalResults, alpha)\n\t\tif err != nil {\n\t\t\treturn nil, err\n\t\t}\n\t} else {\n\t\tresults = FuseRRFMemory(denseResults, lexicalResults, fusionK)\n\t}\n\n\t// Apply temporal decay BEFORE topK so decay can influence final ranking\n\tif opts.Decay != nil \u0026\u0026 opts.Decay.Enabled {\n\t\tApplyTemporalDecay(results, *opts.Decay, time.Now())\n\t\tsort.Slice(results, func(i, j int) bool {\n\t\t\treturn results[i].Score \u003e results[j].Score\n\t\t})\n\t}\n\n\t// Apply topK limit after decay\n\tif topK \u003e 0 \u0026\u0026 len(results) \u003e topK {\n\t\tresults = results[:topK]\n\t}\n\n\treturn results, nil\n}",
+      "start_line": 19,
+      "end_line": 109,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.48296276,
+    "relevance": "high",
+    "preview": "func HybridSearchMemory(ctx context.Context, storage Storage, embedder EmbedderInterface, query string, opts HybridMemorySearchOptions) ([]MemorySearc..."
+  }
+]
