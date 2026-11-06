@@ -1,0 +1,172 @@
+[
+  {
+    "chunk": {
+      "id": "b963a5adf151fddf",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/lockfile.go",
+      "type": "function",
+      "name": "NewIndexLock",
+      "signature": "func NewIndexLock(indexPath, storageType, collectionName string) *IndexLock",
+      "content": "// NewIndexLock creates a lock for the given index directory and collection.\n// For SQLite: lockPath is derived from the index file path (sibling .lock file).\n// For Qdrant: lockPath is derived from data dir + collection name.\nfunc NewIndexLock(indexPath, storageType, collectionName string) *IndexLock {\n\tvar lockPath string\n\tif storageType == \"qdrant\" {\n\t\t// For Qdrant, use a per-collection lock in a temp-safe location\n\t\tlockDir := os.TempDir()\n\t\tlockPath = filepath.Join(lockDir, fmt.Sprintf(\".semantic-%s.lock\", collectionName))\n\t} else {\n\t\t// For SQLite, lock file sits next to the index DB\n\t\tlockPath = indexPath + \".lock\"\n\t}\n\n\treturn \u0026IndexLock{\n\t\tflock: flock.New(lockPath),\n\t\tpath:  lockPath,\n\t}\n}",
+      "start_line": 20,
+      "end_line": 38,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.29656723,
+    "relevance": "low",
+    "preview": "func NewIndexLock(indexPath, storageType, collectionName string) *IndexLock"
+  },
+  {
+    "chunk": {
+      "id": "e7108cd089d598fe",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/lockfile.go",
+      "type": "struct",
+      "name": "IndexLock",
+      "signature": "type IndexLock",
+      "content": "// IndexLock provides cross-process file locking for index operations.\n// Prevents concurrent index/index-update processes from corrupting shared state.\ntype IndexLock struct {\n\tflock *flock.Flock\n\tpath  string\n}",
+      "start_line": 13,
+      "end_line": 18,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.256579,
+    "relevance": "low",
+    "preview": "type IndexLock"
+  },
+  {
+    "chunk": {
+      "id": "5de46c276dd40da7",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/lockfile.go",
+      "type": "method",
+      "name": "TryLock",
+      "signature": "func (l *IndexLock) TryLock() (bool, error)",
+      "content": "// TryLock attempts to acquire an exclusive lock without blocking.\n// Returns true if lock was acquired, false if another process holds it.\n// Use for index-update operations that should silently skip if busy.\nfunc (l *IndexLock) TryLock() (bool, error) {\n\treturn l.flock.TryLock()\n}",
+      "start_line": 56,
+      "end_line": 61,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.24346831,
+    "relevance": "low",
+    "preview": "func (l *IndexLock) TryLock() (bool, error)"
+  },
+  {
+    "chunk": {
+      "id": "0ffcf8e377c951ce",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/storage_qdrant.go",
+      "type": "function",
+      "name": "fileHashID",
+      "signature": "func fileHashID(filePath string) string",
+      "content": "// fileHashID generates a unique ID for file hash storage\nfunc fileHashID(filePath string) string {\n\treturn stringToUUID(\"file_hash:\" + filePath)\n}",
+      "start_line": 1351,
+      "end_line": 1354,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.2348557,
+    "relevance": "low",
+    "preview": "func fileHashID(filePath string) string"
+  },
+  {
+    "chunk": {
+      "id": "8a4bfd1e53479945",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/lockfile_test.go",
+      "type": "function",
+      "name": "TestIndexLock_TryLock",
+      "signature": "func TestIndexLock_TryLock(t *testing.T)",
+      "content": "func TestIndexLock_TryLock(t *testing.T) {\n\ttmpDir := t.TempDir()\n\tindexPath := filepath.Join(tmpDir, \"semantic.db\")\n\n\tlock := NewIndexLock(indexPath, \"sqlite\", \"\")\n\tlocked, err := lock.TryLock()\n\tif err != nil {\n\t\tt.Fatalf(\"TryLock failed: %v\", err)\n\t}\n\tif !locked {\n\t\tt.Fatal(\"expected TryLock to succeed on fresh lock\")\n\t}\n\tdefer lock.Unlock()\n}",
+      "start_line": 42,
+      "end_line": 55,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.23204774,
+    "relevance": "low",
+    "preview": "func TestIndexLock_TryLock(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "5263e1036e100079",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/lockfile_test.go",
+      "type": "function",
+      "name": "TestIndexLock_ReusableAfterUnlock",
+      "signature": "func TestIndexLock_ReusableAfterUnlock(t *testing.T)",
+      "content": "func TestIndexLock_ReusableAfterUnlock(t *testing.T) {\n\ttmpDir := t.TempDir()\n\tindexPath := filepath.Join(tmpDir, \"semantic.db\")\n\n\tlock := NewIndexLock(indexPath, \"sqlite\", \"\")\n\n\t// Lock, unlock, lock again\n\tif err := lock.Lock(5 * time.Second); err != nil {\n\t\tt.Fatalf(\"first Lock failed: %v\", err)\n\t}\n\tif err := lock.Unlock(); err != nil {\n\t\tt.Fatalf(\"Unlock failed: %v\", err)\n\t}\n\n\tlocked, err := lock.TryLock()\n\tif err != nil {\n\t\tt.Fatalf(\"second TryLock failed: %v\", err)\n\t}\n\tif !locked {\n\t\tt.Fatal(\"expected TryLock to succeed after unlock\")\n\t}\n\tlock.Unlock()\n}",
+      "start_line": 112,
+      "end_line": 134,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.22534108,
+    "relevance": "low",
+    "preview": "func TestIndexLock_ReusableAfterUnlock(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "4cad5ec992d414a3",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/lockfile.go",
+      "type": "method",
+      "name": "Lock",
+      "signature": "func (l *IndexLock) Lock(timeout time.Duration) error",
+      "content": "// Lock acquires an exclusive lock, blocking up to timeout.\n// Use for full index rebuilds that must wait for other operations to finish.\nfunc (l *IndexLock) Lock(timeout time.Duration) error {\n\tctx, cancel := context.WithTimeout(context.Background(), timeout)\n\tdefer cancel()\n\n\tlocked, err := l.flock.TryLockContext(ctx, 500*time.Millisecond)\n\tif err != nil {\n\t\treturn fmt.Errorf(\"failed to acquire index lock %s: %w\", l.path, err)\n\t}\n\tif !locked {\n\t\treturn fmt.Errorf(\"timed out waiting for index lock %s after %v\", l.path, timeout)\n\t}\n\treturn nil\n}",
+      "start_line": 40,
+      "end_line": 54,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.22372334,
+    "relevance": "low",
+    "preview": "func (l *IndexLock) Lock(timeout time.Duration) error"
+  },
+  {
+    "chunk": {
+      "id": "5ca9a90c9b5c5e07",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/lockfile_test.go",
+      "type": "function",
+      "name": "TestIndexLock_LockUnlock",
+      "signature": "func TestIndexLock_LockUnlock(t *testing.T)",
+      "content": "func TestIndexLock_LockUnlock(t *testing.T) {\n\ttmpDir := t.TempDir()\n\tindexPath := filepath.Join(tmpDir, \"semantic.db\")\n\n\tlock := NewIndexLock(indexPath, \"sqlite\", \"\")\n\tif err := lock.Lock(5 * time.Second); err != nil {\n\t\tt.Fatalf(\"failed to acquire lock: %v\", err)\n\t}\n\tif err := lock.Unlock(); err != nil {\n\t\tt.Fatalf(\"failed to release lock: %v\", err)\n\t}\n}",
+      "start_line": 29,
+      "end_line": 40,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.21930192,
+    "relevance": "low",
+    "preview": "func TestIndexLock_LockUnlock(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "fac020f1bbd8a698",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/lockfile.go",
+      "type": "method",
+      "name": "Unlock",
+      "signature": "func (l *IndexLock) Unlock() error",
+      "content": "// Unlock releases the lock.\nfunc (l *IndexLock) Unlock() error {\n\treturn l.flock.Unlock()\n}",
+      "start_line": 63,
+      "end_line": 66,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.21389632,
+    "relevance": "low",
+    "preview": "func (l *IndexLock) Unlock() error"
+  },
+  {
+    "chunk": {
+      "id": "44fa370525205e8f",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/lockfile_test.go",
+      "type": "function",
+      "name": "TestIndexLock_TryLock_Contention",
+      "signature": "func TestIndexLock_TryLock_Contention(t *testing.T)",
+      "content": "func TestIndexLock_TryLock_Contention(t *testing.T) {\n\ttmpDir := t.TempDir()\n\tindexPath := filepath.Join(tmpDir, \"semantic.db\")\n\n\t// First lock holder\n\tlock1 := NewIndexLock(indexPath, \"sqlite\", \"\")\n\tlocked, err := lock1.TryLock()\n\tif err != nil {\n\t\tt.Fatalf(\"lock1 TryLock failed: %v\", err)\n\t}\n\tif !locked {\n\t\tt.Fatal(\"expected lock1 TryLock to succeed\")\n\t}\n\tdefer lock1.Unlock()\n\n\t// Second attempt should fail (non-blocking)\n\tlock2 := NewIndexLock(indexPath, \"sqlite\", \"\")\n\tlocked2, err := lock2.TryLock()\n\tif err != nil {\n\t\tt.Fatalf(\"lock2 TryLock failed: %v\", err)\n\t}\n\tif locked2 {\n\t\tt.Fatal(\"expected lock2 TryLock to fail due to contention\")\n\t\tlock2.Unlock()\n\t}\n}",
+      "start_line": 57,
+      "end_line": 82,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.20953108,
+    "relevance": "low",
+    "preview": "func TestIndexLock_TryLock_Contention(t *testing.T)"
+  }
+]

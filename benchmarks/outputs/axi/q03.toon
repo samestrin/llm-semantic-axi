@@ -1,0 +1,20 @@
+help[2]: Run `llm-semantic callers <name>` or `llm-semantic refs <name>` on a result to see its call sites (Go only),"Narrow with `--path <prefix>` or `--type <kind>`, or raise `--top` for more results"
+query: where are call edges extracted from Go source
+results[10]{content,file,name,score}:
+  "// NewGoChunker creates a new Go AST-based chunker\nfunc NewGoChunker() *GoChunker {\n\treturn &GoChunker{}\n}","/work/llm-semantic-axi/internal/semantic/chunker_go.go:16",NewGoChunker,0.35370642
+  "// GoChunker implements the Chunker interface for Go source code\ntype GoChunker struct{}","/work/llm-semantic-axi/internal/semantic/chunker_go.go:13",GoChunker,0.33873445
+  "// Defends \"a class does not call what its methods call\" where line ranges\n// alone cannot tell them apart: on one line, the class and its method span\n// the same lines, and the call must still go to … (166 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/treesitter/refs_javascript_test.go:54",TestJSRefs_OneLineClassAttributesTheCallToTheMethod,0.3010593
+  "// extractCallName extracts the function/method name from a call expression.\nfunc extractCallName(call *ast.CallExpr) string {\n\tswitch fn := call.Fun.(type) {\n\tcase *ast.Ident:\n\t\treturn fn.Name\n\tcase … (142 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/refs_go.go:94",extractCallName,0.29768336
+  "// mixedWorkspace indexes a Go file with call edges and a Ruby file without.\nfunc mixedWorkspace(t *testing.T) {\n\tt.Helper()\n\tdir := newWorkspace(t)\n\tuseEmbedder(t, newFakeEmbedder(t))\n\twriteFile(t, f… (271 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/commands/zero_result_behaviour_test.go:276",mixedWorkspace,0.29401532
+  "// goSource returns a small compilable Go file with one function of the given name.\nfunc goSource(fnName string) []byte {\n\treturn []byte(\"package sample\\n\\nfunc \" + fnName + \"(a, b int) int {\\n\\tretur… (16 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/index_manager_git_batch_test.go:15",goSource,0.29123315
+  "// Defends the epic 03 T1 success line: Python files indexed the way the CLI\n// indexes them get call and import edges. Before T1 the Fallback wrapper hid\n// any RefExtractor, so even a PythonChunker … (1556 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/treesitter/chunker_python_refs_test.go:110",TestPythonRefs_IndexedThroughTheRegisteredChunker,0.28862545
+  "// callGraphWorkspace indexes a file whose call edges the Go chunker records.\nfunc callGraphWorkspace(t *testing.T) {\n\tt.Helper()\n\tdir := newWorkspace(t)\n\tuseEmbedder(t, newFakeEmbedder(t))\n\twriteFile… (219 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/commands/refs_behaviour_test.go:24",callGraphWorkspace,0.27371994
+  "func TestGoChunker_SupportedExtensions(t *testing.T) {\n\tchunker := NewGoChunker()\n\n\texts := chunker.SupportedExtensions()\n\n\tif len(exts) == 0 {\n\t\tt.Error(\"SupportedExtensions() should return at least … (194 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/chunker_go_test.go:258",TestGoChunker_SupportedExtensions,0.26344737
+  "// diagnoseZeroEdges looks up the chunks named symbol when an answer came back\n// empty, and returns nil when it did not. noun reads \"callers of\" or\n// \"references from\".\nfunc diagnoseZeroEdges(ctx co… (1262 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/commands/refs.go:148",diagnoseZeroEdges,0.26143116
+stale:
+  commits_behind: 0
+  files_changed: 0
+  indexed_at: "2026-11-05T22:28:38Z"
+  indexed_commit: 573311bad7007b55c009ec0d8746244a94038fc4
+  state: fresh
+total: 10

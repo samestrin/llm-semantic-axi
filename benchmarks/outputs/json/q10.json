@@ -1,0 +1,171 @@
+[
+  {
+    "chunk": {
+      "id": "971e6c5389e3b38b",
+      "file_path": "/work/llm-semantic-axi/README.md",
+      "type": "file",
+      "name": "README \u003e llm-semantic \u003e Languages",
+      "content": "## Languages\n\nEvery extension `RegisterAllChunkers` registers, and what indexes it. A test (`TestReadmeLanguageTable_MatchesRegisteredExtensions`) fails when this table and the registered extensions disagree.\n\n| Language | Extensions | Chunker | Call edges |\n|---|---|---|---|\n| Go | `.go` | Go (`go/ast`) | yes |\n| C | `.c` | tree-sitter | no |\n| C++ | `.cpp` `.cxx` `.cc` `.hpp` `.hxx` `.hh` `.h` | tree-sitter | no |\n| C# | `.cs` | tree-sitter | no |\n| Java | `.java` | tree-sitter | no |\n| JavaScript | `.js` `.jsx` `.mjs` `.cjs` | tree-sitter | yes |\n| Kotlin | `.kt` `.kts` | tree-sitter | no |\n| PHP | `.php` `.php5` `.php7` `.phtml` | tree-sitter | no |\n| Python | `.py` `.pyi` `.pyw` | tree-sitter | yes |\n| Ruby | `.rb` | tree-sitter | no |\n| Rust | `.rs` | tree-sitter | no |\n| TypeScript | `.ts` `.tsx` `.mts` `.cts` | tree-sitter | yes |\n| Markdown | `.md` `.markdown` | markdown | no |\n| HTML | `.html` `.htm` | HTML | no |\n| Other text | `.adoc` `.bash` `.cfg` `.conf` `.csv` `.diff` `.fish` `.ini` `.json` `.log` `.patch` `.rst` `.sh` `.text` `.toml` `.txt` `.xml` `.yaml` `.yml` `.zsh` | generic text windows | no |",
+      "start_line": 98,
+      "end_line": 119,
+      "language": "markdown",
+      "domain": "code"
+    },
+    "score": 0.42906395,
+    "relevance": "medium",
+    "preview": "## Languages  Every extension `RegisterAllChunkers` registers, and what indexes it. A test (`TestReadmeLanguageTable_MatchesRegisteredExtensions`) fai..."
+  },
+  {
+    "chunk": {
+      "id": "968aecd2208cf24d",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/treesitter/treesitter.go",
+      "type": "function",
+      "name": "TreeError",
+      "signature": "func TreeError(tree *gotreesitter.Tree) error",
+      "content": "// TreeError returns ErrParseTree if the grammar could not parse the tree\n// cleanly, and nil otherwise. A chunker returns its chunks together with\n// TreeError(tree), so the fallback wrapper can keep what the walk found and\n// window the lines it missed, rather than pass a partial file off as whole.\nfunc TreeError(tree *gotreesitter.Tree) error {\n\tif tree.RootNode().HasError() || tree.ParseStoppedEarly() {\n\t\treturn fmt.Errorf(\"%w (stop reason %v)\", ErrParseTree, tree.ParseStopReason())\n\t}\n\treturn nil\n}",
+      "start_line": 31,
+      "end_line": 40,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.35509259,
+    "relevance": "medium",
+    "preview": "func TreeError(tree *gotreesitter.Tree) error"
+  },
+  {
+    "chunk": {
+      "id": "9b0e61dcb2471dcb",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/treesitter/fallback_test.go",
+      "type": "function",
+      "name": "TestTreeError_ReportsATreeWithAnErrorNode",
+      "signature": "func TestTreeError_ReportsATreeWithAnErrorNode(t *testing.T)",
+      "content": "// Defends AC2 at its source: a tree with an error node used to yield whatever\n// nodes the walk happened to find, so a broken file indexed as a partial (or\n// empty) set of chunks and nothing said so.\nfunc TestTreeError_ReportsATreeWithAnErrorNode(t *testing.T) {\n\tlang := NewPythonChunker().lang\n\ttree, err := ParseSource([]byte(brokenPython), lang)\n\tif err != nil {\n\t\tt.Fatalf(\"ParseSource(broken): %v\", err)\n\t}\n\tif err := TreeError(tree); !errors.Is(err, ErrParseTree) {\n\t\tt.Errorf(\"TreeError(broken) = %v, want ErrParseTree\", err)\n\t}\n\ttree.Release()\n\n\ttree, err = ParseSource([]byte(cleanPython), lang)\n\tif err != nil {\n\t\tt.Fatalf(\"ParseSource(clean): %v\", err)\n\t}\n\tif err := TreeError(tree); err != nil {\n\t\tt.Errorf(\"TreeError(clean) = %v, want nil\", err)\n\t}\n\ttree.Release()\n}",
+      "start_line": 54,
+      "end_line": 76,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.23860678,
+    "relevance": "low",
+    "preview": "func TestTreeError_ReportsATreeWithAnErrorNode(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "a831983ca0404bc4",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/treesitter/treesitter.go",
+      "type": "function",
+      "name": "ParseSource",
+      "signature": "func ParseSource(content []byte, lang *gotreesitter.Language) (*gotreesitter.Tree, error)",
+      "content": "// ParseSource parses source bytes with the given language and returns the tree.\n// The caller must call tree.Release() when done.\nfunc ParseSource(content []byte, lang *gotreesitter.Language) (*gotreesitter.Tree, error) {\n\tparser := gotreesitter.NewParser(lang)\n\treturn parser.Parse(content)\n}",
+      "start_line": 24,
+      "end_line": 29,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.22406454,
+    "relevance": "low",
+    "preview": "func ParseSource(content []byte, lang *gotreesitter.Language) (*gotreesitter.Tree, error)"
+  },
+  {
+    "chunk": {
+      "id": "4f84043236791164",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/treesitter/chunker_csharp.go",
+      "type": "method",
+      "name": "Chunk",
+      "signature": "func (c *CSharpChunker) Chunk(path string, content []byte) ([]semantic.Chunk, error)",
+      "content": "func (c *CSharpChunker) Chunk(path string, content []byte) ([]semantic.Chunk, error) {\n\ttree, err := ParseSource(content, c.lang)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tdefer tree.Release()\n\n\tvar chunks []semantic.Chunk\n\troot := tree.RootNode()\n\tleaked := c.walkNode(root, root, content, path, \u0026chunks)\n\tif err := TreeError(tree); err != nil {\n\t\treturn chunks, err\n\t}\n\tif leaked != \"\" {\n\t\t// gotreesitter can recover an unclosed declaration into a tree with no\n\t\t// ERROR node that has dropped earlier declarations, leaving one of the\n\t\t// grammar's hidden (underscore) rules in their place. That tree is not\n\t\t// a clean parse, whatever HasError says.\n\t\treturn chunks, fmt.Errorf(\"%w (hidden node %s in tree)\", ErrParseTree, leaked)\n\t}\n\treturn chunks, nil\n}",
+      "start_line": 32,
+      "end_line": 53,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.18831913,
+    "relevance": "low",
+    "preview": "func (c *CSharpChunker) Chunk(path string, content []byte) ([]semantic.Chunk, error)"
+  },
+  {
+    "chunk": {
+      "id": "7d90bc0087681fea",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/commands/readme_table_test.go",
+      "type": "function",
+      "name": "TestReadmeLanguageTable_MatchesRegisteredExtensions",
+      "signature": "func TestReadmeLanguageTable_MatchesRegisteredExtensions(t *testing.T)",
+      "content": "// Defends against the README language table drifting from RegisterAllChunkers:\n// an extension registered without a row (or a row for one that is not\n// registered) fails, and only Go, JavaScript, TypeScript and Python may claim call edges.\nfunc TestReadmeLanguageTable_MatchesRegisteredExtensions(t *testing.T) {\n\tfactory := semantic.NewChunkerFactory()\n\tRegisterAllChunkers(factory)\n\tregistered := map[string]bool{}\n\tfor _, e := range factory.SupportedExtensions() {\n\t\tregistered[e] = true\n\t}\n\n\ttable := parseReadmeLanguageTable(t)\n\n\tvar missing, extra []string\n\tfor e := range registered {\n\t\tif _, ok := table[e]; !ok {\n\t\t\tmissing = append(missing, e)\n\t\t}\n\t}\n\tfor e := range table {\n\t\tif !registered[e] {\n\t\t\textra = append(extra, e)\n\t\t}\n\t}\n\tsort.Strings(missing)\n\tsort.Strings(extra)\n\tif len(missing) \u003e 0 {\n\t\tt.Errorf(\"registered but missing from README language table: %v\", missing)\n\t}\n\tif len(extra) \u003e 0 {\n\t\tt.Errorf(\"in README language table but not registered: %v\", extra)\n\t}\n\n\tedgeExts := map[string]bool{\"go\": true, \"js\": true, \"jsx\": true, \"mjs\": true, \"cjs\": true,\n\t\t\"py\": true, \"pyi\": true, \"pyw\": true, \"ts\": true, \"tsx\": true, \"mts\": true, \"cts\": true}\n\tfor e, edges := range table {\n\t\twant := \"no\"\n\t\tif edgeExts[e] {\n\t\t\twant = \"yes\"\n\t\t}\n\t\tif edges != want {\n\t\t\tt.Errorf(\".%s call edges = %q in README, want %q\", e, edges, want)\n\t\t}\n\t}\n}",
+      "start_line": 46,
+      "end_line": 90,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.17556173,
+    "relevance": "low",
+    "preview": "func TestReadmeLanguageTable_MatchesRegisteredExtensions(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "be653c0aafa9e0ab",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/mcpserver/argbuilders_more_test.go",
+      "type": "function",
+      "name": "TestRegisteredCommands_MatchesTheRegistry",
+      "signature": "func TestRegisteredCommands_MatchesTheRegistry(t *testing.T)",
+      "content": "func TestRegisteredCommands_MatchesTheRegistry(t *testing.T) {\n\t// RegisteredCommands is what the tool-definition audit checks against. If it\n\t// drifted from commandRegistry the audit would pass while the server was\n\t// advertising something it cannot run.\n\tgot := RegisteredCommands()\n\tif len(got) != len(commandRegistry) {\n\t\tt.Fatalf(\"RegisteredCommands returned %d names for %d registry entries\", len(got), len(commandRegistry))\n\t}\n\tfor _, name := range got {\n\t\tif _, ok := commandRegistry[name]; !ok {\n\t\t\tt.Errorf(\"RegisteredCommands returned %q, which is not in the registry\", name)\n\t\t}\n\t}\n}",
+      "start_line": 420,
+      "end_line": 433,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.16564728,
+    "relevance": "low",
+    "preview": "func TestRegisteredCommands_MatchesTheRegistry(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "27671e68251f81cd",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/treesitter/chunker_kotlin_test.go",
+      "type": "function",
+      "name": "TestKotlinChunker_NamelessDeclarationIsDropped",
+      "signature": "func TestKotlinChunker_NamelessDeclarationIsDropped(t *testing.T)",
+      "content": "func TestKotlinChunker_NamelessDeclarationIsDropped(t *testing.T) {\n\t// The name guard: a node without an identifier must not become a chunk.\n\tc := NewKotlinChunker()\n\tsrc := []byte(\"package a\\n\")\n\ttree, err := ParseSource(src, c.lang)\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\tdefer tree.Release()\n\tvar out []semantic.Chunk\n\tc.extractType(tree.RootNode(), tree.RootNode(), src, \"a.kt\", \u0026out)\n\tc.extractFunction(tree.RootNode(), tree.RootNode(), src, \"a.kt\", \u0026out, false)\n\tif len(out) != 0 {\n\t\tt.Errorf(\"emitted chunks for nameless nodes: %+v\", out)\n\t}\n}",
+      "start_line": 282,
+      "end_line": 297,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.16104844,
+    "relevance": "low",
+    "preview": "func TestKotlinChunker_NamelessDeclarationIsDropped(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "d873c0c2ca571afa",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/commands/index_test.go",
+      "type": "function",
+      "name": "TestRegisterAllChunkers",
+      "signature": "func TestRegisterAllChunkers(t *testing.T)",
+      "content": "func TestRegisterAllChunkers(t *testing.T) {\n\t// This test verifies that RegisterAllChunkers registers chunkers for all expected extensions.\n\t// Previously, index.go and index_update.go had duplicated registration code.\n\t// Now they share RegisterAllChunkers to ensure consistency.\n\tfactory := semantic.NewChunkerFactory()\n\tRegisterAllChunkers(factory)\n\n\texts := factory.SupportedExtensions()\n\textSet := make(map[string]bool)\n\tfor _, ext := range exts {\n\t\textSet[ext] = true\n\t}\n\n\t// Required extensions from each chunker type\n\trequiredExtensions := []struct {\n\t\text   string\n\t\tdescr string\n\t}{\n\t\t{\"go\", \"GoChunker\"},\n\t\t{\"js\", \"JSChunker\"},\n\t\t{\"ts\", \"JSChunker\"},\n\t\t{\"py\", \"PythonChunker\"},\n\t\t{\"php\", \"PHPChunker\"},\n\t\t{\"rs\", \"RustChunker\"},\n\t\t{\"md\", \"MarkdownChunker\"},\n\t\t{\"markdown\", \"MarkdownChunker\"},\n\t\t{\"html\", \"HTMLChunker\"},\n\t\t{\"htm\", \"HTMLChunker\"},\n\t\t{\"txt\", \"GenericChunker\"},\n\t\t{\"yaml\", \"GenericChunker\"},\n\t}\n\n\tfor _, req := range requiredExtensions {\n\t\tif !extSet[req.ext] {\n\t\t\tt.Errorf(\"RegisterAllChunkers should register %q extension (from %s)\", req.ext, req.descr)\n\t\t}\n\t}\n\n\t// Verify we have a reasonable number of extensions\n\tif len(exts) \u003c 15 {\n\t\tt.Errorf(\"Expected at least 15 registered extensions, got %d\", len(exts))\n\t}\n}",
+      "start_line": 230,
+      "end_line": 272,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.15686014,
+    "relevance": "low",
+    "preview": "func TestRegisterAllChunkers(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "20beac1a01013990",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/treesitter/chunker_kotlin.go",
+      "type": "method",
+      "name": "Chunk",
+      "signature": "func (c *KotlinChunker) Chunk(path string, content []byte) ([]semantic.Chunk, error)",
+      "content": "func (c *KotlinChunker) Chunk(path string, content []byte) ([]semantic.Chunk, error) {\n\ttree, err := ParseSource(content, c.lang)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tdefer tree.Release()\n\n\tvar chunks []semantic.Chunk\n\tc.walk(tree.RootNode(), content, path, \u0026chunks, \"\")\n\treturn chunks, TreeError(tree)\n}",
+      "start_line": 35,
+      "end_line": 45,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.15655607,
+    "relevance": "low",
+    "preview": "func (c *KotlinChunker) Chunk(path string, content []byte) ([]semantic.Chunk, error)"
+  }
+]

@@ -1,0 +1,42 @@
+10 results for "where are call edges extracted from Go source"
+
+1. /work/llm-semantic-axi/internal/semantic/chunker_go.go:16 - NewGoChunker (function) [MEDIUM]
+   Score: 0.3537
+   func NewGoChunker() *GoChunker
+
+2. /work/llm-semantic-axi/internal/semantic/chunker_go.go:13 - GoChunker (struct) [MEDIUM]
+   Score: 0.3387
+   type GoChunker
+
+3. /work/llm-semantic-axi/internal/semantic/treesitter/refs_javascript_test.go:54 - TestJSRefs_OneLineClassAttributesTheCallToTheMethod (function) [LOW]
+   Score: 0.3011
+   func TestJSRefs_OneLineClassAttributesTheCallToTheMethod(t *testing.T)
+
+4. /work/llm-semantic-axi/internal/semantic/refs_go.go:94 - extractCallName (function) [LOW]
+   Score: 0.2977
+   func extractCallName(call *ast.CallExpr) string
+
+5. /work/llm-semantic-axi/internal/semantic/commands/zero_result_behaviour_test.go:276 - mixedWorkspace (function) [LOW]
+   Score: 0.2940
+   func mixedWorkspace(t *testing.T)
+
+6. /work/llm-semantic-axi/internal/semantic/index_manager_git_batch_test.go:15 - goSource (function) [LOW]
+   Score: 0.2912
+   func goSource(fnName string) []byte
+
+7. /work/llm-semantic-axi/internal/semantic/treesitter/chunker_python_refs_test.go:110 - TestPythonRefs_IndexedThroughTheRegisteredChunker (function) [LOW]
+   Score: 0.2886
+   func TestPythonRefs_IndexedThroughTheRegisteredChunker(t *testing.T)
+
+8. /work/llm-semantic-axi/internal/semantic/commands/refs_behaviour_test.go:24 - callGraphWorkspace (function) [LOW]
+   Score: 0.2737
+   func callGraphWorkspace(t *testing.T)
+
+9. /work/llm-semantic-axi/internal/semantic/chunker_go_test.go:258 - TestGoChunker_SupportedExtensions (function) [LOW]
+   Score: 0.2634
+   func TestGoChunker_SupportedExtensions(t *testing.T)
+
+10. /work/llm-semantic-axi/internal/semantic/commands/refs.go:148 - diagnoseZeroEdges (function) [LOW]
+   Score: 0.2614
+   func diagnoseZeroEdges(ctx context.Context, rs semantic.RefStorage, symbol, noun string, count int) (*zeroEdges, error)
+

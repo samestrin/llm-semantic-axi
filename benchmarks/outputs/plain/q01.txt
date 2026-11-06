@@ -1,0 +1,42 @@
+10 results for "where is the retry logic for embedding requests"
+
+1. /work/llm-semantic-axi/internal/semantic/memory.go:73 - encodeEmbeddingBinary (function) [LOW]
+   Score: 0.2883
+   func encodeEmbeddingBinary(embedding []float32) []byte
+
+2. /work/llm-semantic-axi/internal/semantic/storage_sqlite.go:1378 - encodeEmbedding (function) [LOW]
+   Score: 0.2311
+   func encodeEmbedding(embedding []float32) ([]byte, error)
+
+3. /work/llm-semantic-axi/internal/semantic/memory.go:142 - CompactEmbedding (struct) [LOW]
+   Score: 0.2308
+   type CompactEmbedding
+
+4. /work/llm-semantic-axi/internal/semantic/storage_sqlite.go:1391 - decodeEmbedding (function) [LOW]
+   Score: 0.2294
+   func decodeEmbedding(data []byte) ([]float32, error)
+
+5. /work/llm-semantic-axi/internal/semantic/memory_test.go:199 - BenchmarkJSONEncoding (function) [LOW]
+   Score: 0.2223
+   func BenchmarkJSONEncoding(b *testing.B)
+
+6. /work/llm-semantic-axi/internal/semantic/memory.go:151 - Quantize (function) [LOW]
+   Score: 0.2164
+   func Quantize(embedding []float32) *CompactEmbedding
+
+7. /work/llm-semantic-axi/internal/semantic/storage.go:62 - ChunkWithEmbedding (struct) [LOW]
+   Score: 0.2152
+   type ChunkWithEmbedding
+
+8. /work/llm-semantic-axi/internal/semantic/memory.go:86 - decodeEmbeddingBinary (function) [LOW]
+   Score: 0.2081
+   func decodeEmbeddingBinary(data []byte) []float32
+
+9. /work/llm-semantic-axi/internal/semantic/memory.go:224 - EstimateMemory (function) [LOW]
+   Score: 0.2068
+   func EstimateMemory(chunks int, embeddingDim int) MemoryStats
+
+10. /work/llm-semantic-axi/internal/semantic/memory_test.go:185 - BenchmarkBinaryEncoding (function) [LOW]
+   Score: 0.2052
+   func BenchmarkBinaryEncoding(b *testing.B)
+

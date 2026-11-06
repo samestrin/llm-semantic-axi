@@ -1,0 +1,20 @@
+help[2]: Run `llm-semantic callers <name>` or `llm-semantic refs <name>` on a result to see its call sites (Go only),"Narrow with `--path <prefix>` or `--type <kind>`, or raise `--top` for more results"
+query: how are dense and lexical search results fused
+results[10]{content,file,name,score}:
+  "// FuseRRF combines dense and lexical search results using Reciprocal Rank Fusion.\n// The formula is: score = sum(1 / (k + rank)) for each result list.\n// Parameter k controls the smoothing - larger k… (315 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/fusion.go:8",FuseRRF,0.556128
+  "// HybridSearch performs combined dense (vector) and lexical (FTS5) search.\n// Results are fused using Reciprocal Rank Fusion (RRF) for improved recall.\n// Returns an error if the storage doesn't supp… (1901 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/search.go:177",HybridSearch,0.5530629
+  "// LexicalSearcher is an optional interface for storage backends that support\n// full-text search. Backends implementing this interface can be used with\n// hybrid search (dense + lexical fusion).\ntype… (239 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/storage.go:68",LexicalSearcher,0.52613366
+  "// TestHybridSearch_FusesDenseAndLexical pins that hybrid search returns the union of the\n// dense and lexical hits: a chunk only the FTS5 stage can find still reaches the caller.\nfunc TestHybridSearc… (972 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/hybrid_overlap_extra_test.go:69",TestHybridSearch_FusesDenseAndLexical,0.5220393
+  "// TestRRFusion_EmptyDense verifies handling when dense search returns no results.\nfunc TestRRFusion_EmptyDense(t *testing.T) {\n\tdenseResults := []SearchResult{} // empty\n\tlexicalResults := makeTestRe… (504 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/fusion_test.go:90",TestRRFusion_EmptyDense,0.52139515
+  "// FuseRRFMemoryWithTopK is FuseRRFMemory with a result count limit.\nfunc FuseRRFMemoryWithTopK(denseResults, lexicalResults []MemorySearchResult, k int, topK int) []MemorySearchResult {\n\tresults := F… (131 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/fusion.go:200",FuseRRFMemoryWithTopK,0.49671578
+  "// FuseRRFWithTopK combines results using RRF and limits to top K results.\n// If topK is 0 or negative, all results are returned.\nfunc FuseRRFWithTopK(denseResults, lexicalResults []SearchResult, k in… (168 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/fusion.go:76",FuseRRFWithTopK,0.48989794
+  "// TestSafeLexicalSearch_EscapesOperators pins the difference between the raw and the safe\n// entry points: a query containing an FTS5 operator character is a syntax error through\n// LexicalSearch but… (646 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/fts_sqlite_rebuild_test.go:103",TestSafeLexicalSearch_EscapesOperators,0.48730588
+  "// TestHybridSearch_FallsBackOnLexicalError pins that an FTS5 syntax error degrades to\n// dense-only results instead of failing the whole search.\nfunc TestHybridSearch_FallsBackOnLexicalError(t *testi… (499 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/hybrid_overlap_extra_test.go:152",TestHybridSearch_FallsBackOnLexicalError,0.4844814
+  "// HybridSearchMemory performs hybrid search (dense + lexical) on memory entries.\n// Requires storage to implement MemoryLexicalSearcher.\nfunc HybridSearchMemory(\n\tctx context.Context,\n\tstorage Storag… (2106 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/memory_search.go:19",HybridSearchMemory,0.48296276
+stale:
+  commits_behind: 0
+  files_changed: 0
+  indexed_at: "2026-11-05T22:28:38Z"
+  indexed_commit: 573311bad7007b55c009ec0d8746244a94038fc4
+  state: fresh
+total: 10

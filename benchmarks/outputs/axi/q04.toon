@@ -1,0 +1,20 @@
+help[2]: Run `llm-semantic callers <name>` or `llm-semantic refs <name>` on a result to see its call sites (Go only),"Narrow with `--path <prefix>` or `--type <kind>`, or raise `--top` for more results"
+query: how is TOON output encoded
+results[10]{content,file,name,score}:
+  "// ValidOutputFormats returns all valid output format values\nfunc ValidOutputFormats() []string {\n\treturn []string{string(OutputBlended), string(OutputByQuery), string(OutputByCollection)}\n}","/work/llm-semantic-axi/internal/semantic/multisearch.go:28",ValidOutputFormats,0.33995336
+  "// Formatter handles output formatting with support for AXI, JSON and minimal modes.\ntype Formatter struct {\n\tJSON    bool // Output as JSON\n\tMinimal bool // Output in minimal/token-optimized mode\n\tAX… (74 more chars, use --full for all)","/work/llm-semantic-axi/pkg/output/formatter.go:26",Formatter,0.31282476
+  "// IsValidOutputFormat checks if the given format string is valid\nfunc IsValidOutputFormat(format string) bool {\n\tswitch OutputFormat(format) {\n\tcase OutputBlended, OutputByQuery, OutputByCollection:\n… (89 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/multisearch.go:33",IsValidOutputFormat,0.30599505
+  "func TestFormatter_Print_JSON(t *testing.T) {\n\tvar buf bytes.Buffer\n\tf := New(true, false, &buf)\n\n\tdata := TestOutput{Name: \"test\", Count: 5}\n\n\terr := f.Print(data, nil)\n\tif err != nil {\n\t\tt.Fatalf(\"P… (437 more chars, use --full for all)","/work/llm-semantic-axi/pkg/output/formatter_test.go:56",TestFormatter_Print_JSON,0.28522962
+  "func runRefs(ctx context.Context, symbol string, jsonOutput, minOutput bool) error {\n\trs, cleanup, err := openRefStorage(ctx)\n\tif err != nil {\n\t\treturn err\n\t}\n\tdefer cleanup()\n\n\treturn writeRefs(ctx, … (47 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/commands/refs.go:97",runRefs,0.2749287
+  "// outputMode is one of the four ways a search command prints.\ntype outputMode struct {\n\tname       string\n\tjson, min  bool\n\taxi        bool\n\tstructured bool // stdout is JSON\n}","/work/llm-semantic-axi/internal/semantic/commands/staleness_behaviour_test.go:78",outputMode,0.26919094
+  "func multisearchCmd() *cobra.Command {\n\tvar (\n\t\ttopK         int\n\t\tthreshold    float64\n\t\tprofiles     []string\n\t\tnoBoost      bool\n\t\tnoDedupe     bool\n\t\toutputFormat string\n\t\tjsonOutput   bool\n\t\tminO… (3078 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/commands/multisearch.go:14",multisearchCmd,0.2565621
+  "// OutputFormat specifies how multisearch results should be organized\ntype OutputFormat string","/work/llm-semantic-axi/internal/semantic/multisearch.go:16",OutputFormat,0.2504897
+  "// writeCallers answers runCallers from an opened call graph view.\nfunc writeCallers(ctx context.Context, w io.Writer, rs semantic.RefStorage, symbol string, jsonOutput, minOutput bool) error {\n\tedges… (376 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/commands/refs.go:81",writeCallers,0.24838813
+  "func refsCmd() *cobra.Command {\n\tvar (\n\t\tjsonOutput bool\n\t\tminOutput  bool\n\t)\n\n\tcmd := &cobra.Command{\n\t\tUse:   \"refs <symbol>\",\n\t\tShort: \"Show what a symbol references\",\n\t\tLong: `List the calls, impo… (526 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/commands/refs.go:43",refsCmd,0.24507153
+stale:
+  commits_behind: 0
+  files_changed: 0
+  indexed_at: "2026-11-05T22:28:38Z"
+  indexed_commit: 573311bad7007b55c009ec0d8746244a94038fc4
+  state: fresh
+total: 10

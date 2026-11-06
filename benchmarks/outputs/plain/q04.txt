@@ -1,0 +1,42 @@
+10 results for "how is TOON output encoded"
+
+1. /work/llm-semantic-axi/internal/semantic/multisearch.go:28 - ValidOutputFormats (function) [MEDIUM]
+   Score: 0.3400
+   func ValidOutputFormats() []string
+
+2. /work/llm-semantic-axi/pkg/output/formatter.go:26 - Formatter (struct) [LOW]
+   Score: 0.3128
+   type Formatter
+
+3. /work/llm-semantic-axi/internal/semantic/multisearch.go:33 - IsValidOutputFormat (function) [LOW]
+   Score: 0.3060
+   func IsValidOutputFormat(format string) bool
+
+4. /work/llm-semantic-axi/pkg/output/formatter_test.go:56 - TestFormatter_Print_JSON (function) [LOW]
+   Score: 0.2852
+   func TestFormatter_Print_JSON(t *testing.T)
+
+5. /work/llm-semantic-axi/internal/semantic/commands/refs.go:97 - runRefs (function) [LOW]
+   Score: 0.2749
+   func runRefs(ctx context.Context, symbol string, jsonOutput, minOutput bool) error
+
+6. /work/llm-semantic-axi/internal/semantic/commands/staleness_behaviour_test.go:78 - outputMode (struct) [LOW]
+   Score: 0.2692
+   type outputMode
+
+7. /work/llm-semantic-axi/internal/semantic/commands/multisearch.go:14 - multisearchCmd (function) [LOW]
+   Score: 0.2566
+   func multisearchCmd() *cobra.Command
+
+8. /work/llm-semantic-axi/internal/semantic/multisearch.go:16 - OutputFormat (function) [LOW]
+   Score: 0.2505
+   type OutputFormat
+
+9. /work/llm-semantic-axi/internal/semantic/commands/refs.go:81 - writeCallers (function) [LOW]
+   Score: 0.2484
+   func writeCallers(ctx context.Context, w io.Writer, rs semantic.RefStorage, symbol string, jsonOutput, minOutput bool) error
+
+10. /work/llm-semantic-axi/internal/semantic/commands/refs.go:43 - refsCmd (function) [LOW]
+   Score: 0.2451
+   func refsCmd() *cobra.Command
+

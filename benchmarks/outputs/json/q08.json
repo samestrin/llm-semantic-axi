@@ -1,0 +1,172 @@
+[
+  {
+    "chunk": {
+      "id": "5c5bd63fe2f36432",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/memory_entry.go",
+      "type": "struct",
+      "name": "MemoryWithEmbedding",
+      "signature": "type MemoryWithEmbedding",
+      "content": "// MemoryWithEmbedding pairs a memory entry with its embedding for batch operations\ntype MemoryWithEmbedding struct {\n\tEntry     MemoryEntry\n\tEmbedding []float32\n}",
+      "start_line": 178,
+      "end_line": 182,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.3768538,
+    "relevance": "medium",
+    "preview": "type MemoryWithEmbedding"
+  },
+  {
+    "chunk": {
+      "id": "efa5ba4ff37840c3",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/storage_qdrant.go",
+      "type": "method",
+      "name": "StoreMemoryBatch",
+      "signature": "func (s *QdrantStorage) StoreMemoryBatch(ctx context.Context, entries []MemoryWithEmbedding) error",
+      "content": "// StoreMemoryBatch stores multiple memory entries with their embeddings\nfunc (s *QdrantStorage) StoreMemoryBatch(ctx context.Context, entries []MemoryWithEmbedding) error {\n\tif len(entries) == 0 {\n\t\treturn nil\n\t}\n\n\ts.mu.Lock()\n\tdefer s.mu.Unlock()\n\n\tif s.closed {\n\t\treturn ErrStorageClosed\n\t}\n\n\tpoints := make([]*qdrant.PointStruct, len(entries))\n\tfor i, mwe := range entries {\n\t\tpoints[i] = s.memoryToPoint(mwe.Entry, mwe.Embedding)\n\t}\n\n\t_, err := s.client.Upsert(ctx, \u0026qdrant.UpsertPoints{\n\t\tCollectionName: s.collectionName,\n\t\tPoints:         points,\n\t})\n\tif err != nil {\n\t\treturn fmt.Errorf(\"failed to batch store memories: %w\", err)\n\t}\n\n\treturn nil\n}",
+      "start_line": 1063,
+      "end_line": 1090,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.36784148,
+    "relevance": "medium",
+    "preview": "func (s *QdrantStorage) StoreMemoryBatch(ctx context.Context, entries []MemoryWithEmbedding) error"
+  },
+  {
+    "chunk": {
+      "id": "f05e6554b2bd149f",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/memory_entry.go",
+      "type": "struct",
+      "name": "MemoryListOptions",
+      "signature": "type MemoryListOptions",
+      "content": "// MemoryListOptions configures how memory entries are listed\ntype MemoryListOptions struct {\n\tLimit  int          // Maximum number of entries to return (0 = no limit)\n\tOffset int          // Number of entries to skip\n\tTags   []string     // Filter by tags (any match)\n\tSource string       // Filter by source\n\tStatus MemoryStatus // Filter by status\n}",
+      "start_line": 184,
+      "end_line": 191,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.36262032,
+    "relevance": "medium",
+    "preview": "type MemoryListOptions"
+  },
+  {
+    "chunk": {
+      "id": "acb212ce03ed38d1",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/memory.go",
+      "type": "struct",
+      "name": "MemoryStats",
+      "signature": "type MemoryStats",
+      "content": "// MemoryStats holds memory usage statistics\ntype MemoryStats struct {\n\tChunksInMemory   int\n\tEmbeddingBytes   int64\n\tEstimatedTotalMB float64\n}",
+      "start_line": 217,
+      "end_line": 222,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.35714287,
+    "relevance": "medium",
+    "preview": "type MemoryStats"
+  },
+  {
+    "chunk": {
+      "id": "f3791fd3b4e576fd",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/commands/memory.go",
+      "type": "function",
+      "name": "memoryResultHelp",
+      "signature": "func memoryResultHelp(total int) []string",
+      "content": "// memoryResultHelp is the --axi next-step list for memory-search.\nfunc memoryResultHelp(total int) []string {\n\tif total == 0 {\n\t\treturn []string{\n\t\t\t\"Lower the cutoff with `--threshold 0` and drop filters\",\n\t\t\t\"Run `llm-semantic memory list` to see what is stored\",\n\t\t}\n\t}\n\treturn []string{\"Run `llm-semantic memory list` to browse stored entries\"}\n}",
+      "start_line": 1543,
+      "end_line": 1552,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.35623524,
+    "relevance": "medium",
+    "preview": "func memoryResultHelp(total int) []string"
+  },
+  {
+    "chunk": {
+      "id": "c93a1d3642e857af",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/storage_qdrant_grpc_test.go",
+      "type": "function",
+      "name": "TestQdrantStorage_MemoryTagFiltering",
+      "signature": "func TestQdrantStorage_MemoryTagFiltering(t *testing.T)",
+      "content": "// TestQdrantStorage_MemoryTagFiltering pins the post-search tag filter, which\n// Qdrant cannot express server-side, including its case-insensitivity.\nfunc TestQdrantStorage_MemoryTagFiltering(t *testing.T) {\n\tstorage, _ := newFakeQdrantStorage(t, \"memtags\", 4)\n\tctx := context.Background()\n\n\tentries := []MemoryWithEmbedding{\n\t\t{Entry: MemoryEntry{ID: \"m1\", Question: \"q1\", Answer: \"a1\", Tags: []string{\"Go\", \"storage\"}, Status: MemoryStatusPending}, Embedding: []float32{1, 0, 0, 0}},\n\t\t{Entry: MemoryEntry{ID: \"m2\", Question: \"q2\", Answer: \"a2\", Tags: []string{\"python\"}, Status: MemoryStatusPending}, Embedding: []float32{1, 0, 0, 0}},\n\t\t{Entry: MemoryEntry{ID: \"m3\", Question: \"q3\", Answer: \"a3\", Tags: nil, Status: MemoryStatusPending}, Embedding: []float32{1, 0, 0, 0}},\n\t}\n\tif err := storage.StoreMemoryBatch(ctx, entries); err != nil {\n\t\tt.Fatalf(\"StoreMemoryBatch: %v\", err)\n\t}\n\n\tlisted, err := storage.ListMemory(ctx, MemoryListOptions{Tags: []string{\"GO\"}})\n\tif err != nil {\n\t\tt.Fatalf(\"ListMemory: %v\", err)\n\t}\n\tif len(listed) != 1 || listed[0].ID != \"m1\" {\n\t\tt.Fatalf(\"ListMemory by tag returned %v, want only m1\", listed)\n\t}\n\n\tsearched, err := storage.SearchMemory(ctx, []float32{1, 0, 0, 0}, MemorySearchOptions{TopK: 10, Tags: []string{\"python\"}})\n\tif err != nil {\n\t\tt.Fatalf(\"SearchMemory: %v\", err)\n\t}\n\tif len(searched) != 1 || searched[0].Entry.ID != \"m2\" {\n\t\tt.Fatalf(\"SearchMemory by tag returned %v, want only m2\", searched)\n\t}\n}",
+      "start_line": 1060,
+      "end_line": 1090,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.35429138,
+    "relevance": "medium",
+    "preview": "func TestQdrantStorage_MemoryTagFiltering(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "67f4ac57279c5c26",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/fts_sqlite.go",
+      "type": "method",
+      "name": "backfillMemoryFTS5",
+      "signature": "func (s *SQLiteStorage) backfillMemoryFTS5() error",
+      "content": "// backfillMemoryFTS5 populates the memory FTS5 index from existing memory entries.\nfunc (s *SQLiteStorage) backfillMemoryFTS5() error {\n\tvar ftsCount, memoryCount int\n\n\terr := s.db.QueryRow(`SELECT COUNT(*) FROM memory_fts`).Scan(\u0026ftsCount)\n\tif err != nil {\n\t\treturn fmt.Errorf(\"failed to count memory FTS entries: %w\", err)\n\t}\n\n\terr = s.db.QueryRow(`SELECT COUNT(*) FROM memory`).Scan(\u0026memoryCount)\n\tif err != nil {\n\t\treturn fmt.Errorf(\"failed to count memory entries: %w\", err)\n\t}\n\n\tif memoryCount \u003e 0 \u0026\u0026 ftsCount == 0 {\n\t\t_, err := s.db.Exec(`\n\t\t\tINSERT INTO memory_fts(rowid, question, answer)\n\t\t\tSELECT rowid, COALESCE(question, ''), COALESCE(answer, '')\n\t\t\tFROM memory\n\t\t`)\n\t\tif err != nil {\n\t\t\treturn fmt.Errorf(\"failed to backfill memory FTS5: %w\", err)\n\t\t}\n\t}\n\n\treturn nil\n}",
+      "start_line": 547,
+      "end_line": 573,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.35078037,
+    "relevance": "medium",
+    "preview": "func (s *SQLiteStorage) backfillMemoryFTS5() error"
+  },
+  {
+    "chunk": {
+      "id": "7db3ee776f40c54c",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/storage.go",
+      "type": "interface",
+      "name": "MemoryStatsTracker",
+      "signature": "type MemoryStatsTracker",
+      "content": "// MemoryStatsTracker is an optional interface for tracking memory retrieval statistics.\n// Storage implementations that support memory stats should implement this interface.\ntype MemoryStatsTracker interface {\n\t// TrackMemoryRetrieval records a single memory retrieval event.\n\tTrackMemoryRetrieval(ctx context.Context, memoryID string, query string, score float32) error\n\n\t// TrackMemoryRetrievalBatch records multiple memory retrieval events in a single transaction.\n\tTrackMemoryRetrievalBatch(ctx context.Context, retrievals []MemoryRetrieval, query string) error\n\n\t// GetMemoryStats returns stats for a specific memory entry.\n\tGetMemoryStats(ctx context.Context, memoryID string) (*RetrievalStats, error)\n\n\t// GetAllMemoryStats returns stats for all tracked memories.\n\tGetAllMemoryStats(ctx context.Context) ([]RetrievalStats, error)\n\n\t// GetMemoryRetrievalHistory returns recent retrieval log entries for a memory.\n\tGetMemoryRetrievalHistory(ctx context.Context, memoryID string, limit int) ([]RetrievalLogEntry, error)\n\n\t// PruneMemoryRetrievalLog removes retrieval log entries older than the specified duration.\n\tPruneMemoryRetrievalLog(ctx context.Context, olderThanDays int) (int64, error)\n\n\t// UpdateMemoryStatsStatus updates the status of a memory entry.\n\tUpdateMemoryStatsStatus(ctx context.Context, memoryID string, status string) error\n}",
+      "start_line": 204,
+      "end_line": 227,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.34342837,
+    "relevance": "medium",
+    "preview": "type MemoryStatsTracker"
+  },
+  {
+    "chunk": {
+      "id": "29a894445952f52a",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/storage_sqlite_memory_filters_test.go",
+      "type": "function",
+      "name": "entryIDs",
+      "signature": "func entryIDs(entries []MemoryEntry) []string",
+      "content": "func entryIDs(entries []MemoryEntry) []string {\n\tout := make([]string, len(entries))\n\tfor i, e := range entries {\n\t\tout[i] = e.ID\n\t}\n\treturn out\n}",
+      "start_line": 365,
+      "end_line": 371,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.3292523,
+    "relevance": "medium",
+    "preview": "func entryIDs(entries []MemoryEntry) []string"
+  },
+  {
+    "chunk": {
+      "id": "cf31d27597a69819",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/storage_sqlite_bench_test.go",
+      "type": "function",
+      "name": "BenchmarkSearchMemory_LargeIndex",
+      "signature": "func BenchmarkSearchMemory_LargeIndex(b *testing.B)",
+      "content": "// BenchmarkSearchMemory_LargeIndex benchmarks SearchMemory with a large index\n// to verify constant memory usage across batch processing\nfunc BenchmarkSearchMemory_LargeIndex(b *testing.B) {\n\t// Use temp file for better benchmark accuracy\n\ttmpDir := b.TempDir()\n\tdbPath := filepath.Join(tmpDir, \"bench.db\")\n\tstorage, err := NewSQLiteStorage(dbPath, 384)\n\tif err != nil {\n\t\tb.Fatalf(\"Failed to create storage: %v\", err)\n\t}\n\tdefer storage.Close()\n\n\t// Create a large number of memory entries (10,000)\n\tconst numEntries = 10000\n\tembeddingDim := 384\n\n\t// Pre-generate embeddings to avoid allocation in store loop (not realistic but necessary for benchmark purity)\n\t// In real benchmarks, embeddings come from an API, but here we generate them\n\t// This is just creating the dataset, not what we're benchmarking\n\tqueryEmbedding := makeEmbedding(embeddingDim, 0.0)\n\n\t// Store entries in batches\n\tconst batchSize = 100\n\tvar entries []MemoryWithEmbedding\n\tfor i := 0; i \u003c numEntries; i++ {\n\t\tembedding := makeEmbedding(embeddingDim, float32(i)*0.01)\n\t\tentry := MemoryWithEmbedding{\n\t\t\tEntry: MemoryEntry{\n\t\t\t\tQuestion:    \"Test Question \" + itoa(i),\n\t\t\t\tAnswer:      \"Test Answer \" + itoa(i),\n\t\t\t\tTags:        []string{\"bench\", \"test\", itoa(i % 10)},\n\t\t\t\tSource:      \"benchmark\",\n\t\t\t\tStatus:      \"active\",\n\t\t\t\tOccurrences: i + 1,\n\t\t\t},\n\t\t\tEmbedding: embedding,\n\t\t}\n\t\tentries = append(entries, entry)\n\t\tif len(entries) \u003e= batchSize {\n\t\t\tif err := storage.StoreMemoryBatch(context.Background(), entries); err != nil {\n\t\t\t\tb.Fatalf(\"Failed to store batch: %v\", err)\n\t\t\t}\n\t\t\tentries = entries[:0]\n\t\t}\n\t}\n\tif len(entries) \u003e 0 {\n\t\tif err := storage.StoreMemoryBatch(context.Background(), entries); err != nil {\n\t\t\tb.Fatalf(\"Failed to store final batch: %v\", err)\n\t\t}\n\t}\n\n\t// Reset timer to measure only search performance\n\tb.ResetTimer()\n\n\t// Benchmark the search\n\tfor i := 0; i \u003c b.N; i++ {\n\t\t_, err := storage.SearchMemory(context.Background(), queryEmbedding, MemorySearchOptions{\n\t\t\tTopK:      10,\n\t\t\tThreshold: 0.0,\n\t\t})\n\t\tif err != nil {\n\t\t\tb.Fatalf(\"SearchMemory failed: %v\", err)\n\t\t}\n\t}\n}",
+      "start_line": 10,
+      "end_line": 74,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.3282762,
+    "relevance": "medium",
+    "preview": "func BenchmarkSearchMemory_LargeIndex(b *testing.B)"
+  }
+]

@@ -1,0 +1,171 @@
+[
+  {
+    "chunk": {
+      "id": "ad6b621ea9ee4b71",
+      "file_path": "/work/llm-semantic-axi/cmd/llm-semantic-mcp/main.go",
+      "type": "function",
+      "name": "run",
+      "signature": "func run(ctx context.Context, in io.ReadCloser, out io.WriteCloser, stderr io.Writer) int",
+      "content": "// run is the whole server: it checks the CLI is installed, registers every\n// tool, serves MCP over in and out until the session ends, and returns the\n// process exit code. It is split from main() so a test can drive a full\n// session and read the exit decision without os.Exit ending the test binary.\nfunc run(ctx context.Context, in io.ReadCloser, out io.WriteCloser, stderr io.Writer) int {\n\t// Verify llm-semantic binary exists\n\tif _, err := os.Stat(mcpserver.BinaryPath); os.IsNotExist(err) {\n\t\tfmt.Fprintf(stderr, \"ERROR: llm-semantic binary not found at %s\\n\", mcpserver.BinaryPath)\n\t\tfmt.Fprintf(stderr, \"Please ensure llm-semantic is installed and accessible.\\n\")\n\t\treturn 1\n\t}\n\n\ttools := mcpserver.GetToolDefinitions()\n\n\t// Create MCP server using official SDK\n\tserver := mcp.NewServer(\u0026mcp.Implementation{\n\t\tName:    serverName,\n\t\tVersion: serverVersion,\n\t}, \u0026mcp.ServerOptions{\n\t\tInstructions: serverInstructions(len(tools)),\n\t})\n\n\t// Register all tools\n\tfor _, toolDef := range tools {\n\t\t// Capture for closure\n\t\ttd := toolDef\n\t\tserver.AddTool(\u0026mcp.Tool{\n\t\t\tName:        td.Name,\n\t\t\tDescription: td.Description,\n\t\t\tInputSchema: td.InputSchema,\n\t\t}, func(ctx context.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {\n\t\t\t// Unmarshal arguments\n\t\t\tvar args map[string]interface{}\n\t\t\tif req.Params.Arguments != nil {\n\t\t\t\tif err := json.Unmarshal(req.Params.Arguments, \u0026args); err != nil {\n\t\t\t\t\treturn \u0026mcp.CallToolResult{\n\t\t\t\t\t\tContent: []mcp.Content{\n\t\t\t\t\t\t\t\u0026mcp.TextContent{Text: \"Error parsing arguments: \" + err.Error()},\n\t\t\t\t\t\t},\n\t\t\t\t\t\tIsError: true,\n\t\t\t\t\t}, nil\n\t\t\t\t}\n\t\t\t}\n\n\t\t\t// Execute the tool using the handler\n\t\t\toutput, err := mcpserver.ExecuteHandler(td.Name, args)\n\t\t\tif err != nil {\n\t\t\t\treturn \u0026mcp.CallToolResult{\n\t\t\t\t\tContent: []mcp.Content{\n\t\t\t\t\t\t\u0026mcp.TextContent{Text: \"Error: \" + err.Error()},\n\t\t\t\t\t},\n\t\t\t\t\tIsError: true,\n\t\t\t\t}, nil\n\t\t\t}\n\t\t\treturn \u0026mcp.CallToolResult{\n\t\t\t\tContent: []mcp.Content{\n\t\t\t\t\t\u0026mcp.TextContent{Text: output},\n\t\t\t\t},\n\t\t\t}, nil\n\t\t})\n\t}\n\n\t// Log startup\n\tfmt.Fprintf(stderr, \"%s v%s started with %d tools\\n\", serverName, serverVersion, len(tools))\n\n\t// Serve until the session ends\n\tw := \u0026recordingWriter{WriteCloser: out}\n\trunErr := server.Run(ctx, \u0026mcp.IOTransport{Reader: in, Writer: w})\n\tif err := sessionResult(runErr, w.writeErr()); err != nil {\n\t\tfmt.Fprintf(stderr, \"Server error: %v\\n\", err)\n\t\treturn 1\n\t}\n\treturn 0\n}",
+      "start_line": 80,
+      "end_line": 153,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.42747146,
+    "relevance": "medium",
+    "preview": "func run(ctx context.Context, in io.ReadCloser, out io.WriteCloser, stderr io.Writer) int"
+  },
+  {
+    "chunk": {
+      "id": "ec535366f72741c7",
+      "file_path": "/work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go",
+      "type": "struct",
+      "name": "server",
+      "signature": "type server",
+      "content": "// server is one run() of the MCP server, connected to a client session.\ntype server struct {\n\tsession *mcp.ClientSession\n\t// clientWrite is the client's end of the server's input pipe, exposed so a\n\t// test can write raw bytes to the server or close the pipe directly.\n\tclientWrite *os.File\n\tdone        chan struct{}\n\tcode        int\n\tstderr      bytes.Buffer\n}",
+      "start_line": 65,
+      "end_line": 74,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.41015157,
+    "relevance": "medium",
+    "preview": "type server"
+  },
+  {
+    "chunk": {
+      "id": "dadc48495c818c28",
+      "file_path": "/work/llm-semantic-axi/VISION.md",
+      "type": "file",
+      "name": "VISION \u003e Vision \u003e The CLI is the product",
+      "content": "## The CLI is the product\n\n`llm-semantic` is the primary surface.\nThe MCP server shells out to the CLI, and it is a fallback for hosts that cannot run one.\nOutput follows the AXI principles, and TOON through `go-axi` is the format given to a model.\nJSON and plain text exist for other callers, and they carry the same truth.\nThe MCP server stays thin and holds no logic of its own.",
+      "start_line": 17,
+      "end_line": 24,
+      "language": "markdown",
+      "domain": "code"
+    },
+    "score": 0.35218036,
+    "relevance": "medium",
+    "preview": "## The CLI is the product  `llm-semantic` is the primary surface. The MCP server shells out to the CLI, and it is a fallback for hosts that cannot run..."
+  },
+  {
+    "chunk": {
+      "id": "c0ab9d272d36d4bf",
+      "file_path": "/work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go",
+      "type": "function",
+      "name": "TestServer_ReportsTheStampedVersion",
+      "signature": "func TestServer_ReportsTheStampedVersion(t *testing.T)",
+      "content": "func TestServer_ReportsTheStampedVersion(t *testing.T) {\n\t// serverVersion is a var precisely so -X main.serverVersion can stamp it;\n\t// it was a const with a hardcoded number inside llm-tools, which is how the\n\t// reported version drifted from the tag. The client reads it at initialize.\n\tfakeCLI(t, \"{}\")\n\tsession := startServer(t).session\n\n\timpl := session.InitializeResult().ServerInfo\n\tif impl.Name != serverName {\n\t\tt.Errorf(\"server name = %q, want %q\", impl.Name, serverName)\n\t}\n\tif impl.Version != serverVersion {\n\t\tt.Errorf(\"server version = %q, want the stamped %q\", impl.Version, serverVersion)\n\t}\n}",
+      "start_line": 175,
+      "end_line": 189,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.3496433,
+    "relevance": "medium",
+    "preview": "func TestServer_ReportsTheStampedVersion(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "d1db289493f9a1b5",
+      "file_path": "/work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go",
+      "type": "function",
+      "name": "fakeCLI",
+      "signature": "func fakeCLI(t *testing.T, payload string)",
+      "content": "// fakeCLI writes an executable stand-in for llm-semantic that echoes payload,\n// and points mcpserver.BinaryPath at it for the duration of the test.\nfunc fakeCLI(t *testing.T, payload string) {\n\tt.Helper()\n\tif runtime.GOOS == \"windows\" {\n\t\tt.Skip(\"the fake CLI is a POSIX shell script\")\n\t}\n\tscript := filepath.Join(t.TempDir(), \"llm-semantic\")\n\tif err := os.WriteFile(script, []byte(\"#!/bin/sh\\nprintf '%s' '\"+payload+\"'\\n\"), 0o755); err != nil {\n\t\tt.Fatalf(\"write fake CLI: %v\", err)\n\t}\n\toriginal := mcpserver.BinaryPath\n\tmcpserver.BinaryPath = script\n\tt.Cleanup(func() { mcpserver.BinaryPath = original })\n}",
+      "start_line": 49,
+      "end_line": 63,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.33476704,
+    "relevance": "medium",
+    "preview": "func fakeCLI(t *testing.T, payload string)"
+  },
+  {
+    "chunk": {
+      "id": "e59b54326067e2bf",
+      "file_path": "/work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go",
+      "type": "function",
+      "name": "startServer",
+      "signature": "func startServer(t *testing.T) *server",
+      "content": "// startServer runs the server and returns it with a connected client session.\n// On cleanup the session is closed and run() must return 0: every test that\n// uses this helper therefore also checks that a normal disconnect is a clean\n// exit, which is the shutdown the server previously turned into exit 1.\nfunc startServer(t *testing.T) *server {\n\tt.Helper()\n\n\tsrv, stdoutR, stdinW := launch(t)\n\n\tctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)\n\tt.Cleanup(cancel)\n\n\tclient := mcp.NewClient(\u0026mcp.Implementation{Name: \"test-client\", Version: \"1\"}, nil)\n\tsession, err := client.Connect(ctx, \u0026mcp.IOTransport{Reader: stdoutR, Writer: stdinW}, nil)\n\tif err != nil {\n\t\tt.Fatalf(\"Connect: %v\", err)\n\t}\n\tsrv.session = session\n\n\tt.Cleanup(func() {\n\t\t_ = session.Close()\n\t\tif code, stderr := srv.wait(t); code != 0 {\n\t\t\tt.Errorf(\"run() = %d after the client disconnected, want 0; stderr:\\n%s\", code, stderr)\n\t\t}\n\t})\n\treturn srv\n}",
+      "start_line": 117,
+      "end_line": 143,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.31258586,
+    "relevance": "low",
+    "preview": "func startServer(t *testing.T) *server"
+  },
+  {
+    "chunk": {
+      "id": "74f84a3687826a9b",
+      "file_path": "/work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go",
+      "type": "function",
+      "name": "TestServer_ClientDisconnectIsACleanExit",
+      "signature": "func TestServer_ClientDisconnectIsACleanExit(t *testing.T)",
+      "content": "func TestServer_ClientDisconnectIsACleanExit(t *testing.T) {\n\t// A client hanging up is how every MCP session ends. The server used to\n\t// treat the resulting \"server is closing: EOF\" from server.Run as fatal and\n\t// exit 1, so a supervisor saw each healthy session end as a crash.\n\tfakeCLI(t, \"{}\")\n\tsrv := startServer(t)\n\n\tctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)\n\tdefer cancel()\n\tif _, err := srv.session.ListTools(ctx, nil); err != nil {\n\t\tt.Fatalf(\"ListTools: %v\", err)\n\t}\n\n\tif err := srv.session.Close(); err != nil {\n\t\tt.Fatalf(\"session.Close: %v\", err)\n\t}\n\tcode, stderr := srv.wait(t)\n\tif code != 0 {\n\t\tt.Errorf(\"run() = %d after the client closed its session, want 0\", code)\n\t}\n\tif strings.Contains(stderr, \"Server error\") {\n\t\tt.Errorf(\"a normal disconnect was logged as a server error:\\n%s\", stderr)\n\t}\n\tif !strings.Contains(stderr, \"started with\") {\n\t\tt.Errorf(\"stderr is missing the startup line, so the server never ran:\\n%s\", stderr)\n\t}\n}",
+      "start_line": 303,
+      "end_line": 329,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.31120712,
+    "relevance": "low",
+    "preview": "func TestServer_ClientDisconnectIsACleanExit(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "1f66b3bad158ffbe",
+      "file_path": "/work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go",
+      "type": "function",
+      "name": "TestServer_HangUpBeforeTheReplyIsACleanExit",
+      "signature": "func TestServer_HangUpBeforeTheReplyIsACleanExit(t *testing.T)",
+      "content": "func TestServer_HangUpBeforeTheReplyIsACleanExit(t *testing.T) {\n\t// This is the disconnect CI caught: the client sends a request and goes\n\t// away before the server answers. The server's reply then finds the read\n\t// side at EOF, the SDK records \"server is closing: EOF\" as a write error,\n\t// and server.Run returns it. Nothing failed, and the process used to exit 1.\n\t// The race goes the server's way only occasionally, so it is run 20 times.\n\tfakeCLI(t, \"{}\")\n\tfor i := 0; i \u003c 20; i++ {\n\t\tsrv, stdoutR, stdinW := launch(t)\n\t\tgo func() { _, _ = io.Copy(io.Discard, stdoutR) }()\n\n\t\tif _, err := stdinW.Write([]byte(initializeRequest)); err != nil {\n\t\t\tt.Fatalf(\"write initialize: %v\", err)\n\t\t}\n\t\tif err := stdinW.Close(); err != nil {\n\t\t\tt.Fatalf(\"close the server's input: %v\", err)\n\t\t}\n\t\tcode, stderr := srv.wait(t)\n\t\tif code != 0 || strings.Contains(stderr, \"Server error\") {\n\t\t\tt.Fatalf(\"attempt %d: run() = %d after the client hung up mid-request, want 0; stderr:\\n%s\", i, code, stderr)\n\t\t}\n\t}\n}",
+      "start_line": 349,
+      "end_line": 371,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.3045548,
+    "relevance": "low",
+    "preview": "func TestServer_HangUpBeforeTheReplyIsACleanExit(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "618b32deb270a90f",
+      "file_path": "/work/llm-semantic-axi/cmd/llm-semantic-mcp/main.go",
+      "type": "function",
+      "name": "serverInstructions",
+      "signature": "func serverInstructions(toolCount int) string",
+      "content": "// serverInstructions takes the tool count from the definitions it describes.\n// It was a literal saying \"4 tools\" while 16 were registered.\nfunc serverInstructions(toolCount int) string {\n\treturn fmt.Sprintf(\"llm-semantic-mcp provides semantic code search using local embedding models. It wraps the llm-semantic CLI with %d tools for searching, indexing, and managing semantic code indexes.\", toolCount)\n}",
+      "start_line": 21,
+      "end_line": 25,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.30134228,
+    "relevance": "low",
+    "preview": "func serverInstructions(toolCount int) string"
+  },
+  {
+    "chunk": {
+      "id": "28fbc11c3fafe292",
+      "file_path": "/work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go",
+      "type": "function",
+      "name": "TestServer_ClosedInputIsACleanExit",
+      "signature": "func TestServer_ClosedInputIsACleanExit(t *testing.T)",
+      "content": "func TestServer_ClosedInputIsACleanExit(t *testing.T) {\n\t// A client process that exits without an MCP goodbye just closes the\n\t// server's stdin. That is still a normal end of session, not a failure.\n\tfakeCLI(t, \"{}\")\n\tsrv := startServer(t)\n\n\tif err := srv.clientWrite.Close(); err != nil {\n\t\tt.Fatalf(\"close the server's input: %v\", err)\n\t}\n\tcode, stderr := srv.wait(t)\n\tif code != 0 {\n\t\tt.Errorf(\"run() = %d after its input was closed, want 0\", code)\n\t}\n\tif strings.Contains(stderr, \"Server error\") {\n\t\tt.Errorf(\"a closed input was logged as a server error:\\n%s\", stderr)\n\t}\n}",
+      "start_line": 331,
+      "end_line": 347,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.29699257,
+    "relevance": "low",
+    "preview": "func TestServer_ClosedInputIsACleanExit(t *testing.T)"
+  }
+]

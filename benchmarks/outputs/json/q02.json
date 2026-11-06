@@ -1,0 +1,171 @@
+[
+  {
+    "chunk": {
+      "id": "d3ab272d634e4393",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/index_manager.go",
+      "type": "method",
+      "name": "fileNeedsUpdate",
+      "signature": "func (m *IndexManager) fileNeedsUpdate(ctx context.Context, filePath string) (bool, error)",
+      "content": "// fileNeedsUpdate checks if a file has been modified since indexing. It errors when the\n// file cannot be read or its stored hash cannot be fetched; callers count the file failed.\nfunc (m *IndexManager) fileNeedsUpdate(ctx context.Context, filePath string) (bool, error) {\n\t// Get file content\n\tcontent, err := os.ReadFile(filePath)\n\tif err != nil {\n\t\treturn false, err\n\t}\n\n\t// Calculate current content hash\n\thash := sha256.Sum256(content)\n\tcurrentHash := hex.EncodeToString(hash[:])\n\n\t// Get stored hash for this file\n\t// A store that cannot say is an error, not \"needs indexing\": re-indexing would hide it.\n\tstoredHash, err := m.storage.GetFileHash(ctx, filePath)\n\tif err != nil {\n\t\treturn false, fmt.Errorf(\"failed to read stored hash: %w\", err)\n\t}\n\n\tif storedHash == \"\" {\n\t\treturn true, nil // No stored hash = needs indexing\n\t}\n\n\t// Compare hashes - file needs update if hashes differ\n\treturn storedHash != currentHash, nil\n}",
+      "start_line": 1314,
+      "end_line": 1340,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.4070401,
+    "relevance": "medium",
+    "preview": "func (m *IndexManager) fileNeedsUpdate(ctx context.Context, filePath string) (bool, error)"
+  },
+  {
+    "chunk": {
+      "id": "f8bc6f93f06b3201",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/index_manager.go",
+      "type": "method",
+      "name": "indexPerFile",
+      "signature": "func (m *IndexManager) indexPerFile(ctx context.Context, files []string, opts IndexOptions, result *IndexResult) (*IndexResult, error)",
+      "content": "// indexPerFile processes files one at a time (original behavior)\nfunc (m *IndexManager) indexPerFile(ctx context.Context, files []string, opts IndexOptions, result *IndexResult) (*IndexResult, error) {\n\ttotalFiles := len(files)\n\n\tfor i, file := range files {\n\t\tselect {\n\t\tcase \u003c-ctx.Done():\n\t\t\treturn result, ctx.Err()\n\t\tdefault:\n\t\t}\n\n\t\t// Check if file is already indexed and unchanged (for resume capability)\n\t\tif !opts.Force {\n\t\t\tneedsIndex, err := m.fileNeedsUpdate(ctx, file)\n\t\t\tif err != nil {\n\t\t\t\t// An unreadable file is not indexed; counting it unchanged would hide that.\n\t\t\t\tresult.Errors = append(result.Errors, fmt.Sprintf(\"%s: %v\", file, err))\n\t\t\t\tresult.FilesSkipped++\n\t\t\t\tif opts.OnProgress != nil {\n\t\t\t\t\topts.OnProgress(ProgressEvent{\n\t\t\t\t\t\tCurrent:     i + 1,\n\t\t\t\t\t\tTotal:       totalFiles,\n\t\t\t\t\t\tFilePath:    file,\n\t\t\t\t\t\tChunksTotal: result.ChunksCreated,\n\t\t\t\t\t\tSkipped:     true,\n\t\t\t\t\t})\n\t\t\t\t}\n\t\t\t\tcontinue\n\t\t\t}\n\t\t\tif !needsIndex {\n\t\t\t\tresult.FilesUnchanged++\n\t\t\t\t// Report progress for skipped file\n\t\t\t\tif opts.OnProgress != nil {\n\t\t\t\t\topts.OnProgress(ProgressEvent{\n\t\t\t\t\t\tCurrent:     i + 1,\n\t\t\t\t\t\tTotal:       totalFiles,\n\t\t\t\t\t\tFilePath:    file,\n\t\t\t\t\t\tChunksTotal: result.ChunksCreated,\n\t\t\t\t\t\tSkipped:     true,\n\t\t\t\t\t})\n\t\t\t\t}\n\t\t\t\tcontinue\n\t\t\t}\n\t\t}\n\n\t\t// Process the file\n\t\tprocessErr := m.processFile(ctx, file, result, opts.BatchSize, opts.Parallel, opts.Domain)\n\t\tif processErr != nil {\n\t\t\tresult.Errors = append(result.Errors, fmt.Sprintf(\"%s: %v\", file, processErr))\n\t\t\tresult.FilesSkipped++\n\t\t} else {\n\t\t\tresult.FilesProcessed++\n\t\t}\n\n\t\t// Report progress\n\t\tif opts.OnProgress != nil {\n\t\t\topts.OnProgress(ProgressEvent{\n\t\t\t\tCurrent:     i + 1,\n\t\t\t\tTotal:       totalFiles,\n\t\t\t\tFilePath:    file,\n\t\t\t\tChunksTotal: result.ChunksCreated,\n\t\t\t\tSkipped:     false,\n\t\t\t})\n\t\t}\n\t}\n\n\treturn result, nil\n}",
+      "start_line": 263,
+      "end_line": 330,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.33830345,
+    "relevance": "medium",
+    "preview": "func (m *IndexManager) indexPerFile(ctx context.Context, files []string, opts IndexOptions, result *IndexResult) (*IndexResult, error)"
+  },
+  {
+    "chunk": {
+      "id": "e7108cd089d598fe",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/lockfile.go",
+      "type": "struct",
+      "name": "IndexLock",
+      "signature": "type IndexLock",
+      "content": "// IndexLock provides cross-process file locking for index operations.\n// Prevents concurrent index/index-update processes from corrupting shared state.\ntype IndexLock struct {\n\tflock *flock.Flock\n\tpath  string\n}",
+      "start_line": 13,
+      "end_line": 18,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.3325644,
+    "relevance": "medium",
+    "preview": "type IndexLock"
+  },
+  {
+    "chunk": {
+      "id": "4bef94d93ae7a089",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/index_manager_git_batch_test.go",
+      "type": "method",
+      "name": "GetFileHash",
+      "signature": "func (s *hashErrStorage) GetFileHash(ctx context.Context, filePath string) (string, error)",
+      "content": "func (s *hashErrStorage) GetFileHash(ctx context.Context, filePath string) (string, error) {\n\treturn \"\", s.err\n}",
+      "start_line": 523,
+      "end_line": 525,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.31688863,
+    "relevance": "medium",
+    "preview": "func (s *hashErrStorage) GetFileHash(ctx context.Context, filePath string) (string, error)"
+  },
+  {
+    "chunk": {
+      "id": "314851d0c13dc88a",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/commands/index.go",
+      "type": "function",
+      "name": "resolveFTSDataDir",
+      "signature": "func resolveFTSDataDir(indexPath string) string",
+      "content": "// resolveFTSDataDir returns the directory holding a Qdrant collection's\n// parallel index, which carries its lexical index and its call graph.\n//\n// Qdrant keeps no local index file of its own, so this used to be derived from\n// an empty path and resolved to the working directory, leaving the database in\n// the repository root. It is anchored the same way the SQLite index is, so a\n// query finds the file the indexer wrote no matter where it runs from.\nfunc resolveFTSDataDir(indexPath string) string {\n\tif indexPath != \"\" {\n\t\treturn filepath.Dir(indexPath)\n\t}\n\tif indexDir != \"\" \u0026\u0026 indexDir != \".index\" {\n\t\treturn indexDir\n\t}\n\tif gitRoot, err := findGitRoot(); err == nil {\n\t\treturn filepath.Join(gitRoot, \".index\")\n\t}\n\treturn \".index\"\n}",
+      "start_line": 482,
+      "end_line": 500,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.28690952,
+    "relevance": "low",
+    "preview": "func resolveFTSDataDir(indexPath string) string"
+  },
+  {
+    "chunk": {
+      "id": "aede11e4634b6b3e",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/index_manager.go",
+      "type": "method",
+      "name": "recordLastIndex",
+      "signature": "func (m *IndexManager) recordLastIndex(ctx context.Context, last LastIndex) error",
+      "content": "// recordLastIndex stores last. A backend that cannot record it is not a failure: the\n// record stays unreadable, so the staleness check reports \"unknown\" rather than a value.\nfunc (m *IndexManager) recordLastIndex(ctx context.Context, last LastIndex) error {\n\terr := m.storage.SetLastIndex(ctx, last)\n\tif err == nil || errors.Is(err, ErrLastIndexUnsupported) {\n\t\treturn nil\n\t}\n\treturn fmt.Errorf(\"failed to record the last indexed commit: %w\", err)\n}",
+      "start_line": 253,
+      "end_line": 261,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.2834243,
+    "relevance": "low",
+    "preview": "func (m *IndexManager) recordLastIndex(ctx context.Context, last LastIndex) error"
+  },
+  {
+    "chunk": {
+      "id": "d9844ef0669b350f",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/index_manager_git_batch_test.go",
+      "type": "function",
+      "name": "TestIndexManager_LastIndexWriteFailureMessage",
+      "signature": "func TestIndexManager_LastIndexWriteFailureMessage(t *testing.T)",
+      "content": "// TestIndexManager_LastIndexWriteFailureMessage defends against Index's error claiming\n// \"index updated\" when it is returned: the caller reads that as success with a footnote.\nfunc TestIndexManager_LastIndexWriteFailureMessage(t *testing.T) {\n\tdir := t.TempDir()\n\tif err := os.WriteFile(filepath.Join(dir, \"one.go\"), goSource(\"One\"), 0644); err != nil {\n\t\tt.Fatal(err)\n\t}\n\tboom := errors.New(\"disk full\")\n\tstorage := \u0026lastIndexStorage{Storage: newFileStorage(t), setErr: boom}\n\tmgr := NewIndexManager(storage, \u0026trackingEmbedder{embedding: []float32{0.1, 0.2, 0.3, 0.4}}, goFactory())\n\n\t_, err := mgr.Index(context.Background(), dir, IndexOptions{})\n\tif !errors.Is(err, boom) {\n\t\tt.Fatalf(\"Index() error = %v, want the SetLastIndex failure\", err)\n\t}\n\tif strings.HasPrefix(err.Error(), \"index updated\") {\n\t\tt.Errorf(\"Index() error = %q, must not begin \\\"index updated\\\"\", err)\n\t}\n}",
+      "start_line": 615,
+      "end_line": 633,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.27877152,
+    "relevance": "low",
+    "preview": "func TestIndexManager_LastIndexWriteFailureMessage(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "ec19dafa303cfc8d",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/last_index_test.go",
+      "type": "function",
+      "name": "TestIndexManager_FileFailureLeavesLastIndex",
+      "signature": "func TestIndexManager_FileFailureLeavesLastIndex(t *testing.T)",
+      "content": "// TestIndexManager_FileFailureLeavesLastIndex defends against an index with files that\n// failed to embed recording HEAD: a later search would then report the index fresh when\n// part of it is missing. Each of Index, the full-scan Update and UpdateGit's advance must\n// leave the previous record, time included, unchanged when any file failed.\nfunc TestIndexManager_FileFailureLeavesLastIndex(t *testing.T) {\n\trepo := t.TempDir()\n\tgitRun(t, repo, \"init\")\n\tcommitGoFile(t, repo, \"one.go\", \"One\")\n\tctx := context.Background()\n\n\tstorage := newFileStorage(t)\n\tembedder := \u0026failingEmbedder{trackingEmbedder: trackingEmbedder{embedding: []float32{0.1, 0.2, 0.3, 0.4}}, marker: \"Broken\"}\n\tmgr := NewIndexManager(storage, embedder, goFactory())\n\n\tplanted := LastIndex{Commit: \"planted\", IndexedAt: time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)}\n\tassertUnchanged := func(step string) {\n\t\tt.Helper()\n\t\tgot := mustLastIndex(t, storage)\n\t\tif got.Commit != planted.Commit || !got.IndexedAt.Equal(planted.IndexedAt) {\n\t\t\tt.Errorf(\"after %s with a failed file: got %+v, want unchanged %+v\", step, *got, planted)\n\t\t}\n\t}\n\tplant := func() {\n\t\tt.Helper()\n\t\tif err := storage.SetLastIndex(ctx, planted); err != nil {\n\t\t\tt.Fatal(err)\n\t\t}\n\t}\n\n\tcommitGoFile(t, repo, \"broken.go\", \"Broken\")\n\n\t// Index, per-file path.\n\tplant()\n\tresult, err := mgr.Index(ctx, repo, IndexOptions{})\n\tif err != nil {\n\t\tt.Fatalf(\"Index() error = %v\", err)\n\t}\n\tif len(result.Errors) == 0 {\n\t\tt.Fatal(\"Index() reported no errors; the test needs broken.go to fail\")\n\t}\n\tassertUnchanged(\"index\")\n\n\t// Index, cross-file batching path (an embed failure there aborts the run).\n\tplant()\n\tif _, err := mgr.Index(ctx, repo, IndexOptions{EmbedBatchSize: 100}); err == nil {\n\t\tt.Fatal(\"Index(EmbedBatchSize) error = nil; the test needs broken.go to fail\")\n\t}\n\tassertUnchanged(\"batched index\")\n\n\t// Full-scan Update: broken.go was never stored, so it is retried and fails again.\n\tplant()\n\tif _, err := mgr.Update(ctx, repo, UpdateOptions{Domain: \"code\"}); err != nil {\n\t\tt.Fatalf(\"Update() error = %v\", err)\n\t}\n\tassertUnchanged(\"full-scan update\")\n\n\t// UpdateGit from a ref matching the recorded commit would advance it to HEAD.\n\tplanted.Commit = gitHeadOf(t, repo, \"HEAD~1\")\n\tplant()\n\tif _, err := mgr.UpdateGit(ctx, repo, \"HEAD~1\", UpdateOptions{Domain: \"code\"}); err != nil {\n\t\tt.Fatalf(\"UpdateGit() error = %v\", err)\n\t}\n\tassertUnchanged(\"git update\")\n\n\t// Once nothing fails, each records HEAD again, so the guard is not blocking every write.\n\tembedder.marker = \"\\x00never\"\n\tif _, err := mgr.Update(ctx, repo, UpdateOptions{Domain: \"code\"}); err != nil {\n\t\tt.Fatalf(\"Update() error = %v\", err)\n\t}\n\tif got := mustLastIndex(t, storage); got.Commit != gitHead(t, repo) {\n\t\tt.Errorf(\"after a clean update: Commit = %q, want HEAD %q\", got.Commit, gitHead(t, repo))\n\t}\n}",
+      "start_line": 357,
+      "end_line": 429,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.27646017,
+    "relevance": "low",
+    "preview": "func TestIndexManager_FileFailureLeavesLastIndex(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "caec52b9a26bb924",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/commands/search_behaviour_test.go",
+      "type": "function",
+      "name": "TestFindIndexPathFallsBackToDotIndex",
+      "signature": "func TestFindIndexPathFallsBackToDotIndex(t *testing.T)",
+      "content": "// TestFindIndexPathFallsBackToDotIndex covers priority 2, which is what every\n// default invocation actually uses.\nfunc TestFindIndexPathFallsBackToDotIndex(t *testing.T) {\n\tdir := newWorkspace(t)\n\twriteFile(t, filepath.Join(dir, \".index\", \"semantic.db\"), \"\")\n\tindexDir = \"nowhere\"\n\n\tgot := findIndexPath()\n\tif want := filepath.Join(\".index\", \"semantic.db\"); got != want {\n\t\tt.Errorf(\"findIndexPath = %q, want %q\", got, want)\n\t}\n}",
+      "start_line": 336,
+      "end_line": 347,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.27496335,
+    "relevance": "low",
+    "preview": "func TestFindIndexPathFallsBackToDotIndex(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "dc51de217f24f570",
+      "file_path": "/work/llm-semantic-axi/CHANGELOG.md",
+      "type": "file",
+      "name": "CHANGELOG \u003e Changelog \u003e [Unreleased] \u003e Fixed",
+      "content": "### Fixed\n\n- `index-update` (both `--no-git` and git paths) counts a file it could not process as skipped and names it with its error, in the text output and in `--json`/`--axi` (`files_skipped`, `errors`); before, such a file vanished silently. A store that cannot return a file's hash now counts as a failed file instead of re-indexing it. (epic 20)\n- `index` reports progress for an unreadable file (as skipped, with the count of files already done), and the commit-record failure message no longer begins \"index updated\", which a caller could read as success with a footnote. (epic 20)\n- Python recursion is one rule: `self.f()` inside method `f` (and `cls.f()`) now records no self-edge, as `f()` inside `f` already did. A call to a differently named method still records its edge. An index built before this change needs `index --force`. (epic 21)\n- `search` with an unquoted multi-word query no longer embeds a trailing space; the query is the arguments joined by single spaces, as `code-search`, `docs-search` and `memory-search` already did. (epic 22)\n- `refs` lists every `imports` edge as unresolved. Before, an import linked to any lone chunk of the same name, so `import debounce from \"lodash/debounce\"` pointed at a local `function debounce` (and Go's `import \"net/http\"` at a lone `func http`). Re-indexing unlinks imports edges an older index had already linked. (epic 03.1)\n- JavaScript and TypeScript call edges: a `this.get()` call links only to a `get` method of the caller's own class, in the same file. Before, it linked to any lone chunk named `get`, so a method was reported as a caller of a top-level function or of another class's method it can never reach. With no such method, or outside a class, the call stays unresolved in `refs` and is never shown as a caller. (epic 03.1)\n- Re-indexing a file edited to remove a chunk's last call now removes that chunk's old call edges; before, an edit that left a file with no calls at all kept every edge it used to have. (epic 03)\n- Opening an index written before the `file_mtime` column existed no longer fails with `no such column: file_mtime`; the migration now runs before the index that references it. (epic 11)\n- Qdrant `ReadEmbeddings` reads the `Dense` vector instead of the deprecated flat `Data` field, so a server that sends only `Dense` no longer yields an empty map and forces every unchanged chunk to be re-embedded. (epic 13)\n- MCP tool schemas no longer advertise `json` and `min` properties. The server always runs the CLI with `--axi`, so setting either was silently ignored. (epic 08)\n\n- With `--axi`, a failed command now prints its error as TOON (`error: true`, `message: ...`) on stdout and still exits non-zero. Before this it printed a plain `Error: ...` on stderr and left stdout empty, because nothing passed `--axi` to the error formatter. This covers errors from the root command's config checks as well as from the subcommand. (epic 05.1)\n- Plain `multisearch` with `--output by_query` or `by_collection` no longer prints `No results found.` under a header that counts results. The empty check read the blended list, which a grouped format leaves empty; it now reads the total. (epic 05.1)\n- `search`, the profile search aliases and `multisearch` over an index that exists but holds no chunks no longer print `No results found for \"...\"`, the same words as a search that matched nothing. They say the index is empty and name `llm-semantic index \u003cpath\u003e`; in `--axi` the answer carries `status: index_empty` and a `help` list pointing at `index`. An empty answer over a populated index carries `status: no_match`. `--json` is unchanged. (epic 05.1)",
+      "start_line": 49,
+      "end_line": 64,
+      "language": "markdown",
+      "domain": "code"
+    },
+    "score": 0.26635942,
+    "relevance": "low",
+    "preview": "### Fixed  - `index-update` (both `--no-git` and git paths) counts a file it could not process as skipped and names it with its error, in the text out..."
+  }
+]
