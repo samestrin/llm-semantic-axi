@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- `collection delete` without `--force` and `memory stats --prune` without `--yes` no longer prompt on stdin. They refuse with an error naming the flag and exit 1, deleting nothing; `--axi` adds the command to run. Before, answering "n" or running with closed stdin printed `Aborted` and exited 0, so a delete that did not happen reported success. Scripts that piped `y` into either command must pass the flag instead. (AXI principle 6)
+
 ## [1.0.0] - 2026-11-06
 
 First standalone release, extracted from [samestrin/llm-tools](https://github.com/samestrin/llm-tools). Installs with `install-release.sh` (no sudo, no clone, no Go; checksum-verified) or from source with `install.sh`. Support is best effort (see the README).
