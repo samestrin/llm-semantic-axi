@@ -183,6 +183,10 @@ make hooks       # opt in to the pre-commit hook
 
 CI gates coverage at 80% and fails below it. See `AGENTS.md` for house rules.
 
+## Support policy
+
+Support is best effort. This is a personal open-source project: issues and pull requests are read and answered as time allows, with no response-time or fix-time guarantee. If you need an answer sooner, include a reproduction against a tagged release.
+
 ## License
 
 MIT

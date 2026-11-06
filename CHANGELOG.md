@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-06
+
+First standalone release, extracted from [samestrin/llm-tools](https://github.com/samestrin/llm-tools). Installs with `install-release.sh` (no sudo, no clone, no Go; checksum-verified) or from source with `install.sh`. Support is best effort (see the README).
+
 ### Added
 
 - Download install path: each release publishes `llm-semantic-<os>-<arch>.tar.gz` holding both binaries for Linux and macOS (amd64, arm64), listed in `SHA256SUMS.txt`, plus `install-release.sh`. The installer needs no sudo, no clone and no Go: it downloads with timeouts, refuses an archive whose checksum is missing or wrong, and installs `llm-semantic` and `llm-semantic-mcp` together into `~/.local/bin` (`--dir` to change it, `--version` to pin a release, `--base-url` to point at a mirror). A failed or interrupted run leaves the existing binaries untouched. It warns when the install directory is not on `PATH`, because `llm-semantic-mcp` finds the CLI through `PATH`. `install.sh` (build from source) is unchanged. (epic 06)
