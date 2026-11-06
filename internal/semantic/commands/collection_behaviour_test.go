@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -104,10 +105,55 @@ func TestCollectionDeleteJSONReportsTheCount(t *testing.T) {
 	}
 }
 
-// TestCollectionDeleteRequiresConfirmation covers both prompt answers. This is
-// the most destructive command in the package; defaulting to yes loses an
-// entire index.
-func TestCollectionDeleteRequiresConfirmation(t *testing.T) {
+// TestCollectionDeleteWithoutForceRefusesAndNeverPrompts defends AXI
+// principle 6 and the repo rule that nothing reports success it did not
+// achieve. The command used to prompt on stdin and return nil when the answer
+// was "n" or stdin was closed, so a delete that never happened exited 0.
+// Whatever is on stdin, it must now refuse with an error naming --force, print
+// no prompt, and leave every chunk in place.
+func TestCollectionDeleteWithoutForceRefusesAndNeverPrompts(t *testing.T) {
+	dir := newWorkspace(t)
+	useEmbedder(t, newFakeEmbedder(t))
+	writeFile(t, filepath.Join(dir, "sample.go"), sampleGoSource)
+	captureStdout(t, func() {
+		if err := runIndex(context.Background(), ".", indexOpts{skipCalibration: true}); err != nil {
+			t.Fatalf("index: %v", err)
+		}
+	})
+	before := chunkCount(t)
+	if before == 0 {
+		t.Fatal("nothing was indexed, so the refusal would pass vacuously")
+	}
+
+	// "y" is included: a yes on stdin must not be read as consent either.
+	for _, stdin := range []string{"n\n", "", "y\n"} {
+		withStdin(t, stdin)
+		var err error
+		out := captureStdout(t, func() {
+			err = runCollectionDelete(context.Background(), collectionDeleteOpts{domain: "code"})
+		})
+		if err == nil {
+			t.Fatalf("stdin %q: delete without --force returned nil (exit 0)", stdin)
+		}
+		if !strings.Contains(err.Error(), "--force") {
+			t.Errorf("stdin %q: error = %v, want it to name --force", stdin, err)
+		}
+		var he *helpError
+		if !errors.As(err, &he) || len(he.AXIHelp()) == 0 {
+			t.Errorf("stdin %q: error carries no --axi next step: %#v", stdin, err)
+		}
+		if strings.Contains(out, "Are you sure?") {
+			t.Errorf("stdin %q: a confirmation prompt was shown:\n%s", stdin, out)
+		}
+		if got := chunkCount(t); got != before {
+			t.Fatalf("stdin %q: a refused delete removed chunks: %d -> %d", stdin, before, got)
+		}
+	}
+}
+
+// TestCollectionDeleteCmdWithoutForceExitsNonZero runs the cobra command, so
+// the refusal is checked at the layer that sets the exit code.
+func TestCollectionDeleteCmdWithoutForceExitsNonZero(t *testing.T) {
 	dir := newWorkspace(t)
 	useEmbedder(t, newFakeEmbedder(t))
 	writeFile(t, filepath.Join(dir, "sample.go"), sampleGoSource)
@@ -118,46 +164,18 @@ func TestCollectionDeleteRequiresConfirmation(t *testing.T) {
 	})
 	before := chunkCount(t)
 
-	withStdin(t, "n\n")
-	declined := captureStdout(t, func() {
-		if err := runCollectionDelete(context.Background(), collectionDeleteOpts{domain: "code"}); err != nil {
-			t.Fatalf("declined delete: %v", err)
-		}
-	})
-	if !strings.Contains(declined, "Are you sure?") {
-		t.Errorf("no confirmation prompt was shown:\n%s", declined)
-	}
-	if !strings.Contains(declined, "Aborted.") {
-		t.Errorf("answering no did not abort:\n%s", declined)
+	withStdin(t, "y\n")
+	cmd := collectionDeleteCmd()
+	cmd.SetArgs([]string{"--profile", "code"})
+	cmd.SetOut(&strings.Builder{})
+	cmd.SetErr(&strings.Builder{})
+	var err error
+	captureStdout(t, func() { err = cmd.Execute() })
+	if err == nil || !strings.Contains(err.Error(), "--force") {
+		t.Fatalf("collection delete without --force: err = %v, want a refusal naming --force", err)
 	}
 	if chunkCount(t) != before {
-		t.Error("a declined delete removed chunks anyway")
-	}
-
-	withStdin(t, "")
-	silent := captureStdout(t, func() {
-		if err := runCollectionDelete(context.Background(), collectionDeleteOpts{domain: "code"}); err != nil {
-			t.Fatalf("non-interactive delete: %v", err)
-		}
-	})
-	if !strings.Contains(silent, "Aborted (non-interactive input)") {
-		t.Errorf("a closed stdin did not abort:\n%s", silent)
-	}
-	if chunkCount(t) != before {
-		t.Error("a non-interactive delete removed chunks anyway")
-	}
-
-	withStdin(t, "Y\n")
-	confirmed := captureStdout(t, func() {
-		if err := runCollectionDelete(context.Background(), collectionDeleteOpts{domain: "code"}); err != nil {
-			t.Fatalf("confirmed delete: %v", err)
-		}
-	})
-	if strings.Contains(confirmed, "Aborted") {
-		t.Errorf("answering Y still aborted:\n%s", confirmed)
-	}
-	if chunkCount(t) != 0 {
-		t.Error("a confirmed delete left chunks behind")
+		t.Error("the refused delete removed chunks")
 	}
 }
 
