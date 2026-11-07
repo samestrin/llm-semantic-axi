@@ -370,3 +370,74 @@ func TestQdrantStorage_StatsCountsOnlyChunkPoints(t *testing.T) {
 		t.Errorf("Stats ChunksTotal = %d with one chunk stored, want 1", stats.ChunksTotal)
 	}
 }
+
+// TestQdrantStorage_ContractVersionStamped defends the contract marker: a new
+// collection records the storage contract version, so a reader can tell which
+// version of docs/storage-contract.md wrote it.
+func TestQdrantStorage_ContractVersionStamped(t *testing.T) {
+	_, fq := newFakeQdrantStorage(t, "contract_stamp", 4)
+
+	records := fq.payloadsWhere("contract_stamp", func(p map[string]*qdrant.Value) bool {
+		return p["type"].GetStringValue() == "storage_contract"
+	})
+	if len(records) != 1 {
+		t.Fatalf("storage_contract points = %d, want 1", len(records))
+	}
+	if got := records[0]["contract_version"].GetIntegerValue(); got != StorageContractVersion {
+		t.Errorf("contract_version = %d, want %d", got, StorageContractVersion)
+	}
+}
+
+// TestQdrantStorage_ContractVersionMismatchFails defends the clear error: a
+// collection stamped with another contract version must refuse to open rather
+// than be read as if its payload shapes were the ones this binary writes.
+func TestQdrantStorage_ContractVersionMismatchFails(t *testing.T) {
+	storage, fq := newFakeQdrantStorage(t, "contract_mismatch", 4)
+	stamp := storage.contractPoint(StorageContractVersion + 1)
+	if _, err := storage.client.Upsert(context.Background(), &qdrant.UpsertPoints{
+		CollectionName: "contract_mismatch",
+		Points:         []*qdrant.PointStruct{stamp},
+	}); err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+
+	err := storage.ensureCollection()
+	if err == nil {
+		t.Fatal("ensureCollection accepted a collection stamped with another contract version")
+	}
+	if !strings.Contains(err.Error(), "storage contract version") {
+		t.Errorf("error = %q, want it to name the storage contract version", err)
+	}
+	_ = fq
+}
+
+// TestQdrantStorage_ContractVersionStampsLegacyCollection defends collections
+// created before the marker existed: they are version 1 by definition, and
+// opening one stamps it instead of failing.
+func TestQdrantStorage_ContractVersionStampsLegacyCollection(t *testing.T) {
+	storage, fq := newFakeQdrantStorage(t, "contract_legacy", 4)
+	if _, err := storage.client.Delete(context.Background(), &qdrant.DeletePoints{
+		CollectionName: "contract_legacy",
+		Points:         qdrant.NewPointsSelector(qdrant.NewID(contractID())),
+	}); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if err := storage.ensureCollection(); err != nil {
+		t.Fatalf("ensureCollection on legacy collection: %v", err)
+	}
+	if fq.payloadOf("contract_legacy", contractID()) == nil {
+		t.Error("legacy collection was not stamped")
+	}
+}
+
+// TestQdrantStorage_ClearKeepsContractVersion defends --force re-index: Clear
+// recreates the collection and must leave it stamped.
+func TestQdrantStorage_ClearKeepsContractVersion(t *testing.T) {
+	storage, fq := newFakeQdrantStorage(t, "contract_clear", 4)
+	if err := storage.Clear(context.Background()); err != nil {
+		t.Fatalf("Clear: %v", err)
+	}
+	if fq.payloadOf("contract_clear", contractID()) == nil {
+		t.Error("Clear left the collection without a contract version")
+	}
+}
