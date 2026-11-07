@@ -121,9 +121,9 @@ func TestChunkers_ReturnTheirChunksWithErrParseTree(t *testing.T) {
 // hit embedded for nothing.
 func TestFallback_BlankGapsBetweenNamedChunksGetNoWindow(t *testing.T) {
 	src := "def a():\n    return 1\n    \n\t\ndef b():\n    return 2\n\nwhile True print(\n"
-	chunks, fellBack, err := WithFallback(NewPythonChunker()).ChunkWithFallback("g.py", []byte(src))
-	if err != nil || !fellBack {
-		t.Fatalf("ChunkWithFallback: fellBack=%v err=%v", fellBack, err)
+	chunks, reason, err := WithFallback(NewPythonChunker()).ChunkWithFallback("g.py", []byte(src))
+	if err != nil || reason == semantic.FallbackNone {
+		t.Fatalf("ChunkWithFallback: reason=%q err=%v", reason, err)
 	}
 	for _, c := range chunks {
 		if c.Type == semantic.ChunkFile && strings.TrimSpace(c.Content) == "" {
@@ -141,11 +141,11 @@ func TestFallback_BlankGapsBetweenNamedChunksGetNoWindow(t *testing.T) {
 // stdlib files that gotreesitter flags; keeping only the named chunks would
 // drop `after` here without a word.
 func TestFallback_PartlyParsedFileKeepsNamedChunksAndWindowsTheRest(t *testing.T) {
-	chunks, fellBack, err := WithFallback(NewPythonChunker()).ChunkWithFallback("p.py", []byte(partlyBrokenPython))
+	chunks, reason, err := WithFallback(NewPythonChunker()).ChunkWithFallback("p.py", []byte(partlyBrokenPython))
 	if err != nil {
 		t.Fatalf("ChunkWithFallback: %v", err)
 	}
-	if !fellBack {
+	if reason == semantic.FallbackNone {
 		t.Error("a partly parsed file was not reported as a fallback")
 	}
 
@@ -193,11 +193,11 @@ func TestFallback_PartlyParsedFileKeepsNamedChunksAndWindowsTheRest(t *testing.T
 func TestFallback_UnparseableFileBecomesTextWindows(t *testing.T) {
 	w := WithFallback(NewPythonChunker())
 
-	chunks, fellBack, err := w.ChunkWithFallback("pkg/broken.py", []byte(brokenPython))
+	chunks, reason, err := w.ChunkWithFallback("pkg/broken.py", []byte(brokenPython))
 	if err != nil {
 		t.Fatalf("ChunkWithFallback: %v", err)
 	}
-	if !fellBack {
+	if reason == semantic.FallbackNone {
 		t.Error("an unparseable file was not reported as a fallback")
 	}
 	assertTextWindows(t, chunks, "pkg/broken.py")
@@ -208,11 +208,11 @@ func TestFallback_UnparseableFileBecomesTextWindows(t *testing.T) {
 func TestFallback_CleanFileKeepsTreeSitterChunks(t *testing.T) {
 	w := WithFallback(NewPythonChunker())
 
-	chunks, fellBack, err := w.ChunkWithFallback("ok.py", []byte(cleanPython))
+	chunks, reason, err := w.ChunkWithFallback("ok.py", []byte(cleanPython))
 	if err != nil {
 		t.Fatalf("ChunkWithFallback: %v", err)
 	}
-	if fellBack {
+	if reason != semantic.FallbackNone {
 		t.Error("a clean file was reported as a fallback")
 	}
 	if len(chunks) != 1 || chunks[0].Name != "ok" || chunks[0].Type != semantic.ChunkFunction {
@@ -242,11 +242,11 @@ func TestFallback_ChunkerErrorAndPanicFallBack(t *testing.T) {
 	}
 	for name, inner := range cases {
 		t.Run(name, func(t *testing.T) {
-			chunks, fellBack, err := WithFallback(inner).ChunkWithFallback("a.stub", []byte("line one\nline two\n"))
+			chunks, reason, err := WithFallback(inner).ChunkWithFallback("a.stub", []byte("line one\nline two\n"))
 			if err != nil {
 				t.Fatalf("ChunkWithFallback: %v", err)
 			}
-			if !fellBack {
+			if reason == semantic.FallbackNone {
 				t.Error("the failure was not reported as a fallback")
 			}
 			assertTextWindows(t, chunks, "a.stub")
@@ -262,11 +262,11 @@ func TestFallback_NonParseErrorDiscardsPartialChunks(t *testing.T) {
 	half := semantic.Chunk{FilePath: "a.stub", Type: semantic.ChunkFunction, Name: "half", StartLine: 1, EndLine: 1}
 	inner := &stubChunker{chunks: []semantic.Chunk{half}, err: errors.New("parser gave up")}
 
-	chunks, fellBack, err := WithFallback(inner).ChunkWithFallback("a.stub", []byte("line one\nline two\nline three"))
+	chunks, reason, err := WithFallback(inner).ChunkWithFallback("a.stub", []byte("line one\nline two\nline three"))
 	if err != nil {
 		t.Fatalf("ChunkWithFallback: %v", err)
 	}
-	if !fellBack {
+	if reason == semantic.FallbackNone {
 		t.Error("the failure was not reported as a fallback")
 	}
 	assertTextWindows(t, chunks, "a.stub") // fails on the kept `half` chunk
@@ -354,5 +354,41 @@ func TestFallback_RefExtractionPanicIsAnError(t *testing.T) {
 	_, err := WithFallback(&refStub{panics: true}).ExtractRefs("x.stub", nil, nil)
 	if err == nil || !strings.Contains(err.Error(), "ref walk blew up") {
 		t.Errorf("ExtractRefs err = %v, want the panic as an error", err)
+	}
+}
+
+// Defends the reason a file was windowed reaching the caller: a parse-tree
+// error is the file's fault, a chunker error or panic is not, and both used to
+// print the same "(parse failed)" label.
+func TestFallback_ReportsWhyItFellBack(t *testing.T) {
+	cases := map[string]struct {
+		stub *stubChunker
+		want semantic.FallbackReason
+	}{
+		"clean":       {&stubChunker{chunks: []semantic.Chunk{{Name: "ok", Type: semantic.ChunkFunction}}}, semantic.FallbackNone},
+		"parse error": {&stubChunker{err: ErrParseTree}, semantic.FallbackParseFailed},
+		"error":       {&stubChunker{err: errors.New("grammar blew up")}, semantic.FallbackChunkerFailed},
+		"panic":       {&stubChunker{panics: true}, semantic.FallbackChunkerFailed},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			_, reason, err := WithFallback(c.stub).ChunkWithFallback("x.stub", []byte("body\n"))
+			if err != nil {
+				t.Fatalf("ChunkWithFallback: %v", err)
+			}
+			if reason != c.want {
+				t.Errorf("reason = %q, want %q", reason, c.want)
+			}
+		})
+	}
+}
+
+// Defends the fallback window size matching the generic chunker the index uses
+// for text files: one number, so a fallen-back file is windowed like any other
+// text file instead of by a copy that can drift.
+func TestFallback_WindowSizeIsTheGenericChunkerSize(t *testing.T) {
+	if fallbackMaxChunkSize != semantic.GenericMaxChunkSize {
+		t.Errorf("fallbackMaxChunkSize = %d, want semantic.GenericMaxChunkSize (%d)",
+			fallbackMaxChunkSize, semantic.GenericMaxChunkSize)
 	}
 }

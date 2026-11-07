@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/odvcencio/gotreesitter"
-	"github.com/odvcencio/gotreesitter/grammars"
 	"github.com/samestrin/llm-semantic-axi/internal/semantic"
 )
 
@@ -102,12 +101,6 @@ func WalkNamedChildren(node *gotreesitter.Node, lang *gotreesitter.Language, fn 
 		child := node.NamedChild(i)
 		fn(child, child.Type(lang))
 	}
-}
-
-// GetLangEntry returns the gotreesitter language entry for a file extension.
-func GetLangEntry(ext string) *grammars.LangEntry {
-	// grammars.DetectLanguage expects a filename, not just extension
-	return grammars.DetectLanguage("file." + ext)
 }
 
 // IncludesDecorators checks for decorator nodes above a function/class definition

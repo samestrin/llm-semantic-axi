@@ -364,14 +364,3 @@ func TestExtractors_NeverEmitANamelessChunk(t *testing.T) {
 		})
 	}
 }
-
-func TestGetLangEntry_ResolvesEveryChunkedLanguage(t *testing.T) {
-	// GetLangEntry builds a filename from a bare extension. If that mapping
-	// broke, the dispatcher would fall back to line chunking for a language this
-	// package has a real parser for.
-	for _, ext := range []string{"py", "js", "ts", "rs", "php"} {
-		if GetLangEntry(ext) == nil {
-			t.Errorf("GetLangEntry(%q) = nil, want a grammar entry", ext)
-		}
-	}
-}

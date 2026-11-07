@@ -120,7 +120,10 @@ type IndexResult struct {
 	ChunksCreated  int      `json:"chunks_created"`           // Total chunks created
 	FilesFallback  int      `json:"files_fallback"`           // Files chunked as text windows because their parse failed
 	FallbackFiles  []string `json:"fallback_files,omitempty"` // Paths of those files
-	Errors         []string `json:"errors"`                   // Error messages
+	// FallbackChunkerFailedFiles names the subset of FallbackFiles whose
+	// chunker errored or panicked. The rest fell back on a parse-tree error.
+	FallbackChunkerFailedFiles []string `json:"fallback_chunker_failed_files,omitempty"`
+	Errors                     []string `json:"errors"` // Error messages
 }
 
 // UpdateResult contains statistics from an update operation
@@ -134,10 +137,12 @@ type UpdateResult struct {
 	ChunksCreated int      `json:"chunks_created"`
 	ChunksRemoved int      `json:"chunks_removed"`
 	// FilesFallback counts files chunked as text windows because their parse
-	// failed; FallbackFiles names them.
-	FilesFallback int      `json:"files_fallback"`
-	FallbackFiles []string `json:"fallback_files,omitempty"`
-	Mode          string   `json:"mode"` // "git" or "full"
+	// failed; FallbackFiles names them, and FallbackChunkerFailedFiles names
+	// the ones whose chunker errored or panicked instead.
+	FilesFallback              int      `json:"files_fallback"`
+	FallbackFiles              []string `json:"fallback_files,omitempty"`
+	FallbackChunkerFailedFiles []string `json:"fallback_chunker_failed_files,omitempty"`
+	Mode                       string   `json:"mode"` // "git" or "full"
 }
 
 // IndexManager handles indexing operations
@@ -391,14 +396,14 @@ func (m *IndexManager) indexWithCrossFileBatching(ctx context.Context, files []s
 		}
 
 		// Chunk the file
-		chunks, contentHash, fellBack, err := m.chunkFile(file)
+		chunks, contentHash, reason, err := m.chunkFile(file)
 		if err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", file, err))
 			result.FilesSkipped++
 			continue
 		}
-		if fellBack {
-			result.addFallback(file)
+		if reason != FallbackNone {
+			result.addFallback(file, reason)
 		}
 
 		// Tag chunks with domain
@@ -568,17 +573,17 @@ func (m *IndexManager) indexWithCrossFileBatching(ctx context.Context, files []s
 
 // chunkFile reads and chunks a single file, returning chunks, content hash,
 // and whether the chunker fell back to text windows.
-func (m *IndexManager) chunkFile(filePath string) ([]Chunk, string, bool, error) {
+func (m *IndexManager) chunkFile(filePath string) ([]Chunk, string, FallbackReason, error) {
 	// Get appropriate chunker
 	chunker, ok := m.factory.GetByExtension(filePath)
 	if !ok {
-		return nil, "", false, fmt.Errorf("no chunker for file type")
+		return nil, "", FallbackNone, fmt.Errorf("no chunker for file type")
 	}
 
 	// Read file content
 	content, err := os.ReadFile(filePath)
 	if err != nil {
-		return nil, "", false, fmt.Errorf("failed to read file: %w", err)
+		return nil, "", FallbackNone, fmt.Errorf("failed to read file: %w", err)
 	}
 
 	// Calculate hash
@@ -586,9 +591,9 @@ func (m *IndexManager) chunkFile(filePath string) ([]Chunk, string, bool, error)
 	hashStr := hex.EncodeToString(contentHash[:])
 
 	// Parse into chunks
-	chunks, fellBack, err := chunkWithFallback(chunker, filePath, content)
+	chunks, reason, err := chunkWithFallback(chunker, filePath, content)
 	if err != nil {
-		return nil, "", false, fmt.Errorf("failed to chunk file: %w", err)
+		return nil, "", FallbackNone, fmt.Errorf("failed to chunk file: %w", err)
 	}
 
 	// Compute content hashes for diff-based re-indexing
@@ -596,29 +601,35 @@ func (m *IndexManager) chunkFile(filePath string) ([]Chunk, string, bool, error)
 		chunks[i].ContentHash = chunks[i].ComputeContentHash()
 	}
 
-	return chunks, hashStr, fellBack, nil
+	return chunks, hashStr, reason, nil
 }
 
-// chunkWithFallback chunks content, and reports whether the chunker had to
-// fall back to text windows. Only a FallbackChunker can say so.
-func chunkWithFallback(chunker Chunker, path string, content []byte) ([]Chunk, bool, error) {
+// chunkWithFallback chunks content, and reports why the chunker had to fall
+// back to text windows, if it did. Only a FallbackChunker can say so.
+func chunkWithFallback(chunker Chunker, path string, content []byte) ([]Chunk, FallbackReason, error) {
 	if fc, ok := chunker.(FallbackChunker); ok {
 		return fc.ChunkWithFallback(path, content)
 	}
 	chunks, err := chunker.Chunk(path, content)
-	return chunks, false, err
+	return chunks, FallbackNone, err
 }
 
-// addFallback records a file that was chunked as text windows.
-func (r *IndexResult) addFallback(path string) {
+// addFallback records a file that was chunked as text windows, and why.
+func (r *IndexResult) addFallback(path string, reason FallbackReason) {
 	r.FilesFallback++
 	r.FallbackFiles = append(r.FallbackFiles, path)
+	if reason == FallbackChunkerFailed {
+		r.FallbackChunkerFailedFiles = append(r.FallbackChunkerFailedFiles, path)
+	}
 }
 
-// addFallback records a file that was chunked as text windows.
-func (r *UpdateResult) addFallback(path string) {
+// addFallback records a file that was chunked as text windows, and why.
+func (r *UpdateResult) addFallback(path string, reason FallbackReason) {
 	r.FilesFallback++
 	r.FallbackFiles = append(r.FallbackFiles, path)
+	if reason == FallbackChunkerFailed {
+		r.FallbackChunkerFailedFiles = append(r.FallbackChunkerFailedFiles, path)
+	}
 }
 
 // addSkipped records a file that could not be processed, with its error.
@@ -630,13 +641,13 @@ func (r *UpdateResult) addSkipped(path string, err error) {
 // processFileWithDiff re-indexes a file using content-aware diffing.
 // Only chunks whose content actually changed are re-embedded. Moved but
 // unchanged code has its embedding reused. Returns (chunksCreated,
-// chunksRemoved, fellBack, error), where fellBack reports that the file was
-// chunked as text windows because its parse failed.
-func (m *IndexManager) processFileWithDiff(ctx context.Context, filePath string, domain string) (int, int, bool, error) {
+// chunksRemoved, reason, error), where reason says why the file was chunked as
+// text windows, if it was.
+func (m *IndexManager) processFileWithDiff(ctx context.Context, filePath string, domain string) (int, int, FallbackReason, error) {
 	// Step 1: Re-chunk the file
-	chunks, fileHash, fellBack, err := m.chunkFile(filePath)
+	chunks, fileHash, reason, err := m.chunkFile(filePath)
 	if err != nil {
-		return 0, 0, false, err
+		return 0, 0, FallbackNone, err
 	}
 
 	// Tag domain and compute content hashes
@@ -658,7 +669,7 @@ func (m *IndexManager) processFileWithDiff(ctx context.Context, filePath string,
 	// Step 2: Get old chunk summaries from storage
 	oldSummaries, err := m.storage.GetChunksByFilePath(ctx, filePath)
 	if err != nil {
-		return 0, 0, false, fmt.Errorf("failed to get old chunks: %w", err)
+		return 0, 0, FallbackNone, fmt.Errorf("failed to get old chunks: %w", err)
 	}
 
 	// Step 3: Diff old vs new
@@ -668,7 +679,7 @@ func (m *IndexManager) processFileWithDiff(ctx context.Context, filePath string,
 	chunksRemoved := 0
 	for _, oldID := range diff.Delete {
 		if err := m.storage.Delete(ctx, oldID); err != nil {
-			return 0, 0, false, fmt.Errorf("failed to delete old chunk %s: %w", oldID, err)
+			return 0, 0, FallbackNone, fmt.Errorf("failed to delete old chunk %s: %w", oldID, err)
 		}
 		chunksRemoved++
 	}
@@ -680,7 +691,7 @@ func (m *IndexManager) processFileWithDiff(ctx context.Context, filePath string,
 	}
 	reusedEmbeddings, err := m.storage.ReadEmbeddings(ctx, reuseOldIDs)
 	if err != nil {
-		return 0, 0, false, fmt.Errorf("failed to read old embeddings: %w", err)
+		return 0, 0, FallbackNone, fmt.Errorf("failed to read old embeddings: %w", err)
 	}
 
 	// Step 6: Store reused chunks (always delete old, then create new to avoid unique constraint)
@@ -699,7 +710,7 @@ func (m *IndexManager) processFileWithDiff(ctx context.Context, filePath string,
 			chunksRemoved++
 		}
 		if err := m.storage.Create(ctx, newChunk, emb); err != nil {
-			return 0, 0, false, fmt.Errorf("failed to store reused chunk: %w", err)
+			return 0, 0, FallbackNone, fmt.Errorf("failed to store reused chunk: %w", err)
 		}
 		reuseCount++
 	}
@@ -716,7 +727,7 @@ func (m *IndexManager) processFileWithDiff(ctx context.Context, filePath string,
 
 		embeddings, err := m.embedder.EmbedBatch(ctx, texts)
 		if err != nil {
-			return 0, 0, false, fmt.Errorf("failed to generate embeddings: %w", err)
+			return 0, 0, FallbackNone, fmt.Errorf("failed to generate embeddings: %w", err)
 		}
 
 		cwes := make([]ChunkWithEmbedding, len(embedChunks))
@@ -728,7 +739,7 @@ func (m *IndexManager) processFileWithDiff(ctx context.Context, filePath string,
 		}
 
 		if err := m.storage.CreateBatch(ctx, cwes); err != nil {
-			return 0, 0, false, fmt.Errorf("failed to store new chunks: %w", err)
+			return 0, 0, FallbackNone, fmt.Errorf("failed to store new chunks: %w", err)
 		}
 		chunksCreated += len(cwes)
 	}
@@ -744,10 +755,10 @@ func (m *IndexManager) processFileWithDiff(ctx context.Context, filePath string,
 
 	// Step 9: Update file hash
 	if err := m.storage.SetFileHash(ctx, filePath, fileHash); err != nil {
-		return 0, 0, false, fmt.Errorf("failed to set file hash: %w", err)
+		return 0, 0, FallbackNone, fmt.Errorf("failed to set file hash: %w", err)
 	}
 
-	return chunksCreated, chunksRemoved, fellBack, nil
+	return chunksCreated, chunksRemoved, reason, nil
 }
 
 // Update performs an incremental update by scanning every file under rootPath.
@@ -798,13 +809,13 @@ func (m *IndexManager) Update(ctx context.Context, rootPath string, opts UpdateO
 
 		if needsUpdate {
 			// Use content-aware diff to only re-embed changed chunks
-			created, removed, fellBack, err := m.processFileWithDiff(ctx, file, opts.Domain)
+			created, removed, reason, err := m.processFileWithDiff(ctx, file, opts.Domain)
 			if err == nil {
 				result.FilesUpdated++
 				result.ChunksCreated += created
 				result.ChunksRemoved += removed
-				if fellBack {
-					result.addFallback(file)
+				if reason != FallbackNone {
+					result.addFallback(file, reason)
 				}
 			} else {
 				result.addSkipped(file, err)
@@ -881,7 +892,14 @@ func (m *IndexManager) UpdateGit(ctx context.Context, rootPath string, gitRef st
 			result.FilesUpdated++
 			result.ChunksCreated += indexResult.ChunksCreated
 			for _, path := range indexResult.FallbackFiles {
-				result.addFallback(path)
+				reason := FallbackParseFailed
+				for _, failed := range indexResult.FallbackChunkerFailedFiles {
+					if failed == path {
+						reason = FallbackChunkerFailed
+						break
+					}
+				}
+				result.addFallback(path, reason)
 			}
 		} else {
 			result.addSkipped(absPath, err)
@@ -1151,7 +1169,7 @@ func (m *IndexManager) processFile(ctx context.Context, filePath string, result 
 	}
 
 	// Parse into chunks
-	chunks, fellBack, err := chunkWithFallback(chunker, filePath, content)
+	chunks, reason, err := chunkWithFallback(chunker, filePath, content)
 	if err != nil {
 		return fmt.Errorf("failed to chunk file: %w", err)
 	}
@@ -1248,8 +1266,8 @@ func (m *IndexManager) processFile(ctx context.Context, filePath string, result 
 		}
 	}
 	result.ChunksCreated += len(chunksWithEmbeddings)
-	if fellBack {
-		result.addFallback(filePath)
+	if reason != FallbackNone {
+		result.addFallback(filePath, reason)
 	}
 
 	// Extract and store chunk references if chunker supports it

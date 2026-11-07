@@ -207,7 +207,7 @@ func reportUpdateResult(result *semantic.UpdateResult, jsonOutput bool) error {
 	if result.FilesSkipped > 0 {
 		fmt.Printf("Skipped %d files with errors\n", result.FilesSkipped)
 	}
-	printFallback(result.FilesFallback, result.FallbackFiles)
+	printFallback(result.FilesFallback, result.FallbackFiles, result.FallbackChunkerFailedFiles)
 	if len(result.Errors) > 0 {
 		fmt.Println("Errors:")
 		for _, e := range result.Errors {

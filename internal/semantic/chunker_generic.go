@@ -5,6 +5,10 @@ import (
 	"strings"
 )
 
+// GenericMaxChunkSize is the window size a text file is chunked at, and the one
+// a fallen-back file's text windows use, so the two never disagree.
+const GenericMaxChunkSize = 1500
+
 // GenericChunker implements a simple text-based chunker for unsupported file types
 type GenericChunker struct {
 	maxChunkSize int

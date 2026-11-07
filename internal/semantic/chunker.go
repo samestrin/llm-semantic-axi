@@ -15,12 +15,29 @@ type Chunker interface {
 	SupportedExtensions() []string
 }
 
+// FallbackReason says why a chunker stood text windows in for code it could not
+// chunk. The empty value means it did not fall back at all.
+type FallbackReason string
+
+const (
+	// FallbackNone means the chunker chunked the file with no text windows.
+	FallbackNone FallbackReason = ""
+	// FallbackParseFailed means the file's parse tree had an error, so the code
+	// it could not parse became text windows. The file's fault.
+	FallbackParseFailed FallbackReason = "parse_failed"
+	// FallbackChunkerFailed means the chunker itself errored or panicked, so the
+	// whole file became text windows. Not the file's fault, and the output must
+	// not blame its syntax.
+	FallbackChunkerFailed FallbackReason = "chunker_failed"
+)
+
 // FallbackChunker is a Chunker that can chunk a file some other way when its
-// own parse fails, and says when it did. The index manager counts those files
-// so the output can state them rather than pass them off as parsed.
+// own parse fails, and says why it did. The index manager counts those files
+// and their reasons, so the output can state them rather than pass them off as
+// parsed.
 type FallbackChunker interface {
 	Chunker
-	ChunkWithFallback(path string, content []byte) (chunks []Chunk, fellBack bool, err error)
+	ChunkWithFallback(path string, content []byte) (chunks []Chunk, reason FallbackReason, err error)
 }
 
 // ChunkerFactory manages language-specific chunkers

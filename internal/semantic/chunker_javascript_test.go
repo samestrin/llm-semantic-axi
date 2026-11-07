@@ -211,7 +211,9 @@ func TestJSChunker_SupportedExtensions(t *testing.T) {
 	chunker := NewJSChunker()
 
 	exts := chunker.SupportedExtensions()
-	expected := map[string]bool{"js": false, "jsx": false, "ts": false, "tsx": false, "mjs": false, "cjs": false}
+	// TypeScript is the tree-sitter TypeScriptChunker's; this chunker claiming
+	// `ts`/`tsx` too made the registry's extension list list them twice.
+	expected := map[string]bool{"js": false, "jsx": false, "mjs": false, "cjs": false}
 
 	for _, ext := range exts {
 		if _, ok := expected[ext]; ok {
