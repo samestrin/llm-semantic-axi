@@ -9,9 +9,10 @@ import (
 	"github.com/samestrin/llm-semantic-axi/internal/semantic"
 )
 
-// fallbackMaxChunkSize mirrors genericMaxChunkSize in commands/index.go, so a
-// fallen-back file is windowed like any other text file.
-const fallbackMaxChunkSize = 1500
+// fallbackMaxChunkSize is the size a fallen-back file's text windows use: the
+// same number the index chunks plain text files at, shared rather than copied so
+// the two cannot drift apart.
+const fallbackMaxChunkSize = semantic.GenericMaxChunkSize
 
 // Fallback wraps a tree-sitter chunker. When the parse tree has an error, it
 // keeps the chunks the inner chunker still found and chunks every non-blank
@@ -51,29 +52,32 @@ func (f *Fallback) Chunk(path string, content []byte) ([]semantic.Chunk, error) 
 	return chunks, err
 }
 
-// ChunkWithFallback is Chunk, and also reports whether any text windows
-// stand in for code the inner chunker could not parse.
-func (f *Fallback) ChunkWithFallback(path string, content []byte) ([]semantic.Chunk, bool, error) {
+// ChunkWithFallback is Chunk, and also says why text windows stand in for code,
+// if they do.
+func (f *Fallback) ChunkWithFallback(path string, content []byte) ([]semantic.Chunk, semantic.FallbackReason, error) {
 	chunks, err := f.chunkInner(path, content)
 	if err == nil {
-		return chunks, false, nil
+		return chunks, semantic.FallbackNone, nil
 	}
-	if !errors.Is(err, ErrParseTree) {
+	reason := semantic.FallbackChunkerFailed
+	if errors.Is(err, ErrParseTree) {
+		reason = semantic.FallbackParseFailed
+	} else {
 		chunks = nil
 	}
-	windows, err := f.windowUncovered(path, content, chunks)
-	if err != nil {
-		return nil, true, err
-	}
-	chunks = append(chunks, windows...)
+	chunks = append(chunks, f.windowUncovered(path, content, chunks)...)
 	sort.SliceStable(chunks, func(i, j int) bool { return chunks[i].StartLine < chunks[j].StartLine })
-	return chunks, true, nil
+	return chunks, reason, nil
 }
 
 // windowUncovered chunks each run of lines that no chunk covers into text
 // windows, numbered by their lines in the file. Runs holding only whitespace
 // are skipped: they are the gaps between definitions, not dropped code.
-func (f *Fallback) windowUncovered(path string, content []byte, chunks []semantic.Chunk) ([]semantic.Chunk, error) {
+//
+// It returns no error because the generic chunker cannot fail: it splits text
+// by size and never rejects it. The error returns this used to have were
+// unreachable.
+func (f *Fallback) windowUncovered(path string, content []byte, chunks []semantic.Chunk) []semantic.Chunk {
 	lines := strings.Split(string(content), "\n")
 	covered := make([]bool, len(lines)+1) // 1-based
 	for _, c := range chunks {
@@ -93,10 +97,7 @@ func (f *Fallback) windowUncovered(path string, content []byte, chunks []semanti
 		}
 		text := strings.Join(lines[start-1:end], "\n")
 		if strings.TrimSpace(text) != "" {
-			got, err := f.generic.Chunk(path, []byte(text))
-			if err != nil {
-				return nil, err
-			}
+			got, _ := f.generic.Chunk(path, []byte(text))
 			for _, w := range got {
 				w.StartLine += start - 1
 				w.EndLine += start - 1
@@ -106,7 +107,7 @@ func (f *Fallback) windowUncovered(path string, content []byte, chunks []semanti
 		}
 		start = end
 	}
-	return windows, nil
+	return windows
 }
 
 // ExtractRefs returns the inner chunker's references, or none if it extracts

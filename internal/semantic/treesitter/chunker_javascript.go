@@ -100,7 +100,9 @@ func (c *JSChunker) extractClass(node *gotreesitter.Node, lang *gotreesitter.Lan
 			case "method_definition":
 				c.extractMethod(child, lang, content, path, ext, chunks, className)
 			case "public_field_definition", "field_definition":
-				// Skip fields
+				// A field holding an arrow function or a function expression is
+				// a callable member; a field holding a value is data.
+				c.extractFieldFunction(child, lang, content, path, ext, chunks, className)
 			}
 		})
 	}
@@ -112,6 +114,35 @@ func (c *JSChunker) extractMethod(node *gotreesitter.Node, lang *gotreesitter.La
 	if name == "" {
 		return
 	}
+
+	sig := ExtractSignature(node, content)
+	chunk := NodeToChunk(node, content, path, ext, semantic.ChunkMethod, name, sig)
+	*chunks = append(*chunks, chunk)
+}
+
+// extractFieldFunction emits a method chunk for a class field whose value is a
+// function: `bar = () => {}` is a callable member, and it was indexed as
+// nothing while only the enclosing class was stored. A field holding a value is
+// left alone, and one holding something else (a call, a reference) is not a
+// callable member either.
+func (c *JSChunker) extractFieldFunction(node *gotreesitter.Node, lang *gotreesitter.Language, content []byte, path, ext string, chunks *[]semantic.Chunk, className string) {
+	valueNode := GetChildByFieldName(node, "value", lang)
+	if valueNode == nil {
+		return
+	}
+	switch valueNode.Type(lang) {
+	case "arrow_function", "function_expression", "function":
+	default:
+		return
+	}
+
+	// The JavaScript grammar names the field `property`, the TypeScript one
+	// `name`; both hold the identifier the member is called by.
+	nameNode := GetChildByFieldName(node, "name", lang)
+	if nameNode == nil {
+		nameNode = GetChildByFieldName(node, "property", lang)
+	}
+	name := GetNodeText(nameNode, content)
 
 	sig := ExtractSignature(node, content)
 	chunk := NodeToChunk(node, content, path, ext, semantic.ChunkMethod, name, sig)

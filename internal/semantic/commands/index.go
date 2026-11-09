@@ -28,7 +28,10 @@ const (
 	// Note: Code is token-dense (~2 chars/token vs ~4 for prose) due to camelCase, brackets, etc.
 	markdownMaxChunkSize = 4000 // ~1000 tokens, good for documentation sections
 	htmlMaxChunkSize     = 4000 // not currently used for size-based chunking (HTML uses semantic boundaries)
-	genericMaxChunkSize  = 1500 // ~750 tokens for code (conservative for 2048-token context limits)
+	// ~750 tokens for code (conservative for 2048-token context limits), shared
+	// with the fallback wrapper so a text window and a text-file chunk are the
+	// same size.
+	genericMaxChunkSize = semantic.GenericMaxChunkSize
 )
 
 func indexCmd() *cobra.Command {
@@ -396,7 +399,7 @@ func runIndex(ctx context.Context, path string, opts indexOpts) error {
 	if result.FilesSkipped > 0 {
 		fmt.Printf("Skipped %d files with errors\n", result.FilesSkipped)
 	}
-	printFallback(result.FilesFallback, result.FallbackFiles)
+	printFallback(result.FilesFallback, result.FallbackFiles, result.FallbackChunkerFailedFiles)
 	if len(result.Errors) > 0 {
 		fmt.Println("Errors:")
 		for _, e := range result.Errors {
@@ -574,15 +577,35 @@ func truncatePath(path string, maxLen int) string {
 	return string(runes[:half]) + "..." + string(runes[len(runes)-half:])
 }
 
-// printFallback states how many files were chunked as text windows because
-// their parse failed, and names them. A clean run prints nothing.
-func printFallback(count int, files []string) {
+// printFallback states how many files were chunked as text windows and why, and
+// names them. A parse-tree error and a chunker that errored or panicked both
+// end in text windows, but only the first says anything about the file, so they
+// are counted and labelled apart. A clean run prints nothing.
+func printFallback(count int, files, chunkerFailed []string) {
 	if count == 0 {
 		return
 	}
-	fmt.Printf("Chunked %d files as text windows (parse failed):\n", count)
+	failed := make(map[string]bool, len(chunkerFailed))
+	for _, f := range chunkerFailed {
+		failed[f] = true
+	}
+	var parseFailed []string
 	for _, f := range files {
-		fmt.Printf("  - %s\n", f)
+		if !failed[f] {
+			parseFailed = append(parseFailed, f)
+		}
+	}
+	if len(parseFailed) > 0 {
+		fmt.Printf("Chunked %d files as text windows (parse failed):\n", len(parseFailed))
+		for _, f := range parseFailed {
+			fmt.Printf("  - %s\n", f)
+		}
+	}
+	if len(chunkerFailed) > 0 {
+		fmt.Printf("Chunked %d files as text windows (chunker failed):\n", len(chunkerFailed))
+		for _, f := range chunkerFailed {
+			fmt.Printf("  - %s\n", f)
+		}
 	}
 }
 

@@ -338,5 +338,5 @@ func (c *JSChunker) extractContent(lines []string, startIdx, endIdx int) string 
 
 // SupportedExtensions returns the file extensions this chunker handles
 func (c *JSChunker) SupportedExtensions() []string {
-	return []string{"js", "jsx", "ts", "tsx", "mjs", "cjs"}
+	return []string{"js", "jsx", "mjs", "cjs"}
 }

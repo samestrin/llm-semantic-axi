@@ -140,9 +140,9 @@ func TestCSharpChunker_TreeThatDroppedDeclarationsIsAParseError(t *testing.T) {
 	}
 
 	// Through the wrapper, the lines the tree lost must still be indexed.
-	chunks, fellBack, err := WithFallback(NewCSharpChunker()).ChunkWithFallback("D.cs", []byte(src))
-	if err != nil || !fellBack {
-		t.Fatalf("ChunkWithFallback: fellBack=%v err=%v", fellBack, err)
+	chunks, reason, err := WithFallback(NewCSharpChunker()).ChunkWithFallback("D.cs", []byte(src))
+	if err != nil || reason == semantic.FallbackNone {
+		t.Fatalf("ChunkWithFallback: reason=%q err=%v", reason, err)
 	}
 	covered := false
 	for _, c := range chunks {

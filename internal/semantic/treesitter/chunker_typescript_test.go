@@ -178,3 +178,37 @@ func TestTypeScriptChunker_EmptySourceYieldsNoChunks(t *testing.T) {
 		}
 	}
 }
+
+// Defends the namespace body being walked: `namespace X { ... }` parses as an
+// expression statement holding an internal_module, and `declare module "m"`
+// as an ambient_declaration holding a module, so before this no arm matched and
+// every declaration inside was missing from the index while the file still
+// reported a clean parse.
+func TestTypeScriptChunker_ChunksDeclarationsInsideNamespaces(t *testing.T) {
+	cases := map[string]struct {
+		src  string
+		want []tsChunk
+	}{
+		"namespace": {
+			"namespace X {\n  export function f() {}\n}\n",
+			[]tsChunk{{"f", semantic.ChunkFunction, 2, 2}},
+		},
+		"nested namespace": {
+			"namespace A.B {\n  export class C {\n    m() {}\n  }\n}\n",
+			[]tsChunk{{"C", semantic.ChunkStruct, 2, 4}, {"m", semantic.ChunkMethod, 3, 3}},
+		},
+		"declare module": {
+			"declare module \"m\" {\n  export function g(): void;\n}\n",
+			[]tsChunk{{"g", semantic.ChunkFunction, 2, 2}},
+		},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			chunks, err := NewTypeScriptChunker().Chunk("a.ts", []byte(c.src))
+			if err != nil {
+				t.Fatalf("Chunk returned %v", err)
+			}
+			assertTSChunks(t, chunks, c.want)
+		})
+	}
+}

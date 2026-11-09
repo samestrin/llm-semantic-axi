@@ -9,7 +9,8 @@ import (
 )
 
 // fallbackStub stands in for treesitter.Fallback, which this package cannot
-// import: content containing "BROKEN" is reported as having fallen back.
+// import: content containing "BROKEN" is reported as a parse failure and
+// content containing "PANIC" as a chunker failure.
 type fallbackStub struct{}
 
 func (fallbackStub) SupportedExtensions() []string { return []string{"fb"} }
@@ -19,10 +20,16 @@ func (s fallbackStub) Chunk(path string, content []byte) ([]Chunk, error) {
 	return chunks, err
 }
 
-func (fallbackStub) ChunkWithFallback(path string, content []byte) ([]Chunk, bool, error) {
+func (fallbackStub) ChunkWithFallback(path string, content []byte) ([]Chunk, FallbackReason, error) {
 	c := Chunk{FilePath: path, Type: ChunkFile, Name: filepath.Base(path), Content: string(content), StartLine: 1, EndLine: 1, Language: "fb"}
 	c.ID = c.GenerateID()
-	return []Chunk{c}, strings.Contains(string(content), "BROKEN"), nil
+	switch {
+	case strings.Contains(string(content), "PANIC"):
+		return []Chunk{c}, FallbackChunkerFailed, nil
+	case strings.Contains(string(content), "BROKEN"):
+		return []Chunk{c}, FallbackParseFailed, nil
+	}
+	return []Chunk{c}, FallbackNone, nil
 }
 
 func fallbackFixture(t *testing.T, files map[string]string) (string, *IndexManager) {
@@ -84,9 +91,15 @@ func TestIndex_CleanFixtureCountsNoFallback(t *testing.T) {
 }
 
 // Defends the full-scan index-update path: an edit that breaks a file's
-// syntax must be counted there too, not only on a full index.
+// syntax must be counted there too, not only on a full index, and the reason
+// must survive the diff path — a chunker failure is not a parse failure here
+// either.
 func TestUpdate_CountsFilesThatFellBack(t *testing.T) {
-	dir, mgr := fallbackFixture(t, map[string]string{"good.fb": "fine", "bad.fb": "fine too"})
+	dir, mgr := fallbackFixture(t, map[string]string{
+		"good.fb":    "fine",
+		"bad.fb":     "fine too",
+		"chunker.fb": "fine as well",
+	})
 	ctx := context.Background()
 	if _, err := mgr.Index(ctx, dir, IndexOptions{}); err != nil {
 		t.Fatalf("Index: %v", err)
@@ -94,23 +107,40 @@ func TestUpdate_CountsFilesThatFellBack(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "bad.fb"), []byte("now BROKEN"), 0644); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(dir, "chunker.fb"), []byte("now PANIC"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	result, err := mgr.Update(ctx, dir, UpdateOptions{})
 	if err != nil {
 		t.Fatalf("Update: %v", err)
 	}
-	if result.FilesFallback != 1 {
-		t.Errorf("FilesFallback = %d, want 1", result.FilesFallback)
+	if result.FilesFallback != 2 {
+		t.Errorf("FilesFallback = %d, want 2", result.FilesFallback)
 	}
-	if len(result.FallbackFiles) != 1 || result.FallbackFiles[0] != filepath.Join(dir, "bad.fb") {
-		t.Errorf("FallbackFiles = %v, want bad.fb", result.FallbackFiles)
+	wantChunker := filepath.Join(dir, "chunker.fb")
+	if len(result.FallbackChunkerFailedFiles) != 1 || result.FallbackChunkerFailedFiles[0] != wantChunker {
+		t.Errorf("FallbackChunkerFailedFiles = %v, want [%s]", result.FallbackChunkerFailedFiles, wantChunker)
+	}
+	wantParse := filepath.Join(dir, "bad.fb")
+	if !containsPath(result.FallbackFiles, wantParse) {
+		t.Errorf("FallbackFiles = %v, want it to name %s", result.FallbackFiles, wantParse)
+	}
+	if containsPath(result.FallbackChunkerFailedFiles, wantParse) {
+		t.Errorf("FallbackChunkerFailedFiles = %v, want the parse failure left out", result.FallbackChunkerFailedFiles)
 	}
 }
 
 // Defends the git index-update path, which chunks through processFile rather
-// than the diff path the full scan uses.
+// than the diff path the full scan uses, and rebuilds each file's fallback
+// reason from the per-file IndexResult: a chunker failure must come out labelled
+// as one there too, not folded into the parse failures.
 func TestUpdateGit_CountsFilesThatFellBack(t *testing.T) {
-	dir, mgr := fallbackFixture(t, map[string]string{"good.fb": "fine", "bad.fb": "fine too"})
+	dir, mgr := fallbackFixture(t, map[string]string{
+		"good.fb":    "fine",
+		"bad.fb":     "fine too",
+		"chunker.fb": "fine as well",
+	})
 	gitRun(t, dir, "init")
 	gitRun(t, dir, "add", ".")
 	gitRun(t, dir, "commit", "-m", "initial")
@@ -121,16 +151,65 @@ func TestUpdateGit_CountsFilesThatFellBack(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "bad.fb"), []byte("now BROKEN"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	gitRun(t, dir, "commit", "-am", "break it")
+	if err := os.WriteFile(filepath.Join(dir, "chunker.fb"), []byte("now PANIC"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	gitRun(t, dir, "commit", "-am", "break them")
 
 	result, err := mgr.UpdateGit(ctx, dir, "HEAD~1", UpdateOptions{})
 	if err != nil {
 		t.Fatalf("UpdateGit: %v", err)
 	}
-	if result.FilesFallback != 1 {
-		t.Errorf("FilesFallback = %d, want 1", result.FilesFallback)
+	if result.FilesFallback != 2 {
+		t.Errorf("FilesFallback = %d, want 2", result.FilesFallback)
 	}
-	if len(result.FallbackFiles) != 1 || result.FallbackFiles[0] != filepath.Join(dir, "bad.fb") {
-		t.Errorf("FallbackFiles = %v, want bad.fb", result.FallbackFiles)
+	wantChunker := filepath.Join(dir, "chunker.fb")
+	if len(result.FallbackChunkerFailedFiles) != 1 || result.FallbackChunkerFailedFiles[0] != wantChunker {
+		t.Errorf("FallbackChunkerFailedFiles = %v, want [%s]", result.FallbackChunkerFailedFiles, wantChunker)
+	}
+	wantParse := filepath.Join(dir, "bad.fb")
+	if !containsPath(result.FallbackFiles, wantParse) {
+		t.Errorf("FallbackFiles = %v, want it to name %s", result.FallbackFiles, wantParse)
+	}
+	if containsPath(result.FallbackChunkerFailedFiles, wantParse) {
+		t.Errorf("FallbackChunkerFailedFiles = %v, want the parse failure left out", result.FallbackChunkerFailedFiles)
+	}
+}
+
+// containsPath reports whether paths names want. Used to assert on a result's
+// file lists without depending on the order the scan happened to walk them.
+func containsPath(paths []string, want string) bool {
+	for _, p := range paths {
+		if p == want {
+			return true
+		}
+	}
+	return false
+}
+
+// Defends the reason reaching the result: a chunker that errors or panics is
+// windowed like a parse error is, but the summary must be able to tell the two
+// apart, or the output blames the file's syntax for a broken chunker.
+func TestIndex_RecordsWhyEachFileFellBack(t *testing.T) {
+	dir, mgr := fallbackFixture(t, map[string]string{
+		"parse.fb":   "BROKEN",
+		"chunker.fb": "PANIC",
+		"good.fb":    "fine",
+	})
+
+	result, err := mgr.Index(context.Background(), dir, IndexOptions{})
+	if err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+	if result.FilesFallback != 2 || len(result.FallbackFiles) != 2 {
+		t.Fatalf("FilesFallback = %d, FallbackFiles = %v, want both files", result.FilesFallback, result.FallbackFiles)
+	}
+	want := filepath.Join(dir, "chunker.fb")
+	if len(result.FallbackChunkerFailedFiles) != 1 || result.FallbackChunkerFailedFiles[0] != want {
+		t.Errorf("FallbackChunkerFailedFiles = %v, want [%s]", result.FallbackChunkerFailedFiles, want)
+	}
+	if len(result.FallbackFiles)-len(result.FallbackChunkerFailedFiles) != 1 {
+		t.Errorf("parse-failure files = %v, want the one file not named as a chunker failure",
+			result.FallbackFiles)
 	}
 }

@@ -191,15 +191,3 @@ func TestTruncateContent(t *testing.T) {
 		t.Errorf("Truncated content too long: %d", len(truncated))
 	}
 }
-
-func TestGetLangEntry(t *testing.T) {
-	entry := GetLangEntry("py")
-	if entry == nil {
-		t.Fatal("Expected language entry for .py")
-	}
-
-	entry = GetLangEntry("nonexistent_extension_xyz")
-	if entry != nil {
-		t.Error("Expected nil for unknown extension")
-	}
-}

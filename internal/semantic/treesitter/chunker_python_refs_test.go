@@ -384,3 +384,42 @@ func TestPythonRefs_RecursionIsOneRuleForBareAndSelf(t *testing.T) {
 		}
 	}
 }
+
+// Defends the text-window exclusion in walkRefs: a call inside a region the
+// grammar could not parse is code the extractor only sees as plain text, so an
+// edge from it would name a target that was guessed. The other no-chunk test
+// passes nil chunks and returns at the len(owners)==0 exit, so deleting the
+// window guard broke no test until this one.
+func TestPythonRefs_CallInsideAFallbackWindowYieldsNoEdge(t *testing.T) {
+	// ok parses and helper() at module level parses; the unclosed call at the
+	// end makes the rest of the file an error region, so the fallback windows
+	// every line below `ok` — the line helper() sits on included.
+	src := "def ok(x):\n    return x\n\nhelper()\n\nwhile True print(\n"
+	fb := WithFallback(NewPythonChunker())
+	chunks, reason, err := fb.ChunkWithFallback("m.py", []byte(src))
+	if err != nil {
+		t.Fatalf("ChunkWithFallback: %v", err)
+	}
+	if reason != semantic.FallbackParseFailed {
+		t.Fatalf("reason = %q, want a parse failure: the fixture must exercise the fallback", reason)
+	}
+	var windowed bool
+	for _, c := range chunks {
+		if c.Type == semantic.ChunkFile && c.StartLine <= 4 && c.EndLine >= 4 {
+			windowed = true
+		}
+	}
+	if !windowed {
+		t.Fatalf("no text window covers the helper() line: chunks = %+v", chunks)
+	}
+
+	refs, err := fb.ExtractRefs("m.py", []byte(src), chunks)
+	if err != nil {
+		t.Fatalf("ExtractRefs: %v", err)
+	}
+	for _, r := range refs {
+		if r.RefName == "helper" {
+			t.Errorf("a call inside a text window recorded the edge %q, want none", r.RefName)
+		}
+	}
+}
