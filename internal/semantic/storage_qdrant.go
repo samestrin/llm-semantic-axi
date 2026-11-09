@@ -218,6 +218,54 @@ func (s *QdrantStorage) ensureCollection() error {
 		return fmt.Errorf("failed to create chunk_id index: %w", err)
 	}
 
+	return s.ensureContractVersion(ctx)
+}
+
+// StorageContractVersion is the contract_version of docs/storage-contract.md.
+// Raise it together with the doc when a change is breaking.
+const StorageContractVersion = 1
+
+// contractID returns the unique ID of the storage_contract marker point.
+func contractID() string {
+	return stringToUUID("storage_contract")
+}
+
+func (s *QdrantStorage) contractPoint(version int64) *qdrant.PointStruct {
+	return &qdrant.PointStruct{
+		Id:      qdrant.NewID(contractID()),
+		Vectors: qdrant.NewVectors(make([]float32, s.embeddingDim)...),
+		Payload: map[string]*qdrant.Value{
+			"type":             qdrant.NewValueString("storage_contract"),
+			"contract_version": qdrant.NewValueInt(version),
+		},
+	}
+}
+
+// ensureContractVersion stamps the collection with the storage contract
+// version, or fails when it is stamped with a different one. A collection with
+// no marker predates it and is version 1, so it is stamped.
+func (s *QdrantStorage) ensureContractVersion(ctx context.Context) error {
+	points, err := s.client.Get(ctx, &qdrant.GetPoints{
+		CollectionName: s.collectionName,
+		Ids:            []*qdrant.PointId{qdrant.NewID(contractID())},
+		WithPayload:    qdrant.NewWithPayload(true),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to read storage contract version: %w", err)
+	}
+	if len(points) > 0 {
+		if got := points[0].Payload["contract_version"].GetIntegerValue(); got != StorageContractVersion {
+			return fmt.Errorf("collection %q has storage contract version %d, but this llm-semantic reads version %d; re-index with --force or use a matching release",
+				s.collectionName, got, StorageContractVersion)
+		}
+		return nil
+	}
+	if _, err := s.client.Upsert(ctx, &qdrant.UpsertPoints{
+		CollectionName: s.collectionName,
+		Points:         []*qdrant.PointStruct{s.contractPoint(StorageContractVersion)},
+	}); err != nil {
+		return fmt.Errorf("failed to record storage contract version: %w", err)
+	}
 	return nil
 }
 
@@ -522,9 +570,11 @@ func (s *QdrantStorage) List(ctx context.Context, opts ListOptions) ([]Chunk, er
 		conditions = append(conditions, qdrant.NewMatch("language", opts.Language))
 	}
 
-	var filter *qdrant.Filter
-	if len(conditions) > 0 {
-		filter = &qdrant.Filter{Must: conditions}
+	// Chunks are the points carrying chunk_id; the bookkeeping points
+	// (file_hash, last_index, storage_contract, ...) are not chunks.
+	filter := &qdrant.Filter{
+		Must:    conditions,
+		MustNot: []*qdrant.Condition{qdrant.NewIsEmpty("chunk_id")},
 	}
 
 	// Paginate scrolling to avoid gRPC message size limits.
