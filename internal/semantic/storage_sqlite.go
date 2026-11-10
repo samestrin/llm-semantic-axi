@@ -91,7 +91,8 @@ func (s *SQLiteStorage) initSchema() error {
 	CREATE TABLE IF NOT EXISTS file_hashes (
 		file_path TEXT PRIMARY KEY,
 		content_hash TEXT NOT NULL,
-		indexed_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		indexed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		fallback_reason TEXT NOT NULL DEFAULT ''
 	);
 
 	CREATE TABLE IF NOT EXISTS memory (
@@ -143,6 +144,11 @@ func (s *SQLiteStorage) initSchema() error {
 
 	// Migrate existing databases: add content_hash column to chunks table if missing
 	if err := s.migrateContentHashColumn(); err != nil {
+		return err
+	}
+
+	// Migrate existing databases: add fallback_reason column to file_hashes if missing
+	if err := s.migrateFallbackReasonColumn(); err != nil {
 		return err
 	}
 
@@ -217,6 +223,28 @@ func (s *SQLiteStorage) migrateContentHashColumn() error {
 		_, err = s.db.Exec(`CREATE INDEX IF NOT EXISTS idx_chunks_content_hash ON chunks(content_hash)`)
 		if err != nil {
 			return fmt.Errorf("failed to create content_hash index: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// migrateFallbackReasonColumn adds fallback_reason to file_hashes tables written
+// before it was recorded. Existing rows read as not fallen back.
+func (s *SQLiteStorage) migrateFallbackReasonColumn() error {
+	var count int
+	err := s.db.QueryRow(`
+		SELECT COUNT(*) FROM pragma_table_info('file_hashes')
+		WHERE name = 'fallback_reason'
+	`).Scan(&count)
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		_, err = s.db.Exec(`ALTER TABLE file_hashes ADD COLUMN fallback_reason TEXT NOT NULL DEFAULT ''`)
+		if err != nil {
+			return fmt.Errorf("failed to add fallback_reason column: %w", err)
 		}
 	}
 
@@ -870,8 +898,15 @@ func (s *SQLiteStorage) GetFileHash(ctx context.Context, filePath string) (strin
 	return hash, nil
 }
 
-// SetFileHash stores the content hash for a file path
+// SetFileHash stores the content hash for a file path, as a file that did not
+// fall back.
 func (s *SQLiteStorage) SetFileHash(ctx context.Context, filePath string, hash string) error {
+	return s.SetFileHashWithFallback(ctx, filePath, hash, FallbackNone)
+}
+
+// SetFileHashWithFallback stores the content hash for a file path, and why the
+// file was chunked as text windows.
+func (s *SQLiteStorage) SetFileHashWithFallback(ctx context.Context, filePath, hash string, reason FallbackReason) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -880,18 +915,45 @@ func (s *SQLiteStorage) SetFileHash(ctx context.Context, filePath string, hash s
 	}
 
 	_, err := s.db.ExecContext(ctx, `
-		INSERT INTO file_hashes (file_path, content_hash, indexed_at)
-		VALUES (?, ?, CURRENT_TIMESTAMP)
+		INSERT INTO file_hashes (file_path, content_hash, indexed_at, fallback_reason)
+		VALUES (?, ?, CURRENT_TIMESTAMP, ?)
 		ON CONFLICT(file_path) DO UPDATE SET
 			content_hash = excluded.content_hash,
-			indexed_at = CURRENT_TIMESTAMP
-	`, filePath, hash)
+			indexed_at = CURRENT_TIMESTAMP,
+			fallback_reason = excluded.fallback_reason
+	`, filePath, hash, string(reason))
 
 	if err != nil {
 		return fmt.Errorf("failed to set file hash: %w", err)
 	}
 
 	return nil
+}
+
+// ListFallbackFiles returns each indexed file that fell back, with why.
+func (s *SQLiteStorage) ListFallbackFiles(ctx context.Context) (map[string]FallbackReason, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.closed {
+		return nil, ErrStorageClosed
+	}
+
+	rows, err := s.db.QueryContext(ctx, `SELECT file_path, fallback_reason FROM file_hashes WHERE fallback_reason <> ''`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list fallback files: %w", err)
+	}
+	defer rows.Close()
+
+	out := make(map[string]FallbackReason)
+	for rows.Next() {
+		var path, reason string
+		if err := rows.Scan(&path, &reason); err != nil {
+			return nil, fmt.Errorf("failed to scan fallback file: %w", err)
+		}
+		out[path] = FallbackReason(reason)
+	}
+	return out, rows.Err()
 }
 
 func (s *SQLiteStorage) Close() error {

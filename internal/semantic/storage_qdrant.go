@@ -1450,6 +1450,53 @@ func (s *QdrantStorage) ListIndexedFiles(ctx context.Context) (map[string]bool, 
 	return result, nil
 }
 
+// ListFallbackFiles returns each indexed file that fell back, with why, scrolling
+// the file_hash points in pages as ListIndexedFiles does.
+func (s *QdrantStorage) ListFallbackFiles(ctx context.Context) (map[string]FallbackReason, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.closed {
+		return nil, ErrStorageClosed
+	}
+
+	filter := &qdrant.Filter{
+		Must: []*qdrant.Condition{
+			qdrant.NewMatch("type", "file_hash"),
+		},
+	}
+
+	result := make(map[string]FallbackReason)
+	var offset *qdrant.PointId
+	pageSize := uint32(500)
+
+	for {
+		scrollResult, nextOffset, err := s.client.ScrollAndOffset(ctx, &qdrant.ScrollPoints{
+			CollectionName: s.collectionName,
+			Filter:         filter,
+			WithPayload:    qdrant.NewWithPayloadInclude("file_path", "fallback_reason"),
+			Limit:          qdrant.PtrOf(pageSize),
+			Offset:         offset,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to scroll fallback files: %w", err)
+		}
+
+		for _, point := range scrollResult {
+			if reason := point.Payload["fallback_reason"].GetStringValue(); reason != "" {
+				result[point.Payload["file_path"].GetStringValue()] = FallbackReason(reason)
+			}
+		}
+
+		if nextOffset == nil {
+			break
+		}
+		offset = nextOffset
+	}
+
+	return result, nil
+}
+
 // GetFileHash retrieves the stored content hash for a file path
 func (s *QdrantStorage) GetFileHash(ctx context.Context, filePath string) (string, error) {
 	s.mu.RLock()
@@ -1479,8 +1526,16 @@ func (s *QdrantStorage) GetFileHash(ctx context.Context, filePath string) (strin
 	return "", nil
 }
 
-// SetFileHash stores the content hash for a file path
+// SetFileHash stores the content hash for a file path, as a file that did not
+// fall back.
 func (s *QdrantStorage) SetFileHash(ctx context.Context, filePath string, hash string) error {
+	return s.SetFileHashWithFallback(ctx, filePath, hash, FallbackNone)
+}
+
+// SetFileHashWithFallback stores the content hash for a file path, and why the
+// file was chunked as text windows. The fallback_reason key is written only for a
+// file that fell back, so other file_hash points keep their earlier shape.
+func (s *QdrantStorage) SetFileHashWithFallback(ctx context.Context, filePath, hash string, reason FallbackReason) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -1499,6 +1554,9 @@ func (s *QdrantStorage) SetFileHash(ctx context.Context, filePath string, hash s
 			"file_path":    qdrant.NewValueString(filePath),
 			"content_hash": qdrant.NewValueString(hash),
 		},
+	}
+	if reason != FallbackNone {
+		point.Payload["fallback_reason"] = qdrant.NewValueString(string(reason))
 	}
 
 	_, err := s.client.Upsert(ctx, &qdrant.UpsertPoints{

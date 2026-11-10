@@ -64,6 +64,7 @@ Written by `SetFileHash` (`storage_qdrant.go:1409-1439`).
 | `type` | string — always `"file_hash"` | `:1424` |
 | `file_path` | string | `:1425` |
 | `content_hash` | string — hash of the file's content at index time | `:1426` |
+| `fallback_reason` | string — why the file was chunked as text windows: `"parse_failed"` or `"chunker_failed"`. Written only for a file that fell back; absent otherwise, and in points written before it was recorded. Written by `SetFileHashWithFallback` and read by `ListFallbackFiles`. Added after version 1; additive, so the version is unchanged | `:1559` |
 
 ### 3. The `calibration_metadata` point (singleton)
 

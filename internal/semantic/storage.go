@@ -62,6 +62,19 @@ type LastIndex struct {
 	Root string `json:"root,omitempty"`
 }
 
+// FallbackStore is implemented by backends that keep, with each file's hash, why
+// the file was chunked as text windows. A resumed index skips an unchanged file,
+// so without the record it could not report that file again, and index-status
+// could not show it at all.
+type FallbackStore interface {
+	// SetFileHashWithFallback stores a file's hash and fallback reason together.
+	// FallbackNone records that the file did not fall back; so does SetFileHash.
+	SetFileHashWithFallback(ctx context.Context, filePath, hash string, reason FallbackReason) error
+
+	// ListFallbackFiles returns each indexed file that fell back, with why.
+	ListFallbackFiles(ctx context.Context) (map[string]FallbackReason, error)
+}
+
 // ChunkWithEmbedding pairs a chunk with its embedding for batch operations
 type ChunkWithEmbedding struct {
 	Chunk     Chunk
