@@ -22,7 +22,7 @@ The download installer fetches the latest release and installs both binaries int
 curl -fsSL https://github.com/samestrin/llm-semantic-axi/releases/latest/download/install-release.sh | sh
 ```
 
-The archive is verified against the release's `SHA256SUMS.txt` before anything is written; a mismatch or a cut-off download stops the install with the existing binaries untouched. Options (each also readable from the environment variable named after it): `--version vX.Y.Z` (`LLM_SEMANTIC_VERSION`) to pin a release, `--dir DIR` (`LLM_SEMANTIC_INSTALL_DIR`) to change the install directory, `--base-url URL` (`LLM_SEMANTIC_BASE_URL`) and `--timeout SECS` (`LLM_SEMANTIC_INSTALL_TIMEOUT`).
+The archive is verified against the release's `SHA256SUMS.txt` before anything is written; a mismatch or a cut-off download stops the install with the existing binaries untouched. Options (each also readable from the environment variable named after it): `--version vX.Y.Z` (`LLM_SEMANTIC_VERSION`) to pin a release (the installer attached to release `vX.Y.Z` is stamped with that tag, so fetching it from `.../releases/download/vX.Y.Z/install-release.sh` installs `vX.Y.Z`), `--dir DIR` (`LLM_SEMANTIC_INSTALL_DIR`) to change the install directory, `--base-url URL` (`LLM_SEMANTIC_BASE_URL`) and `--timeout SECS` (`LLM_SEMANTIC_INSTALL_TIMEOUT`).
 
 **The install directory must be on your `PATH`.** `llm-semantic-mcp` finds the CLI through `PATH`, so the MCP server cannot run until it is. If `~/.local/bin` is not already on it, add this to your shell profile and open a new shell (the installer prints the same warning when it detects this):
 

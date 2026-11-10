@@ -7,8 +7,12 @@
 #
 #   curl -fsSL https://github.com/samestrin/llm-semantic-axi/releases/latest/download/install-release.sh | sh
 #
+# The copy attached to a release is stamped with that release's tag, so
+# .../releases/download/vX.Y.Z/install-release.sh installs vX.Y.Z, not latest.
+# --version overrides the stamp.
+#
 # Options (each also read from the environment variable named after it):
-#   --version vX.Y.Z  LLM_SEMANTIC_VERSION          release to install (default: latest)
+#   --version vX.Y.Z  LLM_SEMANTIC_VERSION          release to install (default: the stamped tag, else latest)
 #   --base-url URL    LLM_SEMANTIC_BASE_URL         where the release assets live
 #   --dir DIR         LLM_SEMANTIC_INSTALL_DIR      install directory (default: ~/.local/bin)
 #   --timeout SECS    LLM_SEMANTIC_INSTALL_TIMEOUT  per-download limit (default: 600)
@@ -19,7 +23,9 @@
 set -eu
 
 REPO_URL="https://github.com/samestrin/llm-semantic-axi"
-VERSION="${LLM_SEMANTIC_VERSION:-}"
+# Release packaging rewrites this line to the release tag (release.yml).
+PINNED_VERSION=""
+VERSION="${LLM_SEMANTIC_VERSION:-$PINNED_VERSION}"
 BASE_URL="${LLM_SEMANTIC_BASE_URL:-}"
 INSTALL_DIR="${LLM_SEMANTIC_INSTALL_DIR:-${HOME}/.local/bin}"
 TIMEOUT="${LLM_SEMANTIC_INSTALL_TIMEOUT:-600}"
@@ -35,7 +41,7 @@ while [ $# -gt 0 ]; do
         --base-url) [ $# -ge 2 ] || die "--base-url needs a value"; BASE_URL="$2"; shift 2 ;;
         --dir) [ $# -ge 2 ] || die "--dir needs a value"; INSTALL_DIR="$2"; shift 2 ;;
         --timeout) [ $# -ge 2 ] || die "--timeout needs a value"; TIMEOUT="$2"; shift 2 ;;
-        -h | --help) sed -n '2,19p' "$0" 2>/dev/null | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h | --help) sed -n '2,22p' "$0" 2>/dev/null | sed 's/^# \{0,1\}//'; exit 0 ;;
         *) die "unknown option: $1" ;;
     esac
 done
