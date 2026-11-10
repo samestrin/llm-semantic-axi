@@ -123,7 +123,10 @@ type IndexResult struct {
 	// FallbackChunkerFailedFiles names the subset of FallbackFiles whose
 	// chunker errored or panicked. The rest fell back on a parse-tree error.
 	FallbackChunkerFailedFiles []string `json:"fallback_chunker_failed_files,omitempty"`
-	Errors                     []string `json:"errors"` // Error messages
+	// Errors holds one message per failure. Index, Update and UpdateGit start
+	// it as an empty slice, so a clean run prints "errors": [] rather than null
+	// or no key at all.
+	Errors []string `json:"errors"`
 }
 
 // UpdateResult contains statistics from an update operation
@@ -131,7 +134,7 @@ type UpdateResult struct {
 	FilesUpdated int `json:"files_updated"`
 	FilesRemoved int `json:"files_removed"`
 	// FilesSkipped counts files that could not be processed; Errors names each
-	// one with its error.
+	// one with its error, and is empty rather than nil on a clean run.
 	FilesSkipped  int      `json:"files_skipped"`
 	Errors        []string `json:"errors"`
 	ChunksCreated int      `json:"chunks_created"`
@@ -192,7 +195,7 @@ type pendingChunk struct {
 // and the time are captured before the walk (see currentLastIndex), so edits made while
 // indexing runs are not tracked by the record.
 func (m *IndexManager) Index(ctx context.Context, rootPath string, opts IndexOptions) (*IndexResult, error) {
-	result := &IndexResult{}
+	result := &IndexResult{Errors: []string{}}
 	last := currentLastIndex(rootPath)
 
 	// Verify path exists
@@ -767,7 +770,7 @@ func (m *IndexManager) processFileWithDiff(ctx context.Context, filePath string,
 // rootPath, not the scope that was scanned, and captures it before the walk, so edits
 // made while the update runs are not tracked by the record.
 func (m *IndexManager) Update(ctx context.Context, rootPath string, opts UpdateOptions) (*UpdateResult, error) {
-	result := &UpdateResult{}
+	result := &UpdateResult{Errors: []string{}}
 	last := currentLastIndex(rootPath)
 
 	// Set overlap configuration (thread-safe)
@@ -849,7 +852,7 @@ func (m *IndexManager) Update(ctx context.Context, rootPath string, opts UpdateO
 // changed/added/deleted files since the given ref (e.g., "HEAD~1"), filters them
 // against include/exclude patterns, and only re-indexes the affected files.
 func (m *IndexManager) UpdateGit(ctx context.Context, rootPath string, gitRef string, opts UpdateOptions) (*UpdateResult, error) {
-	result := &UpdateResult{}
+	result := &UpdateResult{Errors: []string{}}
 	last := currentLastIndex(rootPath)
 	since, sinceErr := gitResolveCommit(rootPath, gitRef)
 
