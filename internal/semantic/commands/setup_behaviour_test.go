@@ -320,6 +320,8 @@ func TestSetupHonoursJSONAndAXI(t *testing.T) {
 // `llm-semantic` exits non-zero in a directory with no index (by design), so
 // Claude Code showed a hook error in every un-indexed project. The hook must
 // ask for index-status and tolerate its exit code, not the bare command.
+// The expected command is the literal a session will run, not the constant
+// the code wrote, so a wrong constant fails here.
 func TestSetupHookToleratesAMissingIndex(t *testing.T) {
 	dir := t.TempDir()
 
@@ -332,16 +334,63 @@ func TestSetupHookToleratesAMissingIndex(t *testing.T) {
 	if len(cmds) != 1 {
 		t.Fatalf("SessionStart commands = %v, want one", cmds)
 	}
-	if cmds[0] != setupHookCommand {
-		t.Errorf("SessionStart command = %q, want %q", cmds[0], setupHookCommand)
-	}
-	if !strings.Contains(setupHookCommand, "index-status") {
-		t.Errorf("hook command %q does not use index-status", setupHookCommand)
-	}
-	if strings.TrimSpace(setupHookCommand) == "llm-semantic" {
-		t.Errorf("hook command is the bare command whose non-zero exit Claude Code reports as a hook error")
+	if cmds[0] != "llm-semantic index-status || true" {
+		t.Errorf("SessionStart command = %q, want the literal index-status hook", cmds[0])
 	}
 	if !strings.Contains(out.String(), "wrote .claude") {
 		t.Errorf("output does not say the settings were written:\n%s", out.String())
+	}
+}
+
+// TestSetupMigratesLegacyHookInPlace defends the upgrade path: a settings
+// file written by an earlier setup holds the bare `llm-semantic` command,
+// and a new setup must rewrite that entry to the tolerant hook, not append a
+// second one and not leave the bare command behind.
+func TestSetupMigratesLegacyHookInPlace(t *testing.T) {
+	dir := t.TempDir()
+	settingsPath := filepath.Join(dir, ".claude", "settings.json")
+	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	legacy := `{"model": "opus", "hooks": {"SessionStart": [{"hooks": [{"type": "command", "command": "llm-semantic"}]}]}}`
+	if err := os.WriteFile(settingsPath, []byte(legacy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var out bytes.Buffer
+	if err := runSetup(&out, dir, false); err != nil {
+		t.Fatalf("runSetup: %v", err)
+	}
+
+	cmds := sessionStartCommands(t, settingsOf(t, dir))
+	if len(cmds) != 1 {
+		t.Fatalf("SessionStart commands = %v, want exactly one", cmds)
+	}
+	if cmds[0] != "llm-semantic index-status || true" {
+		t.Errorf("legacy hook not upgraded: commands = %v", cmds)
+	}
+	for _, c := range cmds {
+		if c == "llm-semantic" {
+			t.Errorf("bare legacy command left in place: %v", cmds)
+		}
+	}
+	settings := settingsOf(t, dir)
+	if m, _ := settings["model"].(string); m != "opus" {
+		t.Errorf("other settings keys were lost: %v", settings)
+	}
+	if !strings.Contains(out.String(), "wrote "+filepath.Join(".claude", "settings.json")) {
+		t.Errorf("output does not say the settings were written:\n%s", out.String())
+	}
+
+	// A second run must see its own hook and report unchanged.
+	var out2 bytes.Buffer
+	if err := runSetup(&out2, dir, false); err != nil {
+		t.Fatalf("second runSetup: %v", err)
+	}
+	if !strings.Contains(out2.String(), "unchanged") || strings.Contains(out2.String(), "wrote "+filepath.Join(".claude", "settings.json")) {
+		t.Errorf("second run must report the settings unchanged:\n%s", out2.String())
+	}
+	if cmds2 := sessionStartCommands(t, settingsOf(t, dir)); len(cmds2) != 1 {
+		t.Errorf("second run changed the hook list: %v", cmds2)
 	}
 }

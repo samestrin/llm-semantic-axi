@@ -327,10 +327,12 @@ func outputMultisearchText(queries []string, result *semantic.MultisearchResult,
 	// themselves must be rendered: a heading per group, then the same
 	// per-result lines the blended output prints. Without this the grouped
 	// text output printed only the header above.
-	group := 0
 	printGroup := func(heading string, rs []semantic.EnhancedResult) {
-		group++
-		fmt.Printf("%s (%d result%s)\n", heading, len(rs), pluralS(len(rs) != 1))
+		plural := "s"
+		if len(rs) == 1 {
+			plural = ""
+		}
+		fmt.Printf("%s (%d result%s)\n", heading, len(rs), plural)
 		for i, r := range rs {
 			printMultisearchResult(i+1, r)
 		}
@@ -355,14 +357,6 @@ func outputMultisearchText(queries []string, result *semantic.MultisearchResult,
 	return nil
 }
 
-// pluralS returns "s" when the count needs one, for the group headings.
-func pluralS(needsS bool) string {
-	if needsS {
-		return "s"
-	}
-	return ""
-}
-
 // sortedKeys is the map ordering the grouped text output needs, so the
 // headings do not shuffle between runs.
 func sortedKeys[V any](m map[string]V) []string {
@@ -377,32 +371,30 @@ func sortedKeys[V any](m map[string]V) []string {
 // printMultisearchResult prints one result: file:line, the symbol, the
 // scores, and the queries it matched.
 func printMultisearchResult(i int, r semantic.EnhancedResult) {
-	{
-		// Format match info
-		matchInfo := ""
-		if len(r.MatchedQueries) > 1 {
-			matchInfo = fmt.Sprintf(" [%d matches]", len(r.MatchedQueries))
-		}
-
-		// Format profile info
-		profileInfo := ""
-		if r.Chunk.Domain != "" {
-			profileInfo = fmt.Sprintf(" (%s)", r.Chunk.Domain)
-		}
-
-		fmt.Printf("%d. %s:%d - %s%s%s\n", i, r.Chunk.FilePath, r.Chunk.StartLine, r.Chunk.Name, profileInfo, matchInfo)
-		fmt.Printf("   Score: %.4f (boosted: %.4f)\n", r.Score, r.BoostedScore)
-
-		if len(r.MatchedQueries) > 0 {
-			fmt.Printf("   Matched: %s\n", strings.Join(r.MatchedQueries, ", "))
-		}
-
-		// Show preview if available
-		if r.Preview != "" {
-			fmt.Printf("   %s\n", r.Preview)
-		} else if r.Chunk.Signature != "" {
-			fmt.Printf("   %s\n", r.Chunk.Signature)
-		}
-		fmt.Println()
+	// Format match info
+	matchInfo := ""
+	if len(r.MatchedQueries) > 1 {
+		matchInfo = fmt.Sprintf(" [%d matches]", len(r.MatchedQueries))
 	}
+
+	// Format profile info
+	profileInfo := ""
+	if r.Chunk.Domain != "" {
+		profileInfo = fmt.Sprintf(" (%s)", r.Chunk.Domain)
+	}
+
+	fmt.Printf("%d. %s:%d - %s%s%s\n", i, r.Chunk.FilePath, r.Chunk.StartLine, r.Chunk.Name, profileInfo, matchInfo)
+	fmt.Printf("   Score: %.4f (boosted: %.4f)\n", r.Score, r.BoostedScore)
+
+	if len(r.MatchedQueries) > 0 {
+		fmt.Printf("   Matched: %s\n", strings.Join(r.MatchedQueries, ", "))
+	}
+
+	// Show preview if available
+	if r.Preview != "" {
+		fmt.Printf("   %s\n", r.Preview)
+	} else if r.Chunk.Signature != "" {
+		fmt.Printf("   %s\n", r.Chunk.Signature)
+	}
+	fmt.Println()
 }

@@ -281,10 +281,17 @@ func TestMultisearchGroupedTextRendersGroups(t *testing.T) {
 	indexedWorkspace(t)
 
 	queries := []string{"authenticate bearer token", "render invoice billing"}
-	for _, format := range []semantic.OutputFormat{semantic.OutputByQuery, semantic.OutputByCollection} {
+	for _, tt := range []struct {
+		format semantic.OutputFormat
+		topK   int
+	}{{semantic.OutputByQuery, 1}, {semantic.OutputByCollection, 10}} {
+		format, topK := tt.format, tt.topK
+		// by_query uses topK 1, so each query group holds exactly one result
+		// and the singular heading is exercised; by_collection keeps topK 10,
+		// so the one collection holds both results and stays plural.
 		out := captureStdout(t, func() {
 			if err := runMultisearch(context.Background(), queries,
-				multisearchOpts{topK: 10, outputFormat: format}); err != nil {
+				multisearchOpts{topK: topK, outputFormat: format}); err != nil {
 				t.Fatalf("runMultisearch(%s): %v", format, err)
 			}
 		})
@@ -293,15 +300,31 @@ func TestMultisearchGroupedTextRendersGroups(t *testing.T) {
 		if !strings.Contains(out, "Multisearch: 2 queries") {
 			t.Errorf("%s: header missing:\n%s", format, out)
 		}
-		var wantHeading string
 		switch format {
 		case semantic.OutputByQuery:
-			wantHeading = "Query: authenticate bearer token"
+			// Both queries, in caller order, each a heading of its own — not
+			// just the first group.
+			for _, q := range queries {
+				if !strings.Contains(out, "Query: "+q) {
+					t.Errorf("by_query: heading for %q missing:\n%s", q, out)
+				}
+			}
+			// One matching function per query group (topK 1), so the singular
+			// heading must be the one printed.
+			if !strings.Contains(out, "(1 result)") {
+				t.Errorf("by_query: singular \"1 result\" heading missing:\n%s", out)
+			}
+			if strings.Contains(out, "(1 results)") {
+				t.Errorf("by_query: pluralised a single result:\n%s", out)
+			}
 		case semantic.OutputByCollection:
-			wantHeading = "Collection: code"
-		}
-		if !strings.Contains(out, wantHeading) {
-			t.Errorf("%s: group heading %q missing:\n%s", format, wantHeading, out)
+			if !strings.Contains(out, "Collection: code") {
+				t.Errorf("by_collection: group heading missing:\n%s", out)
+			}
+			// Both results sit in the one collection, so its heading is plural.
+			if !strings.Contains(out, "Collection: code (2 results)") {
+				t.Errorf("by_collection: plural \"2 results\" heading missing:\n%s", out)
+			}
 		}
 		if !strings.Contains(out, "sample.go:") {
 			t.Errorf("%s: result lines missing:\n%s", format, out)

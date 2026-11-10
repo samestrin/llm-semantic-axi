@@ -67,7 +67,7 @@ llm-semantic refs Decode
 llm-semantic index-update .
 ```
 
-`llm-semantic setup` registers the tool with Claude Code for the current project: it merges a SessionStart hook into `.claude/settings.json` (other keys kept) and writes an Agent Skill to `.claude/skills/llm-semantic/SKILL.md`. It prints each path as `wrote`, `unchanged` or (with `--dry-run`) `would write` — and the same statuses as `would_write` / `unchanged` / `wrote` under `--json` and `--axi`. It is safe to re-run, and never prompts or touches your home directory. The SessionStart hook it registers runs `llm-semantic index-status`, tolerating the non-zero exit a missing index raises, so a session in an un-indexed project starts without a hook error.
+`llm-semantic setup` registers the tool with Claude Code for the current project: it merges a SessionStart hook into `.claude/settings.json` (other keys kept) and writes an Agent Skill to `.claude/skills/llm-semantic/SKILL.md`. It prints each path as `wrote`, `unchanged` or (with `--dry-run`) `would write` — and the same statuses as `would_write` / `unchanged` / `wrote` under `--json` and `--axi`. It is safe to re-run, and never prompts or touches your home directory. The SessionStart hook it registers runs `llm-semantic index-status || true`, tolerating the non-zero exit a missing index raises, so a session in an un-indexed project starts without a hook error.
 
 Full command list: `callers`, `code-search`, `collection`, `docs-search`, `index`, `index-status`, `index-update`, `memory`, `memory-search`, `multisearch`, `refs`, `search`, `setup`.
 

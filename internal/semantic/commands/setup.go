@@ -153,9 +153,6 @@ func planSettings(path string) (setupAction, error) {
 	if hasSessionStartCommand(groups, setupHookCommand) {
 		return setupAction{content: raw}, nil
 	}
-	if hasSessionStartCommand(groups, setupHookCommand) {
-		return setupAction{content: raw}, nil
-	}
 	if !hasSessionStartCommand(groups, legacySetupHookCommand) {
 		groups = append(groups, map[string]any{
 			"hooks": []any{map[string]any{"type": "command", "command": setupHookCommand}},
