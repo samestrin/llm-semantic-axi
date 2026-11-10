@@ -183,6 +183,11 @@ func TestRunIndexRejectsAnUnknownStorageType(t *testing.T) {
 
 // TestRunIndexRefusesWhenAnotherRunHoldsTheLock pins the cross-process guard.
 // Two concurrent rebuilds of one database corrupt it.
+//
+// The lock wait is shortened and the test waits for runIndex to return. It
+// used to give up after 5s with t.Skip while runIndex was still waiting out
+// the full two-minute timeout, so it never reached its assertions, and the
+// leaked goroutine raced the cleanup that resets the package globals.
 func TestRunIndexRefusesWhenAnotherRunHoldsTheLock(t *testing.T) {
 	dir := newWorkspace(t)
 	useEmbedder(t, newFakeEmbedder(t))
@@ -198,23 +203,19 @@ func TestRunIndexRefusesWhenAnotherRunHoldsTheLock(t *testing.T) {
 	}
 	defer held.Unlock()
 
-	// A short wait, not indexLockTimeout: the point is that it refuses, and a
-	// two-minute test is a test nobody runs.
-	done := make(chan error, 1)
-	go func() {
-		done <- runIndex(context.Background(), ".", indexOpts{jsonOutput: true, skipCalibration: true})
-	}()
+	saved := indexLockTimeout
+	indexLockTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { indexLockTimeout = saved })
 
-	select {
-	case err := <-done:
-		if err == nil {
-			t.Fatal("a second index run proceeded while the lock was held")
-		}
-		if !strings.Contains(err.Error(), "another index operation is in progress") {
-			t.Errorf("error = %v, want it to name the in-progress operation", err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Skip("lock wait exceeds the test budget; the refusal path is timeout-bound")
+	err := runIndex(context.Background(), ".", indexOpts{jsonOutput: true, skipCalibration: true})
+	if err == nil {
+		t.Fatal("a second index run proceeded while the lock was held")
+	}
+	if !strings.Contains(err.Error(), "another index operation is in progress") {
+		t.Errorf("error = %v, want it to name the in-progress operation", err)
+	}
+	if _, statErr := os.Stat(indexPath); !os.IsNotExist(statErr) {
+		t.Errorf("the refused run created %s (stat err %v), so it touched the database", indexPath, statErr)
 	}
 }
 
