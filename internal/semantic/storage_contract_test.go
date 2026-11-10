@@ -54,9 +54,10 @@ var contractPayloads = map[string]map[string]payloadKind{
 		"content_hash": kindString,
 	},
 	"file_hash": {
-		"type":         kindString,
-		"file_path":    kindString,
-		"content_hash": kindString,
+		"type":            kindString,
+		"file_path":       kindString,
+		"content_hash":    kindString,
+		"fallback_reason": kindString,
 	},
 	"calibration_metadata": {
 		"type":             kindString,
@@ -93,8 +94,13 @@ var contractPayloads = map[string]map[string]payloadKind{
 		"type":       kindString,
 		"commit":     kindString,
 		"indexed_at": kindString,
+		"root":       kindString,
 	},
 }
+
+// fileHashFallbackOnlyKeys are the file_hash keys written only for a file that
+// was chunked as text windows, per the doc ("absent otherwise").
+var fileHashFallbackOnlyKeys = map[string]bool{"fallback_reason": true}
 
 // memoryCreationOnlyKeys are the memory keys absent until the first tracked
 // retrieval, per the doc ("absent until the first one").
@@ -211,6 +217,9 @@ func TestStorageContract_PayloadKeysAndTypesPerPointKind(t *testing.T) {
 	if err := storage.SetFileHash(ctx, "/repo/pkg/a.go", "filehash"); err != nil {
 		t.Fatalf("SetFileHash: %v", err)
 	}
+	if err := storage.SetFileHashWithFallback(ctx, "/repo/pkg/b.py", "filehash", FallbackParseFailed); err != nil {
+		t.Fatalf("SetFileHashWithFallback: %v", err)
+	}
 	if err := storage.SetCalibrationMetadata(ctx, &CalibrationMetadata{
 		EmbeddingModel:    "m",
 		CalibrationDate:   time.Date(2026, 10, 31, 0, 0, 0, 0, time.UTC),
@@ -243,12 +252,15 @@ func TestStorageContract_PayloadKeysAndTypesPerPointKind(t *testing.T) {
 	if err := storage.SetLastIndex(ctx, LastIndex{
 		Commit:    "0123456789abcdef0123456789abcdef01234567",
 		IndexedAt: time.Date(2026, 10, 31, 0, 0, 0, 0, time.UTC),
+		Root:      "/repo",
 	}); err != nil {
 		t.Fatalf("SetLastIndex: %v", err)
 	}
 
 	assertPayloadContract(t, "chunk", fq.payloadOf(collection, stringToUUID(chunk.ID)), contractPayloads["chunk"])
-	assertPayloadContract(t, "file_hash", fq.payloadOf(collection, fileHashID("/repo/pkg/a.go")), contractPayloads["file_hash"])
+	assertPayloadContract(t, "file_hash", fq.payloadOf(collection, fileHashID("/repo/pkg/a.go")),
+		without(contractPayloads["file_hash"], fileHashFallbackOnlyKeys))
+	assertPayloadContract(t, "file_hash (fell back)", fq.payloadOf(collection, fileHashID("/repo/pkg/b.py")), contractPayloads["file_hash"])
 	assertPayloadContract(t, "calibration_metadata", fq.payloadOf(collection, calibrationMetadataID()), contractPayloads["calibration_metadata"])
 	assertPayloadContract(t, "last_index", fq.payloadOf(collection, lastIndexID()), contractPayloads["last_index"])
 	assertPayloadContract(t, "memory (before any retrieval)", fq.payloadOf(collection, memoryPointID(entry.ID)),
@@ -277,6 +289,8 @@ func TestStorageContract_PayloadKeysAndTypesPerPointKind(t *testing.T) {
 		{"calibration_metadata", "type", "calibration_metadata", fq.payloadOf(collection, calibrationMetadataID())},
 		{"last_index", "type", "last_index", fq.payloadOf(collection, lastIndexID())},
 		{"last_index", "indexed_at", "2026-10-31T00:00:00Z", fq.payloadOf(collection, lastIndexID())},
+		{"last_index", "root", "/repo", fq.payloadOf(collection, lastIndexID())},
+		{"file_hash", "fallback_reason", "parse_failed", fq.payloadOf(collection, fileHashID("/repo/pkg/b.py"))},
 		{"memory", "entry_type", "memory", fq.payloadOf(collection, memoryPointID(entry.ID))},
 		{"retrieval_log", "entry_type", "retrieval_log", logs[0]},
 		{"chunk", "domain", "code", fq.payloadOf(collection, stringToUUID(chunk.ID))},
