@@ -17,6 +17,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- A resumed `index` reports the files it skipped as unchanged that were chunked as text windows, and `index-status` lists them (`files_fallback`, `fallback_files`, `fallback_chunker_failed_files` under `--json` / `--axi`); the reason is now stored with each file's hash. An index built before this records it as each file is next re-indexed. (technical debt)
+- Staleness in `callers`, `refs` and the searches is measured against the directory that was indexed, now recorded with the last index, so `--index-dir` pointing at another repository's index reports how far that repository has moved instead of `unknown`. An index recorded before this keeps measuring from the working directory until it is re-indexed. (technical debt)
+- `index-update` in git mode keeps a changed file's old chunks when its re-index fails, so a file named in the errors stays searchable as it was last indexed; `index --json` and `index-update --json` print `"errors": []` on a clean run instead of `null`. (technical debt)
+- `callers` reports `not_indexed_for_edges` for a language whose index holds import edges but no call edges, instead of "none recorded in the call graph". (technical debt)
 - `multisearch --output by_query` / `by_collection` in plain-text mode now renders the grouped results (a heading per query or collection, then the same per-result lines); before, only the `Multisearch: N queries, M results` header printed, because the grouped formats leave the blended list empty by design. The `setup` SessionStart hook now runs `llm-semantic index-status || true`, tolerating the non-zero exit a missing index raises so Claude Code no longer shows a hook error in every un-indexed project; existing hooks are upgraded in place on the next setup run.
 - `index` and `index-update` no longer report a file whose chunker errored or panicked as `(parse failed)`. The text-window summary prints a separate `(chunker failed)` group, and `--json` / `--axi` name those paths in `fallback_chunker_failed_files`; `fallback_files` still lists every file that fell back.
 
