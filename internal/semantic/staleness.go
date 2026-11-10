@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
@@ -57,7 +58,9 @@ func (s Staleness) Fresh() bool {
 var commitHash = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 
 // CheckStaleness compares the last index recorded in storage with the git working tree
-// containing dir. It uses git only (no tree walk, no embedding): commits from the recorded
+// containing the directory the record names as indexed, or dir when it names none or
+// that directory is gone, so an index opened from another repository is measured
+// against the repository it was built from. It uses git only (no tree walk, no embedding): commits from the recorded
 // commit to HEAD, plus uncommitted changes from `git status --porcelain`, across the whole
 // repository: FilesChanged is repository-wide and is not narrowed to dir, so a change
 // outside the indexed directory still counts. Changes at or under any of ignore are not
@@ -75,6 +78,11 @@ func CheckStaleness(ctx context.Context, storage Storage, dir string, ignore ...
 		return unknownStaleness(StalenessReasonNoRecord, nil)
 	}
 
+	if last.Root != "" {
+		if info, err := os.Stat(last.Root); err == nil && info.IsDir() {
+			dir = last.Root
+		}
+	}
 	s := measureStaleness(ctx, last.Commit, dir, ignore)
 	s.IndexedCommit = last.Commit
 	s.IndexedAt = last.IndexedAt

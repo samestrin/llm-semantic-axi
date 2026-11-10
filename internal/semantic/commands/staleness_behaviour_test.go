@@ -437,3 +437,48 @@ func TestIndexStalenessHasItsOwnTimeout(t *testing.T) {
 		t.Fatalf("indexStaleness still running after 5s with a %v timeout", stalenessTimeout)
 	}
 }
+
+// TestStalenessWithAnIndexDirMeasuresTheIndexedRepository defends `--index-dir`
+// pointing at another repository's index: callers run from repository B over
+// the index of repository A must report how far A has moved, not
+// unknown/commit_unknown because A's commit is not in B's history.
+func TestStalenessWithAnIndexDirMeasuresTheIndexedRepository(t *testing.T) {
+	here := newWorkspace(t)
+	useEmbedder(t, newFakeEmbedder(t))
+	t.Setenv("GIT_CEILING_DIRECTORIES", filepath.Dir(here))
+	writeFile(t, filepath.Join(here, "b.go"), "package b\n")
+	runGit(t, here, "init", "-q")
+	runGit(t, here, "add", "b.go")
+	runGit(t, here, "commit", "-q", "-m", "b")
+
+	indexed := t.TempDir()
+	writeFile(t, filepath.Join(indexed, "sample.go"), callGraphSource)
+	runGit(t, indexed, "init", "-q")
+	runGit(t, indexed, "add", "sample.go")
+	runGit(t, indexed, "commit", "-q", "-m", "sample")
+
+	indexDir = filepath.Join(t.TempDir(), "idx")
+	captureStdout(t, func() {
+		if err := runIndex(context.Background(), indexed, indexOpts{skipCalibration: true}); err != nil {
+			t.Fatalf("runIndex: %v", err)
+		}
+	})
+	writeFile(t, filepath.Join(indexed, "later.go"), "package sample\n")
+	runGit(t, indexed, "add", "later.go")
+	runGit(t, indexed, "commit", "-q", "-m", "later")
+
+	withAXI(t)
+	out := captureStdout(t, func() {
+		if err := runCallers(context.Background(), "Authenticate", false, false); err != nil {
+			t.Fatalf("callers: %v", err)
+		}
+	})
+	if !strings.Contains(out, "Caller") {
+		t.Fatalf("callers did not answer from the index of the other repository:\n%s", out)
+	}
+	for _, want := range []string{"state: stale", "commits_behind: 1"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("callers over another repository's index lacks %q:\n%s", want, out)
+		}
+	}
+}

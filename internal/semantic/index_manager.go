@@ -123,7 +123,10 @@ type IndexResult struct {
 	// FallbackChunkerFailedFiles names the subset of FallbackFiles whose
 	// chunker errored or panicked. The rest fell back on a parse-tree error.
 	FallbackChunkerFailedFiles []string `json:"fallback_chunker_failed_files,omitempty"`
-	Errors                     []string `json:"errors"` // Error messages
+	// Errors holds one message per failure. Index, Update and UpdateGit start
+	// it as an empty slice, so a clean run prints "errors": [] rather than null
+	// or no key at all.
+	Errors []string `json:"errors"`
 }
 
 // UpdateResult contains statistics from an update operation
@@ -131,7 +134,7 @@ type UpdateResult struct {
 	FilesUpdated int `json:"files_updated"`
 	FilesRemoved int `json:"files_removed"`
 	// FilesSkipped counts files that could not be processed; Errors names each
-	// one with its error.
+	// one with its error, and is empty rather than nil on a clean run.
 	FilesSkipped  int      `json:"files_skipped"`
 	Errors        []string `json:"errors"`
 	ChunksCreated int      `json:"chunks_created"`
@@ -192,7 +195,7 @@ type pendingChunk struct {
 // and the time are captured before the walk (see currentLastIndex), so edits made while
 // indexing runs are not tracked by the record.
 func (m *IndexManager) Index(ctx context.Context, rootPath string, opts IndexOptions) (*IndexResult, error) {
-	result := &IndexResult{}
+	result := &IndexResult{Errors: []string{}}
 	last := currentLastIndex(rootPath)
 
 	// Verify path exists
@@ -223,12 +226,17 @@ func (m *IndexManager) Index(ctx context.Context, rootPath string, opts IndexOpt
 		return nil, fmt.Errorf("failed to collect files: %w", err)
 	}
 
+	fellBack, err := m.storedFallbacks(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	// Use cross-file batching if EmbedBatchSize is set
 	if opts.EmbedBatchSize > 0 {
-		result, err = m.indexWithCrossFileBatching(ctx, files, opts, result)
+		result, err = m.indexWithCrossFileBatching(ctx, files, opts, fellBack, result)
 	} else {
 		// Original per-file approach
-		result, err = m.indexPerFile(ctx, files, opts, result)
+		result, err = m.indexPerFile(ctx, files, opts, fellBack, result)
 	}
 	if err != nil {
 		return result, err
@@ -252,7 +260,11 @@ func (m *IndexManager) Index(ctx context.Context, rootPath string, opts IndexOpt
 // Capturing before the walk means a commit landing mid-index is reported as unindexed.
 func currentLastIndex(rootPath string) LastIndex {
 	commit, _ := gitResolveCommit(rootPath, "HEAD")
-	return LastIndex{Commit: commit, IndexedAt: time.Now().UTC()}
+	root, err := filepath.Abs(rootPath)
+	if err != nil {
+		root = ""
+	}
+	return LastIndex{Commit: commit, IndexedAt: time.Now().UTC(), Root: root}
 }
 
 // recordLastIndex stores last. A backend that cannot record it is not a failure: the
@@ -265,8 +277,33 @@ func (m *IndexManager) recordLastIndex(ctx context.Context, last LastIndex) erro
 	return fmt.Errorf("failed to record the last indexed commit: %w", err)
 }
 
+// setFileHash records a file's hash, and why it fell back where the backend
+// keeps that.
+func (m *IndexManager) setFileHash(ctx context.Context, filePath, hash string, reason FallbackReason) error {
+	if fs, ok := m.storage.(FallbackStore); ok {
+		return fs.SetFileHashWithFallback(ctx, filePath, hash, reason)
+	}
+	return m.storage.SetFileHash(ctx, filePath, hash)
+}
+
+// storedFallbacks returns the files an earlier run recorded as fallen back, so a
+// resumed index that skips them can still report them. A backend that keeps no
+// record returns none.
+func (m *IndexManager) storedFallbacks(ctx context.Context) (map[string]FallbackReason, error) {
+	fs, ok := m.storage.(FallbackStore)
+	if !ok {
+		return nil, nil
+	}
+	fellBack, err := fs.ListFallbackFiles(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read the files that fell back: %w", err)
+	}
+	return fellBack, nil
+}
+
 // indexPerFile processes files one at a time (original behavior)
-func (m *IndexManager) indexPerFile(ctx context.Context, files []string, opts IndexOptions, result *IndexResult) (*IndexResult, error) {
+// fellBack holds the files an earlier run recorded as fallen back.
+func (m *IndexManager) indexPerFile(ctx context.Context, files []string, opts IndexOptions, fellBack map[string]FallbackReason, result *IndexResult) (*IndexResult, error) {
 	totalFiles := len(files)
 
 	for i, file := range files {
@@ -296,6 +333,9 @@ func (m *IndexManager) indexPerFile(ctx context.Context, files []string, opts In
 			}
 			if !needsIndex {
 				result.FilesUnchanged++
+				if reason, ok := fellBack[file]; ok {
+					result.addFallback(file, reason)
+				}
 				// Report progress for skipped file
 				if opts.OnProgress != nil {
 					opts.OnProgress(ProgressEvent{
@@ -337,20 +377,21 @@ func (m *IndexManager) indexPerFile(ctx context.Context, files []string, opts In
 // indexWithCrossFileBatching processes files in batches with incremental commits.
 // Each batch: chunk files → embed chunks → store to DB → commit file hashes.
 // This allows resuming interrupted indexing - files with stored hashes are skipped.
-func (m *IndexManager) indexWithCrossFileBatching(ctx context.Context, files []string, opts IndexOptions, result *IndexResult) (*IndexResult, error) {
+func (m *IndexManager) indexWithCrossFileBatching(ctx context.Context, files []string, opts IndexOptions, fellBack map[string]FallbackReason, result *IndexResult) (*IndexResult, error) {
 	totalFiles := len(files)
 	embedBatchSize := opts.EmbedBatchSize
 
 	// First pass: filter files that need indexing and group into batches
 	// Each batch targets ~embedBatchSize chunks for efficient API usage
 	type fileBatch struct {
-		files  []string
-		hashes map[string]string // filePath -> contentHash
-		chunks []pendingChunk
+		files   []string
+		hashes  map[string]string         // filePath -> contentHash
+		reasons map[string]FallbackReason // filePath -> why it fell back, if it did
+		chunks  []pendingChunk
 	}
 
 	var batches []fileBatch
-	currentBatch := fileBatch{hashes: make(map[string]string)}
+	currentBatch := fileBatch{hashes: make(map[string]string), reasons: make(map[string]FallbackReason)}
 	fileIndex := 0
 
 	for _, file := range files {
@@ -382,6 +423,9 @@ func (m *IndexManager) indexWithCrossFileBatching(ctx context.Context, files []s
 			}
 			if !needsIndex {
 				result.FilesUnchanged++
+				if reason, ok := fellBack[file]; ok {
+					result.addFallback(file, reason)
+				}
 				if opts.OnProgress != nil {
 					opts.OnProgress(ProgressEvent{
 						Current:     fileIndex,
@@ -424,6 +468,7 @@ func (m *IndexManager) indexWithCrossFileBatching(ctx context.Context, files []s
 		// Add to current batch
 		currentBatch.files = append(currentBatch.files, file)
 		currentBatch.hashes[file] = contentHash
+		currentBatch.reasons[file] = reason
 		for _, chunk := range chunks {
 			currentBatch.chunks = append(currentBatch.chunks, pendingChunk{
 				chunk:       chunk,
@@ -446,7 +491,7 @@ func (m *IndexManager) indexWithCrossFileBatching(ctx context.Context, files []s
 		// When batch reaches target size, finalize it
 		if len(currentBatch.chunks) >= embedBatchSize {
 			batches = append(batches, currentBatch)
-			currentBatch = fileBatch{hashes: make(map[string]string)}
+			currentBatch = fileBatch{hashes: make(map[string]string), reasons: make(map[string]FallbackReason)}
 		}
 	}
 
@@ -540,7 +585,7 @@ func (m *IndexManager) indexWithCrossFileBatching(ctx context.Context, files []s
 		// Step 3: Commit file hashes (this is the durability checkpoint)
 		// After this, these files will be skipped on resume
 		for filePath, hash := range batch.hashes {
-			_ = m.storage.SetFileHash(ctx, filePath, hash)
+			_ = m.setFileHash(ctx, filePath, hash, batch.reasons[filePath])
 		}
 
 		// Update results
@@ -754,7 +799,7 @@ func (m *IndexManager) processFileWithDiff(ctx context.Context, filePath string,
 	}
 
 	// Step 9: Update file hash
-	if err := m.storage.SetFileHash(ctx, filePath, fileHash); err != nil {
+	if err := m.setFileHash(ctx, filePath, fileHash, reason); err != nil {
 		return 0, 0, FallbackNone, fmt.Errorf("failed to set file hash: %w", err)
 	}
 
@@ -767,7 +812,7 @@ func (m *IndexManager) processFileWithDiff(ctx context.Context, filePath string,
 // rootPath, not the scope that was scanned, and captures it before the walk, so edits
 // made while the update runs are not tracked by the record.
 func (m *IndexManager) Update(ctx context.Context, rootPath string, opts UpdateOptions) (*UpdateResult, error) {
-	result := &UpdateResult{}
+	result := &UpdateResult{Errors: []string{}}
 	last := currentLastIndex(rootPath)
 
 	// Set overlap configuration (thread-safe)
@@ -849,7 +894,7 @@ func (m *IndexManager) Update(ctx context.Context, rootPath string, opts UpdateO
 // changed/added/deleted files since the given ref (e.g., "HEAD~1"), filters them
 // against include/exclude patterns, and only re-indexes the affected files.
 func (m *IndexManager) UpdateGit(ctx context.Context, rootPath string, gitRef string, opts UpdateOptions) (*UpdateResult, error) {
-	result := &UpdateResult{}
+	result := &UpdateResult{Errors: []string{}}
 	last := currentLastIndex(rootPath)
 	since, sinceErr := gitResolveCommit(rootPath, gitRef)
 
@@ -883,12 +928,18 @@ func (m *IndexManager) UpdateGit(ctx context.Context, rootPath string, gitRef st
 			continue
 		}
 
-		// Remove old chunks and re-index
+		// Chunk and embed before removing the old chunks, so a file that fails
+		// here stays searchable as it was last indexed.
+		prepared, err := m.prepareFile(ctx, absPath, opts.Domain)
+		if err != nil {
+			result.addSkipped(absPath, err)
+			continue
+		}
 		removed, _ := m.storage.DeleteByFilePath(ctx, absPath)
 		result.ChunksRemoved += removed
 
 		indexResult := &IndexResult{}
-		if err := m.processFile(ctx, absPath, indexResult, 0, 0, opts.Domain); err == nil {
+		if err := m.storePreparedFile(ctx, prepared, indexResult, 0, 0); err == nil {
 			result.FilesUpdated++
 			result.ChunksCreated += indexResult.ChunksCreated
 			for _, path := range indexResult.FallbackFiles {
@@ -1156,22 +1207,42 @@ func (m *IndexManager) collectFiles(rootPath string, includes, excludes []string
 // batchSize controls how many vectors are sent per upsert (0 = unlimited)
 // parallel controls how many batch uploads run concurrently (0 or 1 = sequential)
 func (m *IndexManager) processFile(ctx context.Context, filePath string, result *IndexResult, batchSize, parallel int, domain string) error {
+	prepared, err := m.prepareFile(ctx, filePath, domain)
+	if err != nil {
+		return err
+	}
+	return m.storePreparedFile(ctx, prepared, result, batchSize, parallel)
+}
+
+// preparedFile is a file chunked and embedded but not yet stored, so a caller
+// replacing the file's old chunks can leave them in place until this point.
+type preparedFile struct {
+	path                 string
+	chunker              Chunker
+	content              []byte
+	chunks               []Chunk
+	chunksWithEmbeddings []ChunkWithEmbedding
+	reason               FallbackReason
+}
+
+// prepareFile reads, chunks and embeds a file without writing to storage.
+func (m *IndexManager) prepareFile(ctx context.Context, filePath string, domain string) (*preparedFile, error) {
 	// Get appropriate chunker
 	chunker, ok := m.factory.GetByExtension(filePath)
 	if !ok {
-		return fmt.Errorf("no chunker for file type")
+		return nil, fmt.Errorf("no chunker for file type")
 	}
 
 	// Read file content
 	content, err := os.ReadFile(filePath)
 	if err != nil {
-		return fmt.Errorf("failed to read file: %w", err)
+		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
 	// Parse into chunks
 	chunks, reason, err := chunkWithFallback(chunker, filePath, content)
 	if err != nil {
-		return fmt.Errorf("failed to chunk file: %w", err)
+		return nil, fmt.Errorf("failed to chunk file: %w", err)
 	}
 
 	// Tag chunks with domain and compute content hashes
@@ -1197,14 +1268,14 @@ func (m *IndexManager) processFile(ctx context.Context, filePath string, result 
 	// Check for cancellation before batch embedding
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return nil, ctx.Err()
 	default:
 	}
 
 	// Generate embeddings for all chunks in a single batch request
 	embeddings, err := m.embedder.EmbedBatch(ctx, texts)
 	if err != nil {
-		return fmt.Errorf("failed to generate embeddings: %w", err)
+		return nil, fmt.Errorf("failed to generate embeddings: %w", err)
 	}
 
 	// Pair chunks with their embeddings
@@ -1215,6 +1286,20 @@ func (m *IndexManager) processFile(ctx context.Context, filePath string, result 
 			Embedding: embeddings[i],
 		}
 	}
+
+	return &preparedFile{
+		path:                 filePath,
+		chunker:              chunker,
+		content:              content,
+		chunks:               chunks,
+		chunksWithEmbeddings: chunksWithEmbeddings,
+		reason:               reason,
+	}, nil
+}
+
+// storePreparedFile writes a prepared file's chunks, references and hash.
+func (m *IndexManager) storePreparedFile(ctx context.Context, p *preparedFile, result *IndexResult, batchSize, parallel int) error {
+	filePath, chunksWithEmbeddings, reason := p.path, p.chunksWithEmbeddings, p.reason
 
 	// Store chunks in batches
 	if batchSize <= 0 {
@@ -1271,13 +1356,13 @@ func (m *IndexManager) processFile(ctx context.Context, filePath string, result 
 	}
 
 	// Extract and store chunk references if chunker supports it
-	m.extractAndStoreRefs(ctx, chunker, filePath, content, chunks)
+	m.extractAndStoreRefs(ctx, p.chunker, filePath, p.content, p.chunks)
 
 	// Store file hash after successfully processing all chunks
 	// This enables resume capability - files with matching hashes will be skipped
-	contentHash := sha256.Sum256(content)
+	contentHash := sha256.Sum256(p.content)
 	hashStr := hex.EncodeToString(contentHash[:])
-	if err := m.storage.SetFileHash(ctx, filePath, hashStr); err != nil {
+	if err := m.setFileHash(ctx, filePath, hashStr, reason); err != nil {
 		// Log but don't fail - the file was indexed successfully
 		// Resume will just re-index this file next time
 		return nil

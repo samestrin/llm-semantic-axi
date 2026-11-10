@@ -14,10 +14,9 @@ import (
 	"golang.org/x/term"
 )
 
-const (
-	// indexLockTimeout is how long index (rebuild) waits to acquire the lock
-	indexLockTimeout = 120 * time.Second
-)
+// indexLockTimeout is how long index (rebuild) waits to acquire the lock. A
+// variable so a test can shorten the wait.
+var indexLockTimeout = 120 * time.Second
 
 const (
 	// progressReportInterval is the number of files between progress reports
