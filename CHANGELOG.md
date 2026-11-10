@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- The `install-release.sh` attached to a release is stamped with that release's tag, so downloading it from `.../releases/download/vX.Y.Z/` installs `vX.Y.Z` instead of whatever release is latest. `--version` still overrides the stamp; the copy in the repository, with no stamp, still installs latest.
+
 ### Changed
 
 - A resumed `index` reports the files it skipped as unchanged that were chunked as text windows, and `index-status` lists them (`files_fallback`, `fallback_files`, `fallback_chunker_failed_files` under `--json` / `--axi`); the reason is now stored with each file's hash. An index built before this records it as each file is next re-indexed. (technical debt)

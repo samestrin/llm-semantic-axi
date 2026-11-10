@@ -44,6 +44,7 @@ jobs:
       # install_release_test.go pins both.
       - name: package installer archives
         run: |
+          VERSION="${GITHUB_REF_NAME}"
           for platform in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
             os=${platform%/*}; arch=${platform#*/}
             stage="$(mktemp -d)"
@@ -53,7 +54,10 @@ jobs:
             tar -czf "dist/llm-semantic-${os}-${arch}.tar.gz" -C "$stage" llm-semantic llm-semantic-mcp
             rm -rf "$stage"
           done
-          cp install-release.sh dist/install-release.sh
+          # Pin the published installer to this tag, so the copy downloaded
+          # from a tag URL installs that tag rather than whatever is latest.
+          sed "s|^PINNED_VERSION=\"\"\$|PINNED_VERSION=\"$VERSION\"|" install-release.sh > dist/install-release.sh
+          grep -qx "PINNED_VERSION=\"$VERSION\"" dist/install-release.sh
           cd dist && sha256sum * > SHA256SUMS.txt
 
       - name: publish

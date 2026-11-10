@@ -427,3 +427,67 @@ func TestReleaseWorkflowPublishesInstallerArchives(t *testing.T) {
 		}
 	}
 }
+
+// stampedInstaller mimics the sed in release.yml's packaging step.
+func stampedInstaller(t *testing.T, tag string) string {
+	t.Helper()
+	script, err := os.ReadFile("install-release.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const placeholder = "\nPINNED_VERSION=\"\"\n"
+	if !strings.Contains(string(script), placeholder) {
+		t.Fatal("install-release.sh has no PINNED_VERSION placeholder line for release.yml to stamp")
+	}
+	return strings.Replace(string(script), placeholder, "\nPINNED_VERSION=\""+tag+"\"\n", 1)
+}
+
+// Defends against a tag's install-release.sh installing latest: a stamped
+// script must resolve its own tag's download URL, an explicit --version must
+// still win, and an unstamped script must keep resolving latest. A dead
+// loopback proxy stops the download, so only the announced URL is checked.
+func TestInstallRelease_StampedTagSelectsDownloadURL(t *testing.T) {
+	if _, err := exec.LookPath("curl"); err != nil {
+		t.Skip("curl is not installed")
+	}
+	const repo = "https://github.com/samestrin/llm-semantic-axi/releases/"
+	cases := []struct {
+		name, tag string
+		args      []string
+		want      string
+	}{
+		{"stamped", "v9.9.9", nil, repo + "download/v9.9.9"},
+		{"explicit version overrides stamp", "v9.9.9", []string{"--version", "v1.2.3"}, repo + "download/v1.2.3"},
+		{"unstamped is latest", "", nil, repo + "latest/download"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			script := filepath.Join(dir, "install-release.sh")
+			if err := os.WriteFile(script, []byte(stampedInstaller(t, c.tag)), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			sh, _ := exec.LookPath("sh")
+			cmd := exec.Command(sh, append([]string{script}, c.args...)...)
+			cmd.Env = []string{"HOME=" + dir, "TMPDIR=" + dir, "PATH=" + restrictedPath(t, "curl"), "https_proxy=http://127.0.0.1:1", "HTTPS_PROXY=http://127.0.0.1:1"}
+			out, _ := cmd.CombinedOutput()
+			if !strings.Contains(string(out), "from "+c.want+"\n") {
+				t.Errorf("want download from %s, got:\n%s", c.want, out)
+			}
+		})
+	}
+}
+
+// Defends the release side of the stamp: release.yml must rewrite the
+// placeholder in the published copy and fail if the rewrite did not land.
+func TestReleaseWorkflowStampsInstaller(t *testing.T) {
+	wf, err := os.ReadFile(".github/workflows/release.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`^PINNED_VERSION=\"\"\$`, `> dist/install-release.sh`, `grep -qx "PINNED_VERSION=\"$VERSION\"" dist/install-release.sh`} {
+		if !strings.Contains(string(wf), want) {
+			t.Errorf("release.yml does not contain %q", want)
+		}
+	}
+}
