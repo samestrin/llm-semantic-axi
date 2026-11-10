@@ -57,6 +57,9 @@ type SearchOptions struct {
 type LastIndex struct {
 	Commit    string    `json:"commit"` // HEAD at the time of the index; empty outside git
 	IndexedAt time.Time `json:"indexed_at"`
+	// Root is the absolute path of the indexed directory, which the staleness
+	// check measures from. Empty in a record written before it was recorded.
+	Root string `json:"root,omitempty"`
 }
 
 // ChunkWithEmbedding pairs a chunk with its embedding for batch operations

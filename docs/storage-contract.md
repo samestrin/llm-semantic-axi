@@ -175,6 +175,7 @@ the version is unchanged.
 | `type` | string — always `"last_index"` | `:1691` |
 | `commit` | string — the full commit hash of `HEAD` when the index started; empty when the indexed directory is not in a git repository | `:1692` |
 | `indexed_at` | string — RFC 3339 timestamp in UTC, with fractional seconds, of when the index started | `:1693` |
+| `root` | string — absolute path of the indexed directory, which the staleness check measures from; empty or absent in a point written before it was recorded, in which case the check measures from the working directory. Added after version 1; additive, so the version is unchanged | `:1768` |
 
 ### 7. The `storage_contract` point (singleton)
 

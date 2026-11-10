@@ -516,3 +516,40 @@ func TestCheckStaleness_UntrackedShownDespiteConfig(t *testing.T) {
 		t.Errorf("State = %q, FilesChanged = %v; want stale, 2 (pkg/a.go, pkg/b.go)", s.State, s.FilesChanged)
 	}
 }
+
+// TestCheckStaleness_MeasuresFromTheRecordedRoot defends `--index-dir` pointing
+// at another repository's index: measured from the directory the command runs
+// in, the indexed commit is not in that history and the answer was unknown,
+// never the real distance. The record names the indexed directory, so the
+// check measures there; a record without one, or whose directory is gone,
+// falls back to the directory passed in.
+func TestCheckStaleness_MeasuresFromTheRecordedRoot(t *testing.T) {
+	ctx := context.Background()
+	indexed := t.TempDir()
+	gitRun(t, indexed, "init")
+	commitGoFile(t, indexed, "one.go", "One")
+	here := t.TempDir()
+	gitRun(t, here, "init")
+	commitGoFile(t, here, "other.go", "Other")
+
+	storage := newFileStorage(t)
+	record := LastIndex{Commit: gitHead(t, indexed), IndexedAt: time.Now(), Root: indexed}
+	if err := storage.SetLastIndex(ctx, record); err != nil {
+		t.Fatal(err)
+	}
+	commitGoFile(t, indexed, "two.go", "Two")
+
+	s := CheckStaleness(ctx, storage, here)
+	if s.State != StalenessStale || s.CommitsBehind == nil || *s.CommitsBehind != 1 {
+		t.Errorf("CheckStaleness from another repository = %+v, want stale and 1 commit behind the indexed one", s)
+	}
+
+	// No root recorded, and a recorded root that no longer exists.
+	for _, root := range []string{"", filepath.Join(t.TempDir(), "gone")} {
+		record.Root = root
+		if err := storage.SetLastIndex(ctx, record); err != nil {
+			t.Fatal(err)
+		}
+		assertUnknown(t, CheckStaleness(ctx, storage, here), StalenessReasonCommitUnknown)
+	}
+}

@@ -154,6 +154,9 @@ func TestIndexManager_RecordsLastIndex(t *testing.T) {
 	if got.IndexedAt.Before(before) || got.IndexedAt.After(after) {
 		t.Errorf("after index: IndexedAt = %v, want between %v and %v", got.IndexedAt, before, after)
 	}
+	if got.Root != repo {
+		t.Errorf("after index: Root = %q, want the indexed directory %q", got.Root, repo)
+	}
 
 	// --since matching the recorded commit advances it to the new HEAD.
 	commitGoFile(t, repo, "two.go", "Two")

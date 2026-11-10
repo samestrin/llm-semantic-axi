@@ -255,7 +255,11 @@ func (m *IndexManager) Index(ctx context.Context, rootPath string, opts IndexOpt
 // Capturing before the walk means a commit landing mid-index is reported as unindexed.
 func currentLastIndex(rootPath string) LastIndex {
 	commit, _ := gitResolveCommit(rootPath, "HEAD")
-	return LastIndex{Commit: commit, IndexedAt: time.Now().UTC()}
+	root, err := filepath.Abs(rootPath)
+	if err != nil {
+		root = ""
+	}
+	return LastIndex{Commit: commit, IndexedAt: time.Now().UTC(), Root: root}
 }
 
 // recordLastIndex stores last. A backend that cannot record it is not a failure: the

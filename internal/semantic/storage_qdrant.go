@@ -1739,7 +1739,7 @@ func (s *QdrantStorage) getLastIndexLocked(ctx context.Context) (*LastIndex, err
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse last index time: %w", err)
 	}
-	return &LastIndex{Commit: payload["commit"].GetStringValue(), IndexedAt: indexedAt}, nil
+	return &LastIndex{Commit: payload["commit"].GetStringValue(), IndexedAt: indexedAt, Root: payload["root"].GetStringValue()}, nil
 }
 
 // SetLastIndex stores the record of the last index, replacing any previous one.
@@ -1765,6 +1765,7 @@ func (s *QdrantStorage) setLastIndexLocked(ctx context.Context, li LastIndex) er
 			"type":       qdrant.NewValueString("last_index"),
 			"commit":     qdrant.NewValueString(li.Commit),
 			"indexed_at": qdrant.NewValueString(li.IndexedAt.UTC().Format(time.RFC3339Nano)),
+			"root":       qdrant.NewValueString(li.Root),
 		},
 	}
 
