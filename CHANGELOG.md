@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- `llm-semantic-mcp -v`, `-V` and `--version` print the bare version and exit 0 without starting the server or needing the CLI binary, and the started banner prints the version once (it printed `vv1.2.0` for a release build).
 - A resumed `index` reports the files it skipped as unchanged that were chunked as text windows, and `index-status` lists them (`files_fallback`, `fallback_files`, `fallback_chunker_failed_files` under `--json` / `--axi`); the reason is now stored with each file's hash. An index built before this records it as each file is next re-indexed. (technical debt)
 - Staleness in `callers`, `refs` and the searches is measured against the directory that was indexed, now recorded with the last index, so `--index-dir` pointing at another repository's index reports how far that repository has moved instead of `unknown`. An index recorded before this keeps measuring from the working directory until it is re-indexed. (technical debt)
 - `index-update` in git mode keeps a changed file's old chunks when its re-index fails, so a file named in the errors stays searchable as it was last indexed; `index --json` and `index-update --json` print `"errors": []` on a clean run instead of `null`. (technical debt)

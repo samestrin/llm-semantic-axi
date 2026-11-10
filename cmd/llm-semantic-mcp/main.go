@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -41,7 +42,31 @@ func main() {
 	// and a supervisor reads as a crash. Ignored, the write returns EPIPE and
 	// run() can see that the client went away.
 	signal.Ignore(syscall.SIGPIPE)
+	if printVersion(os.Args[1:], os.Stdout) {
+		os.Exit(0)
+	}
 	os.Exit(run(context.Background(), os.Stdin, nopCloser{os.Stdout}, os.Stderr))
+}
+
+// printVersion handles -v, -V and --version: it writes the bare version and
+// reports true so main exits 0 before run() checks for the CLI binary or reads
+// any JSON-RPC from stdin.
+func printVersion(args []string, stdout io.Writer) bool {
+	if len(args) == 0 {
+		return false
+	}
+	switch args[0] {
+	case "-v", "-V", "--version":
+		fmt.Fprintln(stdout, serverVersion)
+		return true
+	}
+	return false
+}
+
+// startedBanner adds the "v" itself only when the stamped version lacks one:
+// release builds stamp "v1.2.0", which printed as "vv1.2.0".
+func startedBanner(version string, toolCount int) string {
+	return fmt.Sprintf("%s v%s started with %d tools", serverName, strings.TrimPrefix(version, "v"), toolCount)
 }
 
 // nopCloser keeps stdout open when the SDK closes the connection, as
@@ -140,7 +165,7 @@ func run(ctx context.Context, in io.ReadCloser, out io.WriteCloser, stderr io.Wr
 	}
 
 	// Log startup
-	fmt.Fprintf(stderr, "%s v%s started with %d tools\n", serverName, serverVersion, len(tools))
+	fmt.Fprintln(stderr, startedBanner(serverVersion, len(tools)))
 
 	// Serve until the session ends
 	w := &recordingWriter{WriteCloser: out}

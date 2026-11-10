@@ -572,3 +572,59 @@ func TestServer_InstructionsStateTheRegisteredToolCount(t *testing.T) {
 		t.Errorf("GetToolDefinitions has %d tools, the client sees %d", n, len(res.Tools))
 	}
 }
+
+func TestBinary_VersionFlagsPrintTheBareVersionAndExitZero(t *testing.T) {
+	// -v, -V and --version must print only the version and exit 0 without
+	// starting the server: the CLI binary is pointed at a path that does not
+	// exist, so a run() that consulted it would exit 1, and stdin is closed.
+	for _, flag := range []string{"-v", "-V", "--version"} {
+		t.Run(flag, func(t *testing.T) {
+			cmd := exec.Command(os.Args[0], flag)
+			cmd.Env = append(os.Environ(), runMainEnv+"=1")
+			var stdout, stderr bytes.Buffer
+			cmd.Stdout, cmd.Stderr = &stdout, &stderr
+			if err := cmd.Run(); err != nil {
+				t.Fatalf("%s: want exit 0, got %v (stderr %q)", flag, err, stderr.String())
+			}
+			if got := strings.TrimSpace(stdout.String()); got != serverVersion {
+				t.Errorf("stdout = %q, want bare %q", got, serverVersion)
+			}
+			if strings.Contains(stderr.String(), "started") || strings.Contains(stderr.String(), "ERROR") {
+				t.Errorf("server started or checked the CLI: %q", stderr.String())
+			}
+		})
+	}
+}
+
+func TestServer_StartupBannerPrintsAStampedVersionOnce(t *testing.T) {
+	// A release build stamps "v1.2.0"; run() prefixed another "v" and logged
+	// "vv1.2.0". This drives run() itself, not a helper, so reverting the
+	// banner call site fails here.
+	fakeCLI(t, "{}")
+	original := serverVersion
+	serverVersion = "v1.2.0"
+	t.Cleanup(func() { serverVersion = original })
+	srv := startServer(t)
+	_ = srv.session.Close()
+	_, stderr := srv.wait(t)
+	if !strings.Contains(stderr, "v1.2.0") || strings.Contains(stderr, "vv1.2.0") {
+		t.Errorf("startup banner = %q, want v1.2.0 once", stderr)
+	}
+}
+func TestPrintVersion_IgnoresOtherArguments(t *testing.T) {
+	// Without a version flag the server must start as before.
+	var out bytes.Buffer
+	if printVersion(nil, &out) || printVersion([]string{"serve"}, &out) || out.Len() != 0 {
+		t.Errorf("printVersion handled a non-version invocation: %q", out.String())
+	}
+}
+
+func TestStartedBanner_PrintsTheVersionOnce(t *testing.T) {
+	// A release build stamps "v1.2.0"; the banner prefixed another "v" -> "vv1.2.0".
+	for _, v := range []string{"v1.2.0", "1.2.0"} {
+		got := startedBanner(v, 16)
+		if !strings.Contains(got, "v1.2.0") || strings.Contains(got, "vv1.2.0") {
+			t.Errorf("banner for %q = %q", v, got)
+		}
+	}
+}
