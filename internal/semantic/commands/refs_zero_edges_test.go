@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"io"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -99,10 +100,10 @@ func TestZeroEdgeDiagnosisRunsOnlyWhereItsResultIsPrinted(t *testing.T) {
 	}
 	writers := map[string]func(*bytes.Buffer, bool, bool) error{
 		"callers": func(b *bytes.Buffer, j, m bool) error {
-			return writeCallers(context.Background(), b, failingLangs{}, "sym", j, m)
+			return writeCallers(context.Background(), b, io.Discard, failingLangs{}, "sym", j, m)
 		},
 		"refs": func(b *bytes.Buffer, j, m bool) error {
-			return writeRefs(context.Background(), b, failingLangs{}, "sym", j, m)
+			return writeRefs(context.Background(), b, io.Discard, failingLangs{}, "sym", j, m)
 		},
 	}
 	for _, tc := range cases {
@@ -148,7 +149,7 @@ func TestCallersOfALanguageWithOnlyImportEdgesIsNotIndexedForEdges(t *testing.T)
 	withAXI(t)
 
 	var callers bytes.Buffer
-	if err := writeCallers(context.Background(), &callers, importsOnly{}, "Run", false, false); err != nil {
+	if err := writeCallers(context.Background(), &callers, io.Discard, importsOnly{}, "Run", false, false); err != nil {
 		t.Fatalf("callers: %v", err)
 	}
 	if !strings.Contains(callers.String(), "status: "+zeroNotIndexedForEdges) {
@@ -156,10 +157,43 @@ func TestCallersOfALanguageWithOnlyImportEdgesIsNotIndexedForEdges(t *testing.T)
 	}
 
 	var refs bytes.Buffer
-	if err := writeRefs(context.Background(), &refs, importsOnly{}, "Run", false, false); err != nil {
+	if err := writeRefs(context.Background(), &refs, io.Discard, importsOnly{}, "Run", false, false); err != nil {
 		t.Fatalf("refs: %v", err)
 	}
 	if strings.Contains(refs.String(), "calls") || !strings.Contains(refs.String(), "imports") {
 		t.Errorf("refs should list the import and claim no call:\n%s", refs.String())
+	}
+}
+
+// TestCallersAndRefsWriteTheJSONStalenessLineToTheGivenStderr defends the
+// --json and --min staleness line going to the stderr writer the caller passed,
+// not to the process's stderr, where a test cannot see it and stdout's schema
+// would be the only thing checked. importsOnly is no Storage, so its staleness
+// is unknown and the line is always printed.
+func TestCallersAndRefsWriteTheJSONStalenessLineToTheGivenStderr(t *testing.T) {
+	writers := map[string]func(out, errOut *bytes.Buffer, j, m bool) error{
+		"callers": func(out, errOut *bytes.Buffer, j, m bool) error {
+			return writeCallers(context.Background(), out, errOut, importsOnly{}, "Run", j, m)
+		},
+		"refs": func(out, errOut *bytes.Buffer, j, m bool) error {
+			return writeRefs(context.Background(), out, errOut, importsOnly{}, "Run", j, m)
+		},
+	}
+	for name, write := range writers {
+		for _, mode := range []struct {
+			name      string
+			json, min bool
+		}{{"json", true, false}, {"min", false, true}} {
+			var out, errOut bytes.Buffer
+			if err := write(&out, &errOut, mode.json, mode.min); err != nil {
+				t.Fatalf("%s --%s: %v", name, mode.name, err)
+			}
+			if !strings.Contains(errOut.String(), "Index staleness unknown") {
+				t.Errorf("%s --%s: staleness line not on the given stderr: %q", name, mode.name, errOut.String())
+			}
+			if strings.Contains(out.String(), "staleness") {
+				t.Errorf("%s --%s: staleness line leaked into stdout: %q", name, mode.name, out.String())
+			}
+		}
 	}
 }

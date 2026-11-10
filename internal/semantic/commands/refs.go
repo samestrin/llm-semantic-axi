@@ -75,11 +75,11 @@ func runCallers(ctx context.Context, symbol string, jsonOutput, minOutput bool) 
 	}
 	defer cleanup()
 
-	return writeCallers(ctx, os.Stdout, rs, symbol, jsonOutput, minOutput)
+	return writeCallers(ctx, os.Stdout, os.Stderr, rs, symbol, jsonOutput, minOutput)
 }
 
 // writeCallers answers runCallers from an opened call graph view.
-func writeCallers(ctx context.Context, w io.Writer, rs semantic.RefStorage, symbol string, jsonOutput, minOutput bool) error {
+func writeCallers(ctx context.Context, w, errW io.Writer, rs semantic.RefStorage, symbol string, jsonOutput, minOutput bool) error {
 	edges, err := rs.GetCallersByName(ctx, symbol)
 	if err != nil {
 		return fmt.Errorf("failed to look up callers of %q: %w", symbol, err)
@@ -91,7 +91,7 @@ func writeCallers(ctx context.Context, w io.Writer, rs semantic.RefStorage, symb
 	}
 
 	stale := refStaleness(ctx, rs)
-	return formatCallers(w, symbol, edges, zero, &stale, jsonOutput, minOutput)
+	return formatCallers(w, errW, symbol, edges, zero, &stale, jsonOutput, minOutput)
 }
 
 func runRefs(ctx context.Context, symbol string, jsonOutput, minOutput bool) error {
@@ -101,11 +101,11 @@ func runRefs(ctx context.Context, symbol string, jsonOutput, minOutput bool) err
 	}
 	defer cleanup()
 
-	return writeRefs(ctx, os.Stdout, rs, symbol, jsonOutput, minOutput)
+	return writeRefs(ctx, os.Stdout, os.Stderr, rs, symbol, jsonOutput, minOutput)
 }
 
 // writeRefs answers runRefs from an opened call graph view.
-func writeRefs(ctx context.Context, w io.Writer, rs semantic.RefStorage, symbol string, jsonOutput, minOutput bool) error {
+func writeRefs(ctx context.Context, w, errW io.Writer, rs semantic.RefStorage, symbol string, jsonOutput, minOutput bool) error {
 	edges, err := rs.GetRefsByName(ctx, symbol)
 	if err != nil {
 		return fmt.Errorf("failed to look up references from %q: %w", symbol, err)
@@ -117,7 +117,7 @@ func writeRefs(ctx context.Context, w io.Writer, rs semantic.RefStorage, symbol 
 	}
 
 	stale := refStaleness(ctx, rs)
-	return formatRefs(w, symbol, edges, zero, &stale, jsonOutput, minOutput)
+	return formatRefs(w, errW, symbol, edges, zero, &stale, jsonOutput, minOutput)
 }
 
 // zeroEdges says what an empty callers or refs answer means. Without it the
@@ -232,9 +232,9 @@ func openRefStorage(ctx context.Context) (semantic.RefStorage, func(), error) {
 // formatCallers prints the callers of symbol. zero is the diagnosis of an
 // empty answer; with none, the empty text can only say the symbol may not be
 // indexed.
-func formatCallers(w io.Writer, symbol string, edges []semantic.RefEdge, zero *zeroEdges, stale *semantic.Staleness, jsonOutput, minOutput bool) error {
+func formatCallers(w, errW io.Writer, symbol string, edges []semantic.RefEdge, zero *zeroEdges, stale *semantic.Staleness, jsonOutput, minOutput bool) error {
 	if jsonOutput || minOutput || GlobalAXIOutput {
-		return writeCallersJSON(w, symbol, edges, zero, stale, minOutput)
+		return writeCallersJSON(w, errW, symbol, edges, zero, stale, minOutput)
 	}
 	defer writeStalenessLine(w, stale)
 
@@ -254,7 +254,7 @@ func formatCallers(w io.Writer, symbol string, edges []semantic.RefEdge, zero *z
 	return nil
 }
 
-func writeCallersJSON(w io.Writer, symbol string, edges []semantic.RefEdge, zero *zeroEdges, stale *semantic.Staleness, minimal bool) error {
+func writeCallersJSON(w, errW io.Writer, symbol string, edges []semantic.RefEdge, zero *zeroEdges, stale *semantic.Staleness, minimal bool) error {
 	callers := make([]map[string]interface{}, 0, len(edges))
 	for _, e := range edges {
 		entry := map[string]interface{}{
@@ -275,7 +275,7 @@ func writeCallersJSON(w io.Writer, symbol string, edges []semantic.RefEdge, zero
 		"callers": callers,
 	}
 	addZeroEdges(payload, zero)
-	addStaleness(payload, stale)
+	addStaleness(errW, payload, stale)
 	return emitJSON(w, payload, true)
 }
 
@@ -303,11 +303,11 @@ func collapseRefEdges(edges []semantic.RefEdge) []semantic.RefEdge {
 }
 
 // formatRefs prints the references from symbol; zero is as for formatCallers.
-func formatRefs(w io.Writer, symbol string, edges []semantic.RefEdge, zero *zeroEdges, stale *semantic.Staleness, jsonOutput, minOutput bool) error {
+func formatRefs(w, errW io.Writer, symbol string, edges []semantic.RefEdge, zero *zeroEdges, stale *semantic.Staleness, jsonOutput, minOutput bool) error {
 	edges = collapseRefEdges(edges)
 
 	if jsonOutput || minOutput || GlobalAXIOutput {
-		return writeRefsJSON(w, symbol, edges, zero, stale, minOutput)
+		return writeRefsJSON(w, errW, symbol, edges, zero, stale, minOutput)
 	}
 	defer writeStalenessLine(w, stale)
 
@@ -331,7 +331,7 @@ func formatRefs(w io.Writer, symbol string, edges []semantic.RefEdge, zero *zero
 	return nil
 }
 
-func writeRefsJSON(w io.Writer, symbol string, edges []semantic.RefEdge, zero *zeroEdges, stale *semantic.Staleness, minimal bool) error {
+func writeRefsJSON(w, errW io.Writer, symbol string, edges []semantic.RefEdge, zero *zeroEdges, stale *semantic.Staleness, minimal bool) error {
 	refs := make([]map[string]interface{}, 0, len(edges))
 	for _, e := range edges {
 		entry := map[string]interface{}{
@@ -355,7 +355,7 @@ func writeRefsJSON(w io.Writer, symbol string, edges []semantic.RefEdge, zero *z
 		"references": refs,
 	}
 	addZeroEdges(payload, zero)
-	addStaleness(payload, stale)
+	addStaleness(errW, payload, stale)
 	return emitJSON(w, payload, true)
 }
 
@@ -371,9 +371,9 @@ func addZeroEdges(payload map[string]interface{}, zero *zeroEdges) {
 }
 
 // addStaleness carries the staleness: a `stale` object under --axi, and one
-// stderr line under --json and --min, whose schema stays as it was. nil means
-// the caller did not measure it.
-func addStaleness(payload map[string]interface{}, stale *semantic.Staleness) {
+// line on errW, the caller's stderr, under --json and --min, whose schema stays
+// as it was. nil means the caller did not measure it.
+func addStaleness(errW io.Writer, payload map[string]interface{}, stale *semantic.Staleness) {
 	if stale == nil {
 		return
 	}
@@ -381,5 +381,7 @@ func addStaleness(payload map[string]interface{}, stale *semantic.Staleness) {
 		payload["stale"] = axiStaleness(*stale)
 		return
 	}
-	printStalenessLine(*stale, true)
+	if line := stalenessLine(*stale); line != "" {
+		fmt.Fprintln(errW, line)
+	}
 }
