@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"strings"
 	"testing"
+
+	"github.com/samestrin/llm-semantic-axi/internal/semantic/commands"
 )
 
 // main() is thin, but the one thing it does that nothing else does is stamp the
@@ -52,24 +54,52 @@ func withArgs(t *testing.T, args ...string) {
 	t.Cleanup(func() { os.Args = original })
 }
 
-func TestMain_StampsTheVersionOntoTheRootCommand(t *testing.T) {
-	// --version is answered by cobra from rootCmd.Version, which only main()
-	// sets. If the stamping were dropped the flag would disappear entirely
-	// rather than report a wrong number, so this pins both.
-	withArgs(t, "llm-semantic", "--version")
+func TestMain_VersionFlagsPrintTheBareVersion(t *testing.T) {
+	// --version, -v and -V must each print exactly the stamped version and a
+	// newline on stdout, nothing on stderr, and exit 0. The commit used to be
+	// appended, which broke `$(llm-semantic -v)` in scripts.
+	for _, flag := range []string{"-v", "-V", "--version"} {
+		t.Run(flag, func(t *testing.T) {
+			stdout, stderr, code := runMain(t, flag)
 
-	out := captureStdout(t, main)
+			if stdout != version+"\n" {
+				t.Errorf("stdout = %q, want %q", stdout, version+"\n")
+			}
+			if stderr != "" {
+				t.Errorf("stderr = %q, want empty", stderr)
+			}
+			if code != 0 {
+				t.Errorf("exit code = %d, want 0", code)
+			}
+		})
+	}
+}
 
-	if !strings.Contains(out, version) || !strings.Contains(out, commit) {
-		t.Errorf("--version output %q carries neither the version %q nor the commit %q", out, version, commit)
+func TestMain_UnstampedBuildReportsDev(t *testing.T) {
+	// An unstamped build must say "dev", not an empty string or a fake number.
+	if version != "dev" {
+		t.Skip("binary was stamped with ldflags")
 	}
-	// The default build reports the ldflags placeholders, formatted as
-	// "<version> (<commit>)".
-	if !strings.Contains(out, version+" ("+commit+")") {
-		t.Errorf("--version output %q is not in the \"<version> (<commit>)\" shape", out)
+	stdout, _, _ := runMain(t, "--version")
+	if stdout != "dev\n" {
+		t.Errorf("stdout = %q, want \"dev\\n\"", stdout)
 	}
-	if !strings.Contains(out, "llm-semantic") {
-		t.Errorf("--version output %q does not name the binary", out)
+}
+
+func TestMain_IndexDashVStillMeansVerbose(t *testing.T) {
+	// -v on a subcommand is --verbose. It must not print the version, and must
+	// not be rejected as an unknown flag.
+	stdout, stderr, _ := runMain(t, "index", "-v", "--help")
+	if strings.Contains(stderr, "unknown") || stdout == version+"\n" {
+		t.Errorf("index -v mishandled: stdout=%q stderr=%q", stdout, stderr)
+	}
+	root := commands.RootCmd()
+	idx, _, err := root.Find([]string{"index"})
+	if err != nil {
+		t.Fatalf("Find index: %v", err)
+	}
+	if f := idx.Flags().ShorthandLookup("v"); f == nil || f.Name != "verbose" {
+		t.Errorf("index -v does not map to --verbose: %v", f)
 	}
 }
 
