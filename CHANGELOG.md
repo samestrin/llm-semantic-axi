@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- `multisearch --output by_query` / `by_collection` in plain-text mode now renders the grouped results (a heading per query or collection, then the same per-result lines); before, only the `Multisearch: N queries, M results` header printed, because the grouped formats leave the blended list empty by design. The `setup` SessionStart hook now runs `llm-semantic index-status || true`, tolerating the non-zero exit a missing index raises so Claude Code no longer shows a hook error in every un-indexed project; existing hooks are upgraded in place on the next setup run. (technical debt EST-5256)
 - `index` and `index-update` no longer report a file whose chunker errored or panicked as `(parse failed)`. The text-window summary prints a separate `(chunker failed)` group, and `--json` / `--axi` name those paths in `fallback_chunker_failed_files`; `fallback_files` still lists every file that fell back. (technical debt EST-5252)
 - `collection delete` without `--force` and `memory stats --prune` without `--yes` no longer prompt on stdin. They refuse with an error naming the flag and exit 1, deleting nothing; `--axi` adds the command to run. Before, answering "n" or running with closed stdin printed `Aborted` and exited 0, so a delete that did not happen reported success. Scripts that piped `y` into either command must pass the flag instead. (AXI principle 6)
 

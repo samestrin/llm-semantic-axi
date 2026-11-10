@@ -656,7 +656,7 @@ func filterExcludedPaths(paths []string, excludes []string, excludeTests bool) [
 		// Check if any exclude pattern matches this path
 		excluded := false
 		for _, exc := range allExcludes {
-			// Check using filepath.Match or substring
+			// Substring check; a pattern-style filepath.Match check runs below.
 			if strings.Contains(normalizedPath, exc) {
 				excluded = true
 				break

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/samestrin/llm-semantic-axi/internal/semantic"
@@ -322,34 +323,78 @@ func outputMultisearchText(queries []string, result *semantic.MultisearchResult,
 		return nil
 	}
 
-	for i, r := range result.Results {
-		// Format match info
-		matchInfo := ""
-		if len(r.MatchedQueries) > 1 {
-			matchInfo = fmt.Sprintf(" [%d matches]", len(r.MatchedQueries))
+	// Grouped formats leave the blended list empty by design, so the groups
+	// themselves must be rendered: a heading per group, then the same
+	// per-result lines the blended output prints. Without this the grouped
+	// text output printed only the header above.
+	printGroup := func(heading string, rs []semantic.EnhancedResult) {
+		plural := "s"
+		if len(rs) == 1 {
+			plural = ""
 		}
-
-		// Format profile info
-		profileInfo := ""
-		if r.Chunk.Domain != "" {
-			profileInfo = fmt.Sprintf(" (%s)", r.Chunk.Domain)
+		fmt.Printf("%s (%d result%s)\n", heading, len(rs), plural)
+		for i, r := range rs {
+			printMultisearchResult(i+1, r)
 		}
-
-		fmt.Printf("%d. %s:%d - %s%s%s\n", i+1, r.Chunk.FilePath, r.Chunk.StartLine, r.Chunk.Name, profileInfo, matchInfo)
-		fmt.Printf("   Score: %.4f (boosted: %.4f)\n", r.Score, r.BoostedScore)
-
-		if len(r.MatchedQueries) > 0 {
-			fmt.Printf("   Matched: %s\n", strings.Join(r.MatchedQueries, ", "))
+	}
+	if result.Format == semantic.OutputByQuery {
+		// The query order the caller gave, not map order.
+		for _, q := range queries {
+			printGroup("Query: "+q, result.ByQuery[q])
 		}
-
-		// Show preview if available
-		if r.Preview != "" {
-			fmt.Printf("   %s\n", r.Preview)
-		} else if r.Chunk.Signature != "" {
-			fmt.Printf("   %s\n", r.Chunk.Signature)
+		return nil
+	}
+	if result.Format == semantic.OutputByCollection {
+		for _, name := range sortedKeys(result.ByCollection) {
+			printGroup("Collection: "+name, result.ByCollection[name])
 		}
-		fmt.Println()
+		return nil
 	}
 
+	for i, r := range result.Results {
+		printMultisearchResult(i+1, r)
+	}
 	return nil
+}
+
+// sortedKeys is the map ordering the grouped text output needs, so the
+// headings do not shuffle between runs.
+func sortedKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// printMultisearchResult prints one result: file:line, the symbol, the
+// scores, and the queries it matched.
+func printMultisearchResult(i int, r semantic.EnhancedResult) {
+	// Format match info
+	matchInfo := ""
+	if len(r.MatchedQueries) > 1 {
+		matchInfo = fmt.Sprintf(" [%d matches]", len(r.MatchedQueries))
+	}
+
+	// Format profile info
+	profileInfo := ""
+	if r.Chunk.Domain != "" {
+		profileInfo = fmt.Sprintf(" (%s)", r.Chunk.Domain)
+	}
+
+	fmt.Printf("%d. %s:%d - %s%s%s\n", i, r.Chunk.FilePath, r.Chunk.StartLine, r.Chunk.Name, profileInfo, matchInfo)
+	fmt.Printf("   Score: %.4f (boosted: %.4f)\n", r.Score, r.BoostedScore)
+
+	if len(r.MatchedQueries) > 0 {
+		fmt.Printf("   Matched: %s\n", strings.Join(r.MatchedQueries, ", "))
+	}
+
+	// Show preview if available
+	if r.Preview != "" {
+		fmt.Printf("   %s\n", r.Preview)
+	} else if r.Chunk.Signature != "" {
+		fmt.Printf("   %s\n", r.Chunk.Signature)
+	}
+	fmt.Println()
 }
