@@ -12,9 +12,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// setupHookCommand is what Claude Code runs at session start. A bare run
-// shows the index status for the directory.
-const setupHookCommand = "llm-semantic"
+// setupHookCommand is what Claude Code runs at session start. It asks for
+// index-status and tolerates its exit code: a bare `llm-semantic` exits
+// non-zero in a directory with no index (by design, so a missing index is
+// never silent), and Claude Code renders that as a hook error in every
+// un-indexed project. `|| true` keeps the status text on the session output
+// while letting the session start cleanly.
+const setupHookCommand = "llm-semantic index-status || true"
+
+// legacySetupHookCommand is the bare command setup used to write. A settings
+// file carrying it is migrated to setupHookCommand rather than left to error.
+const legacySetupHookCommand = "llm-semantic"
 
 const setupSkillContent = `---
 name: llm-semantic
@@ -145,10 +153,18 @@ func planSettings(path string) (setupAction, error) {
 	if hasSessionStartCommand(groups, setupHookCommand) {
 		return setupAction{content: raw}, nil
 	}
-
-	groups = append(groups, map[string]any{
-		"hooks": []any{map[string]any{"type": "command", "command": setupHookCommand}},
-	})
+	if hasSessionStartCommand(groups, setupHookCommand) {
+		return setupAction{content: raw}, nil
+	}
+	if !hasSessionStartCommand(groups, legacySetupHookCommand) {
+		groups = append(groups, map[string]any{
+			"hooks": []any{map[string]any{"type": "command", "command": setupHookCommand}},
+		})
+	} else {
+		// Upgrade the legacy bare command in place rather than appending a
+		// second hook entry.
+		replaceSessionStartCommand(groups, legacySetupHookCommand, setupHookCommand)
+	}
 	hooks["SessionStart"] = groups
 	root["hooks"] = hooks
 	out, err := json.MarshalIndent(root, "", "  ")
@@ -170,4 +186,20 @@ func hasSessionStartCommand(groups []any, command string) bool {
 		}
 	}
 	return false
+}
+
+// replaceSessionStartCommand rewrites any hook whose command is old so a
+// settings file written by an earlier setup is upgraded in place, not
+// duplicated.
+func replaceSessionStartCommand(groups []any, old, new string) {
+	for _, g := range groups {
+		gm, _ := g.(map[string]any)
+		inner, _ := gm["hooks"].([]any)
+		for _, h := range inner {
+			hm, _ := h.(map[string]any)
+			if c, _ := hm["command"].(string); c == old {
+				hm["command"] = new
+			}
+		}
+	}
 }

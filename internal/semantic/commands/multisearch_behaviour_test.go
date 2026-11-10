@@ -272,3 +272,39 @@ func TestMultisearchCmdValidatesItsArguments(t *testing.T) {
 		})
 	}
 }
+
+// TestMultisearchGroupedTextRendersGroups defends the plain-text grouped
+// output: --output by_query / by_collection used to print only the header,
+// because the grouped formats leave the blended Results list empty by design.
+// The groups themselves must be rendered, with a heading per group.
+func TestMultisearchGroupedTextRendersGroups(t *testing.T) {
+	indexedWorkspace(t)
+
+	queries := []string{"authenticate bearer token", "render invoice billing"}
+	for _, format := range []semantic.OutputFormat{semantic.OutputByQuery, semantic.OutputByCollection} {
+		out := captureStdout(t, func() {
+			if err := runMultisearch(context.Background(), queries,
+				multisearchOpts{topK: 10, outputFormat: format}); err != nil {
+				t.Fatalf("runMultisearch(%s): %v", format, err)
+			}
+		})
+
+		// The blended header still tells the whole story.
+		if !strings.Contains(out, "Multisearch: 2 queries") {
+			t.Errorf("%s: header missing:\n%s", format, out)
+		}
+		var wantHeading string
+		switch format {
+		case semantic.OutputByQuery:
+			wantHeading = "Query: authenticate bearer token"
+		case semantic.OutputByCollection:
+			wantHeading = "Collection: code"
+		}
+		if !strings.Contains(out, wantHeading) {
+			t.Errorf("%s: group heading %q missing:\n%s", format, wantHeading, out)
+		}
+		if !strings.Contains(out, "sample.go:") {
+			t.Errorf("%s: result lines missing:\n%s", format, out)
+		}
+	}
+}

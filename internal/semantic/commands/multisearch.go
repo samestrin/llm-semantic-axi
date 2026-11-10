@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/samestrin/llm-semantic-axi/internal/semantic"
@@ -322,7 +323,61 @@ func outputMultisearchText(queries []string, result *semantic.MultisearchResult,
 		return nil
 	}
 
+	// Grouped formats leave the blended list empty by design, so the groups
+	// themselves must be rendered: a heading per group, then the same
+	// per-result lines the blended output prints. Without this the grouped
+	// text output printed only the header above.
+	group := 0
+	printGroup := func(heading string, rs []semantic.EnhancedResult) {
+		group++
+		fmt.Printf("%s (%d result%s)\n", heading, len(rs), pluralS(len(rs) != 1))
+		for i, r := range rs {
+			printMultisearchResult(i+1, r)
+		}
+	}
+	if result.Format == semantic.OutputByQuery {
+		// The query order the caller gave, not map order.
+		for _, q := range queries {
+			printGroup("Query: "+q, result.ByQuery[q])
+		}
+		return nil
+	}
+	if result.Format == semantic.OutputByCollection {
+		for _, name := range sortedKeys(result.ByCollection) {
+			printGroup("Collection: "+name, result.ByCollection[name])
+		}
+		return nil
+	}
+
 	for i, r := range result.Results {
+		printMultisearchResult(i+1, r)
+	}
+	return nil
+}
+
+// pluralS returns "s" when the count needs one, for the group headings.
+func pluralS(needsS bool) string {
+	if needsS {
+		return "s"
+	}
+	return ""
+}
+
+// sortedKeys is the map ordering the grouped text output needs, so the
+// headings do not shuffle between runs.
+func sortedKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// printMultisearchResult prints one result: file:line, the symbol, the
+// scores, and the queries it matched.
+func printMultisearchResult(i int, r semantic.EnhancedResult) {
+	{
 		// Format match info
 		matchInfo := ""
 		if len(r.MatchedQueries) > 1 {
@@ -335,7 +390,7 @@ func outputMultisearchText(queries []string, result *semantic.MultisearchResult,
 			profileInfo = fmt.Sprintf(" (%s)", r.Chunk.Domain)
 		}
 
-		fmt.Printf("%d. %s:%d - %s%s%s\n", i+1, r.Chunk.FilePath, r.Chunk.StartLine, r.Chunk.Name, profileInfo, matchInfo)
+		fmt.Printf("%d. %s:%d - %s%s%s\n", i, r.Chunk.FilePath, r.Chunk.StartLine, r.Chunk.Name, profileInfo, matchInfo)
 		fmt.Printf("   Score: %.4f (boosted: %.4f)\n", r.Score, r.BoostedScore)
 
 		if len(r.MatchedQueries) > 0 {
@@ -350,6 +405,4 @@ func outputMultisearchText(queries []string, result *semantic.MultisearchResult,
 		}
 		fmt.Println()
 	}
-
-	return nil
 }

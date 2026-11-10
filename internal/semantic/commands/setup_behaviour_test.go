@@ -315,3 +315,33 @@ func TestSetupHonoursJSONAndAXI(t *testing.T) {
 		GlobalAXIOutput, GlobalJSONOutput = false, false
 	}
 }
+
+// TestSetupHookToleratesAMissingIndex defends the hook command shape: a bare
+// `llm-semantic` exits non-zero in a directory with no index (by design), so
+// Claude Code showed a hook error in every un-indexed project. The hook must
+// ask for index-status and tolerate its exit code, not the bare command.
+func TestSetupHookToleratesAMissingIndex(t *testing.T) {
+	dir := t.TempDir()
+
+	var out bytes.Buffer
+	if err := runSetup(&out, dir, false); err != nil {
+		t.Fatalf("runSetup: %v", err)
+	}
+
+	cmds := sessionStartCommands(t, settingsOf(t, dir))
+	if len(cmds) != 1 {
+		t.Fatalf("SessionStart commands = %v, want one", cmds)
+	}
+	if cmds[0] != setupHookCommand {
+		t.Errorf("SessionStart command = %q, want %q", cmds[0], setupHookCommand)
+	}
+	if !strings.Contains(setupHookCommand, "index-status") {
+		t.Errorf("hook command %q does not use index-status", setupHookCommand)
+	}
+	if strings.TrimSpace(setupHookCommand) == "llm-semantic" {
+		t.Errorf("hook command is the bare command whose non-zero exit Claude Code reports as a hook error")
+	}
+	if !strings.Contains(out.String(), "wrote .claude") {
+		t.Errorf("output does not say the settings were written:\n%s", out.String())
+	}
+}
