@@ -16,12 +16,12 @@ import (
 var recordedIndexTime = time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
 
 // TestQdrantStorage_LastIndexRoundTrip defends against Qdrant dropping the record
-// of the last index: the commit and time written are the commit and time read.
+// of the last index: the commit, time and root written are the ones read.
 func TestQdrantStorage_LastIndexRoundTrip(t *testing.T) {
 	storage, _ := newFakeQdrantStorage(t, "lastindex_rt", 4)
 	ctx := context.Background()
 
-	want := LastIndex{Commit: "0123456789abcdef0123456789abcdef01234567", IndexedAt: recordedIndexTime}
+	want := LastIndex{Commit: "0123456789abcdef0123456789abcdef01234567", IndexedAt: recordedIndexTime, Root: "/src/repo"}
 	if err := storage.SetLastIndex(ctx, want); err != nil {
 		t.Fatalf("SetLastIndex: %v", err)
 	}
@@ -33,7 +33,7 @@ func TestQdrantStorage_LastIndexRoundTrip(t *testing.T) {
 	if got == nil {
 		t.Fatal("GetLastIndex = nil after SetLastIndex")
 	}
-	if got.Commit != want.Commit || !got.IndexedAt.Equal(want.IndexedAt) {
+	if got.Commit != want.Commit || !got.IndexedAt.Equal(want.IndexedAt) || got.Root != want.Root {
 		t.Errorf("GetLastIndex = %+v, want %+v", got, want)
 	}
 }

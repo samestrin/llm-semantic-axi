@@ -1328,7 +1328,7 @@ func TestIndexAndUpdateResultsMarshalSnakeCaseKeys(t *testing.T) {
 	}
 	update := UpdateResult{
 		FilesUpdated: 1, FilesRemoved: 1, ChunksCreated: 1, ChunksRemoved: 1,
-		FilesFallback: 1, FallbackFiles: []string{"a.go"}, Mode: "git",
+		FilesFallback: 1, FallbackFiles: []string{"a.go"}, Errors: []string{"boom"}, Mode: "git",
 	}
 
 	for name, tc := range map[string]struct {
@@ -1338,7 +1338,7 @@ func TestIndexAndUpdateResultsMarshalSnakeCaseKeys(t *testing.T) {
 		"IndexResult": {index, []string{"files_processed", "files_skipped", "files_unchanged",
 			"chunks_created", "files_fallback", "fallback_files", "errors"}},
 		"UpdateResult": {update, []string{"files_updated", "files_removed", "chunks_created",
-			"chunks_removed", "files_fallback", "fallback_files", "mode"}},
+			"chunks_removed", "files_fallback", "fallback_files", "errors", "mode"}},
 	} {
 		raw, err := json.Marshal(tc.value)
 		if err != nil {

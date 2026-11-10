@@ -64,6 +64,7 @@ Written by `SetFileHash` (`storage_qdrant.go:1409-1439`).
 | `type` | string — always `"file_hash"` | `:1424` |
 | `file_path` | string | `:1425` |
 | `content_hash` | string — hash of the file's content at index time | `:1426` |
+| `fallback_reason` | string — why the file was chunked as text windows: `"parse_failed"` or `"chunker_failed"`. Written only for a file that fell back; absent otherwise, and in points written before it was recorded. Written by `SetFileHashWithFallback` and read by `ListFallbackFiles`. Added after version 1; additive, so the version is unchanged | `:1559` |
 
 ### 3. The `calibration_metadata` point (singleton)
 
@@ -175,6 +176,7 @@ the version is unchanged.
 | `type` | string — always `"last_index"` | `:1691` |
 | `commit` | string — the full commit hash of `HEAD` when the index started; empty when the indexed directory is not in a git repository | `:1692` |
 | `indexed_at` | string — RFC 3339 timestamp in UTC, with fractional seconds, of when the index started | `:1693` |
+| `root` | string — absolute path of the indexed directory, which the staleness check measures from; empty or absent in a point written before it was recorded, in which case the check measures from the working directory. Added after version 1; additive, so the version is unchanged | `:1826` |
 
 ### 7. The `storage_contract` point (singleton)
 

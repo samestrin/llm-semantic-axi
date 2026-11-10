@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -186,5 +187,125 @@ func TestRunIndexKeepsNamedChunksForAPartlyParsedFile(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(windowText, "\n"), "def after(y):") {
 		t.Errorf("no text window row holds `def after`; windows = %q", windowText)
+	}
+}
+
+// TestResumedIndexAndIndexStatusStillReportTheFallback defends the fallback
+// surviving the run that found it: a second `index` skipped the unchanged file
+// and said nothing about it, and index-status had no way to show it, so the
+// only record that a file was searchable as text windows alone was gone.
+func TestResumedIndexAndIndexStatusStillReportTheFallback(t *testing.T) {
+	dir := newWorkspace(t)
+	useEmbedder(t, newFakeEmbedder(t))
+	writeFile(t, filepath.Join(dir, "good.py"), cleanPySource)
+	writeFile(t, filepath.Join(dir, "broken.py"), brokenPySource)
+	runIndexIn(t, ".", indexOpts{skipCalibration: true})
+
+	resumed := runIndexIn(t, ".", indexOpts{skipCalibration: true})
+	if !strings.Contains(resumed, "Skipped 2 unchanged files") {
+		t.Fatalf("the second index did not resume:\n%s", resumed)
+	}
+	if !strings.Contains(resumed, "Chunked 1 files as text windows (parse failed)") || !strings.Contains(resumed, "broken.py") {
+		t.Errorf("the resumed index does not report the file that fell back:\n%s", resumed)
+	}
+
+	plain := captureStdout(t, func() {
+		if err := runIndexStatus(context.Background(), false); err != nil {
+			t.Fatalf("index-status: %v", err)
+		}
+	})
+	if !strings.Contains(plain, "Text windows:  1 files") || !strings.Contains(plain, "broken.py (parse failed)") {
+		t.Errorf("index-status does not show the file that fell back:\n%s", plain)
+	}
+
+	raw := captureStdout(t, func() {
+		if err := runIndexStatus(context.Background(), true); err != nil {
+			t.Fatalf("index-status --json: %v", err)
+		}
+	})
+	var payload struct {
+		FilesFallback *int     `json:"files_fallback"`
+		FallbackFiles []string `json:"fallback_files"`
+	}
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		t.Fatalf("index-status --json: %v\n%s", err, raw)
+	}
+	if payload.FilesFallback == nil || *payload.FilesFallback != 1 || len(payload.FallbackFiles) != 1 || filepath.Base(payload.FallbackFiles[0]) != "broken.py" {
+		t.Errorf("index-status --json fallback = %v %v, want 1 naming broken.py:\n%s", payload.FilesFallback, payload.FallbackFiles, raw)
+	}
+}
+
+// TestIndexStatusLabelsAChunkerFailureAsOne defends index-status keeping the
+// two fallback reasons apart: a file whose chunker errored or panicked must not
+// read as "(parse failed)", which blames its syntax, the mislabel `index` and
+// `index-update` were fixed for. No shipped chunker panics on demand, so the
+// record is written straight to the index after a real run.
+func TestIndexStatusLabelsAChunkerFailureAsOne(t *testing.T) {
+	dir := newWorkspace(t)
+	useEmbedder(t, newFakeEmbedder(t))
+	writeFile(t, filepath.Join(dir, "good.py"), cleanPySource)
+	writeFile(t, filepath.Join(dir, "broken.py"), brokenPySource)
+	runIndexIn(t, ".", indexOpts{skipCalibration: true})
+
+	storage, err := semantic.NewSQLiteStorage(filepath.Join(".index", "semantic.db"), 0)
+	if err != nil {
+		t.Fatalf("reopen index: %v", err)
+	}
+	good := filepath.Join(dir, "good.py")
+	hash, err := storage.GetFileHash(context.Background(), good)
+	if err != nil || hash == "" {
+		storage.Close()
+		t.Fatalf("good.py has no stored hash (%q, %v); the test needs it indexed", hash, err)
+	}
+	if err := storage.SetFileHashWithFallback(context.Background(), good, hash, semantic.FallbackChunkerFailed); err != nil {
+		storage.Close()
+		t.Fatalf("record the chunker failure: %v", err)
+	}
+	storage.Close()
+
+	plain := captureStdout(t, func() {
+		if err := runIndexStatus(context.Background(), false); err != nil {
+			t.Fatalf("index-status: %v", err)
+		}
+	})
+	for _, want := range []string{"Text windows:  2 files", "good.py (chunker failed)", "broken.py (parse failed)"} {
+		if !strings.Contains(plain, want) {
+			t.Errorf("index-status lacks %q:\n%s", want, plain)
+		}
+	}
+
+	raw := captureStdout(t, func() {
+		if err := runIndexStatus(context.Background(), true); err != nil {
+			t.Fatalf("index-status --json: %v", err)
+		}
+	})
+	var payload struct {
+		FallbackFiles              []string `json:"fallback_files"`
+		FallbackChunkerFailedFiles []string `json:"fallback_chunker_failed_files"`
+	}
+	if err := json.Unmarshal([]byte(raw), &payload); err != nil {
+		t.Fatalf("index-status --json: %v\n%s", err, raw)
+	}
+	if len(payload.FallbackFiles) != 2 || len(payload.FallbackChunkerFailedFiles) != 1 || filepath.Base(payload.FallbackChunkerFailedFiles[0]) != "good.py" {
+		t.Errorf("index-status --json fallback_files = %v, fallback_chunker_failed_files = %v; want both files, and good.py alone as chunker failed:\n%s",
+			payload.FallbackFiles, payload.FallbackChunkerFailedFiles, raw)
+	}
+}
+
+// TestStatusFallbacksWithoutARecordIsNotZero defends index-status over a
+// backend that keeps no fallback record: it must report the record as absent,
+// so the keys are omitted, rather than a measured zero.
+func TestStatusFallbacksWithoutARecordIsNotZero(t *testing.T) {
+	fellBack, files, ok, err := statusFallbacks(context.Background(), lastIndexOnly{})
+	if err != nil || ok || fellBack != nil || files != nil {
+		t.Errorf("statusFallbacks on a backend without FallbackStore = %v, %v, ok %v, %v; want nothing and ok false", fellBack, files, ok, err)
+	}
+
+	raw, err := json.Marshal(indexStatusJSON{Indexed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), "fallback") {
+		t.Errorf("a status with no fallback record marshals %s, want no fallback keys", raw)
 	}
 }

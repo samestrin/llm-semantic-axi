@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"sort"
 
 	"github.com/samestrin/llm-semantic-axi/internal/semantic"
 	"github.com/spf13/cobra"
@@ -20,6 +21,31 @@ type indexStatusJSON struct {
 	Path         string                        `json:"path,omitempty"`        // Only for sqlite
 	Collection   string                        `json:"collection,omitempty"`  // Only for qdrant
 	Calibration  *semantic.CalibrationMetadata `json:"calibration,omitempty"` // Optional
+	// FilesFallback counts the files chunked as text windows, with the same keys
+	// index --json uses. Absent when the backend keeps no such record, so it
+	// never reads as zero.
+	FilesFallback              *int     `json:"files_fallback,omitempty"`
+	FallbackFiles              []string `json:"fallback_files,omitempty"`
+	FallbackChunkerFailedFiles []string `json:"fallback_chunker_failed_files,omitempty"`
+}
+
+// statusFallbacks reads the files the index recorded as chunked as text windows,
+// with why, and their paths sorted. ok is false when the backend keeps no such
+// record.
+func statusFallbacks(ctx context.Context, storage semantic.Storage) (fellBack map[string]semantic.FallbackReason, files []string, ok bool, err error) {
+	fs, ok := storage.(semantic.FallbackStore)
+	if !ok {
+		return nil, nil, false, nil
+	}
+	fellBack, err = fs.ListFallbackFiles(ctx)
+	if err != nil {
+		return nil, nil, true, fmt.Errorf("failed to read the files that fell back: %w", err)
+	}
+	for path := range fellBack {
+		files = append(files, path)
+	}
+	sort.Strings(files)
+	return fellBack, files, true, nil
 }
 
 // indexStatusAXI is the --axi form of the status: the same fields plus help.
@@ -133,6 +159,11 @@ func runIndexStatus(ctx context.Context, jsonOutput bool) error {
 		slog.Debug("calibration metadata not available", "error", calErr)
 	}
 
+	fellBack, fallbackFiles, fallbackKept, err := statusFallbacks(ctx, storage)
+	if err != nil {
+		return err
+	}
+
 	if jsonOutput || GlobalAXIOutput {
 		result := indexStatusJSON{
 			Indexed:      true,
@@ -141,6 +172,16 @@ func runIndexStatus(ctx context.Context, jsonOutput bool) error {
 			ChunksTotal:  stats.ChunksTotal,
 			LastUpdated:  stats.LastUpdated,
 			Calibration:  calibration,
+		}
+		if fallbackKept {
+			n := len(fallbackFiles)
+			result.FilesFallback = &n
+			result.FallbackFiles = fallbackFiles
+			for _, path := range fallbackFiles {
+				if fellBack[path] == semantic.FallbackChunkerFailed {
+					result.FallbackChunkerFailedFiles = append(result.FallbackChunkerFailedFiles, path)
+				}
+			}
 		}
 		if storageType == "qdrant" {
 			result.Collection = resolveCollectionName()
@@ -161,6 +202,16 @@ func runIndexStatus(ctx context.Context, jsonOutput bool) error {
 	fmt.Printf("Files indexed: %d\n", stats.FilesIndexed)
 	fmt.Printf("Total chunks:  %d\n", stats.ChunksTotal)
 	fmt.Printf("Last updated:  %s\n", stats.LastUpdated)
+	if fallbackKept {
+		fmt.Printf("Text windows:  %d files\n", len(fallbackFiles))
+		for _, path := range fallbackFiles {
+			why := "parse failed"
+			if fellBack[path] == semantic.FallbackChunkerFailed {
+				why = "chunker failed"
+			}
+			fmt.Printf("  %s (%s)\n", path, why)
+		}
+	}
 
 	// Display calibration info
 	fmt.Printf("\nCalibration\n")

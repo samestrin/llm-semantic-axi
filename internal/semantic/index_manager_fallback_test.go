@@ -2,6 +2,7 @@ package semantic
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -211,5 +212,67 @@ func TestIndex_RecordsWhyEachFileFellBack(t *testing.T) {
 	if len(result.FallbackFiles)-len(result.FallbackChunkerFailedFiles) != 1 {
 		t.Errorf("parse-failure files = %v, want the one file not named as a chunker failure",
 			result.FallbackFiles)
+	}
+}
+
+// TestCleanRunsMarshalErrorsAsAnEmptyList defends `index --json` and
+// `index-update --json` on a clean run: a nil Errors marshalled as
+// `"errors": null`, where a consumer reading the key as a list gets no list.
+// The key stays present rather than omitted, so its absence never has to be
+// read as "no errors".
+func TestCleanRunsMarshalErrorsAsAnEmptyList(t *testing.T) {
+	dir, mgr := fallbackFixture(t, map[string]string{"good.fb": "fine"})
+	gitRun(t, dir, "init")
+	gitRun(t, dir, "add", ".")
+	gitRun(t, dir, "commit", "-m", "initial")
+	ctx := context.Background()
+
+	assertErrorsList := func(name string, result any) {
+		t.Helper()
+		raw, err := json.Marshal(result)
+		if err != nil {
+			t.Fatalf("%s: marshal: %v", name, err)
+		}
+		if !strings.Contains(string(raw), `"errors":[]`) {
+			t.Errorf("%s on a clean run marshals %s, want \"errors\":[]", name, raw)
+		}
+	}
+
+	index, err := mgr.Index(ctx, dir, IndexOptions{})
+	if err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+	assertErrorsList("Index", index)
+
+	if err := os.WriteFile(filepath.Join(dir, "good.fb"), []byte("still fine"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	update, err := mgr.Update(ctx, dir, UpdateOptions{})
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	if update.FilesUpdated != 1 {
+		t.Fatalf("Update FilesUpdated = %d, want 1, so the run did no work", update.FilesUpdated)
+	}
+	assertErrorsList("Update", update)
+
+	if err := os.WriteFile(filepath.Join(dir, "good.fb"), []byte("fine again"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	gitRun(t, dir, "commit", "-am", "change")
+	git, err := mgr.UpdateGit(ctx, dir, "HEAD~1", UpdateOptions{})
+	if err != nil {
+		t.Fatalf("UpdateGit: %v", err)
+	}
+	if git.FilesUpdated != 1 {
+		t.Fatalf("UpdateGit FilesUpdated = %d, want 1, so the run did no work", git.FilesUpdated)
+	}
+	assertErrorsList("UpdateGit", git)
+}
+
+func writeFallbackFile(t *testing.T, path, body string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(body), 0644); err != nil {
+		t.Fatalf("write %s: %v", path, err)
 	}
 }

@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- A resumed `index` reports the files it skipped as unchanged that were chunked as text windows, and `index-status` lists them (`files_fallback`, `fallback_files`, `fallback_chunker_failed_files` under `--json` / `--axi`); the reason is now stored with each file's hash. An index built before this records it as each file is next re-indexed. (technical debt)
+- Staleness in `callers`, `refs` and the searches is measured against the directory that was indexed, now recorded with the last index, so `--index-dir` pointing at another repository's index reports how far that repository has moved instead of `unknown`. An index recorded before this keeps measuring from the working directory until it is re-indexed. (technical debt)
+- `index-update` in git mode keeps a changed file's old chunks when its re-index fails, so a file named in the errors stays searchable as it was last indexed; `index --json` and `index-update --json` print `"errors": []` on a clean run instead of `null`. (technical debt)
+- `callers` reports `not_indexed_for_edges` for a language whose index holds import edges but no call edges, instead of "none recorded in the call graph". (technical debt)
+
 ## [1.1.0] - 2026-11-10
 
 ### Added
