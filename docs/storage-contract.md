@@ -15,7 +15,7 @@ file is an internal implementation detail and is **not** part of this contract.
 
 ## Point ID derivation
 
-Chunk, `file_hash`, `calibration_metadata`, `last_index`, and memory point IDs are
+Chunk, `file_hash`, `calibration_metadata`, `last_index`, `storage_contract`, and memory point IDs are
 deterministic UUIDs derived from a string by SHA-256: `stringToUUID(s)` hashes
 `s` with SHA-256 and formats bytes `0:4-4:6-6:8-8:10-10:16` as a UUID
 (`storage_qdrant.go:24-29`). The exception is `retrieval_log` points, whose IDs
@@ -176,6 +176,27 @@ the version is unchanged.
 | `commit` | string — the full commit hash of `HEAD` when the index started; empty when the indexed directory is not in a git repository | `:1692` |
 | `indexed_at` | string — RFC 3339 timestamp in UTC, with fractional seconds, of when the index started | `:1693` |
 
+### 7. The `storage_contract` point (singleton)
+
+Records the `contract_version` of this document that wrote the collection.
+Written by `ensureContractVersion` whenever the collection is opened or
+recreated (including after a collection clear); a collection with no such point
+predates it, is version 1 by definition, and is stamped on its next open. On
+open, `llm-semantic` reads the point and refuses to use the collection with a
+clear error when the stored version differs from the one it implements
+(`StorageContractVersion`). Added after version 1 was published; it is
+additive, so the version is unchanged.
+
+- **ID:** `stringToUUID("storage_contract")` (`contractID`). At most one such
+  point exists per collection.
+- **Vector:** a zero vector of `embeddingDim` floats — a dummy.
+- **Payload:**
+
+| Key | Type |
+| --- | --- |
+| `type` | string — always `"storage_contract"` |
+| `contract_version` | int — the version in this document's title |
+
 ## Filter rule: how to select chunks
 
 **Chunks are exactly the points that carry a `chunk_id` payload key.** Only
@@ -199,6 +220,7 @@ select:
 - calibration metadata → `type == "calibration_metadata"` (read by ID at
   `:1568`);
 - the last index record → `type == "last_index"` (read by ID at `:1653`);
+- the contract marker → `type == "storage_contract"` (read by ID);
 - memory entries → `entry_type == "memory"` (this is how memory search
   filters, `:1077-1079` and `:1236-1238`; also the decode guard at `:947`);
 - retrieval logs → `entry_type == "retrieval_log"`

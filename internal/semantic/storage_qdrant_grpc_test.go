@@ -260,8 +260,8 @@ func TestQdrantStorage_CreateBatchSplitsLargeBatches(t *testing.T) {
 	if got := fq.callCount("Upsert") - before; got != wantCalls {
 		t.Errorf("Upsert called %d times, want %d sub-batches", got, wantCalls)
 	}
-	if got := fq.pointCount("batching"); got != n {
-		t.Errorf("stored %d points, want %d", got, n)
+	if got := fq.pointCount("batching"); got != n+1 { // +1: the storage_contract marker
+		t.Errorf("stored %d points, want %d plus the marker", got, n)
 	}
 }
 
@@ -1492,7 +1492,7 @@ func TestQdrantStorage_PruneMemoryRetrievalLog(t *testing.T) {
 	if n != 2 {
 		t.Fatalf("PruneMemoryRetrievalLog removed %d, want 2", n)
 	}
-	if got := fq.pointCount("prune"); got != 1 {
+	if got := fq.pointCount("prune"); got != 2 { // current log entry + storage_contract marker
 		t.Errorf("collection holds %d points after pruning, want 1", got)
 	}
 	if fq.payloadOf("prune", pointKey(qdrant.NewID(stringToUUID("new-1")))) == nil {
@@ -1567,7 +1567,7 @@ func TestQdrantStorage_PruneMemoryRetrievalLogFullPageBoundary(t *testing.T) {
 	if n != int64(total) {
 		t.Errorf("PruneMemoryRetrievalLog reported %d deleted, want exactly %d", n, total)
 	}
-	if got := fq.pointCount("pruneboundary"); got != 0 {
+	if got := fq.pointCount("pruneboundary"); got != 1 { // only the storage_contract marker
 		t.Errorf("collection holds %d points after pruning, want 0", got)
 	}
 }
