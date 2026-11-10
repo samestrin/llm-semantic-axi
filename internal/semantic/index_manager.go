@@ -886,12 +886,18 @@ func (m *IndexManager) UpdateGit(ctx context.Context, rootPath string, gitRef st
 			continue
 		}
 
-		// Remove old chunks and re-index
+		// Chunk and embed before removing the old chunks, so a file that fails
+		// here stays searchable as it was last indexed.
+		prepared, err := m.prepareFile(ctx, absPath, opts.Domain)
+		if err != nil {
+			result.addSkipped(absPath, err)
+			continue
+		}
 		removed, _ := m.storage.DeleteByFilePath(ctx, absPath)
 		result.ChunksRemoved += removed
 
 		indexResult := &IndexResult{}
-		if err := m.processFile(ctx, absPath, indexResult, 0, 0, opts.Domain); err == nil {
+		if err := m.storePreparedFile(ctx, prepared, indexResult, 0, 0); err == nil {
 			result.FilesUpdated++
 			result.ChunksCreated += indexResult.ChunksCreated
 			for _, path := range indexResult.FallbackFiles {
@@ -1159,22 +1165,42 @@ func (m *IndexManager) collectFiles(rootPath string, includes, excludes []string
 // batchSize controls how many vectors are sent per upsert (0 = unlimited)
 // parallel controls how many batch uploads run concurrently (0 or 1 = sequential)
 func (m *IndexManager) processFile(ctx context.Context, filePath string, result *IndexResult, batchSize, parallel int, domain string) error {
+	prepared, err := m.prepareFile(ctx, filePath, domain)
+	if err != nil {
+		return err
+	}
+	return m.storePreparedFile(ctx, prepared, result, batchSize, parallel)
+}
+
+// preparedFile is a file chunked and embedded but not yet stored, so a caller
+// replacing the file's old chunks can leave them in place until this point.
+type preparedFile struct {
+	path                 string
+	chunker              Chunker
+	content              []byte
+	chunks               []Chunk
+	chunksWithEmbeddings []ChunkWithEmbedding
+	reason               FallbackReason
+}
+
+// prepareFile reads, chunks and embeds a file without writing to storage.
+func (m *IndexManager) prepareFile(ctx context.Context, filePath string, domain string) (*preparedFile, error) {
 	// Get appropriate chunker
 	chunker, ok := m.factory.GetByExtension(filePath)
 	if !ok {
-		return fmt.Errorf("no chunker for file type")
+		return nil, fmt.Errorf("no chunker for file type")
 	}
 
 	// Read file content
 	content, err := os.ReadFile(filePath)
 	if err != nil {
-		return fmt.Errorf("failed to read file: %w", err)
+		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
 	// Parse into chunks
 	chunks, reason, err := chunkWithFallback(chunker, filePath, content)
 	if err != nil {
-		return fmt.Errorf("failed to chunk file: %w", err)
+		return nil, fmt.Errorf("failed to chunk file: %w", err)
 	}
 
 	// Tag chunks with domain and compute content hashes
@@ -1200,14 +1226,14 @@ func (m *IndexManager) processFile(ctx context.Context, filePath string, result 
 	// Check for cancellation before batch embedding
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return nil, ctx.Err()
 	default:
 	}
 
 	// Generate embeddings for all chunks in a single batch request
 	embeddings, err := m.embedder.EmbedBatch(ctx, texts)
 	if err != nil {
-		return fmt.Errorf("failed to generate embeddings: %w", err)
+		return nil, fmt.Errorf("failed to generate embeddings: %w", err)
 	}
 
 	// Pair chunks with their embeddings
@@ -1218,6 +1244,20 @@ func (m *IndexManager) processFile(ctx context.Context, filePath string, result 
 			Embedding: embeddings[i],
 		}
 	}
+
+	return &preparedFile{
+		path:                 filePath,
+		chunker:              chunker,
+		content:              content,
+		chunks:               chunks,
+		chunksWithEmbeddings: chunksWithEmbeddings,
+		reason:               reason,
+	}, nil
+}
+
+// storePreparedFile writes a prepared file's chunks, references and hash.
+func (m *IndexManager) storePreparedFile(ctx context.Context, p *preparedFile, result *IndexResult, batchSize, parallel int) error {
+	filePath, chunksWithEmbeddings, reason := p.path, p.chunksWithEmbeddings, p.reason
 
 	// Store chunks in batches
 	if batchSize <= 0 {
@@ -1274,11 +1314,11 @@ func (m *IndexManager) processFile(ctx context.Context, filePath string, result 
 	}
 
 	// Extract and store chunk references if chunker supports it
-	m.extractAndStoreRefs(ctx, chunker, filePath, content, chunks)
+	m.extractAndStoreRefs(ctx, p.chunker, filePath, p.content, p.chunks)
 
 	// Store file hash after successfully processing all chunks
 	// This enables resume capability - files with matching hashes will be skipped
-	contentHash := sha256.Sum256(content)
+	contentHash := sha256.Sum256(p.content)
 	hashStr := hex.EncodeToString(contentHash[:])
 	if err := m.storage.SetFileHash(ctx, filePath, hashStr); err != nil {
 		// Log but don't fail - the file was indexed successfully
