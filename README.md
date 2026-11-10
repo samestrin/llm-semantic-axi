@@ -119,7 +119,7 @@ Where `llm-semantic` stands against the ten principles on [axi.md](https://axi.m
 | 9 | Contextual disclosure (`help[]` next steps) | Met | `--axi` output of the search family, `memory search`, `multisearch` and `index-status` carries a `help` list of suggested next steps, as does the missing-index error. |
 | 10 | Consistent `--help` on every subcommand | Met | `--help` exits 0 on all subcommands. |
 
-Scope note for rows 2-5: they are met in `--axi` (and plain, where the note says so). `--json` keeps its pre-05.1 schema by board decision (2026-10-31) — full fields, untruncated content, and a bare result array without `total` or a zero-result message — so the machine-readable JSON mode does not meet principles 2-5 and is a standing exception with that reason.
+Scope note for rows 2-5: they are met in `--axi` (and plain, where the note says so). `--json` keeps its pre-AXI schema so existing scripts keep working — full fields, untruncated content, and a bare result array without `total` or a zero-result message — so the machine-readable JSON mode does not meet principles 2-5 and is a standing exception with that reason.
 
 ## Languages
 
@@ -165,7 +165,7 @@ The search family (`search`, its profile aliases, `multisearch`, `callers`, `ref
 
 - `--axi` carries a `stale` object. `state` is `fresh`, `stale` or `unknown`; a stale or fresh answer that was measured adds `commits_behind`, `files_changed`, `indexed_commit` and `indexed_at`, and an `unknown` one adds a `reason` (for example `no_record` for an index built before the record existed). Counts appear only when measured, so nothing reads as "0 behind" that was never checked. `memory search` reports `state: not_applicable` — memories are stored, not indexed from the working tree.
 - Plain output ends with a line such as `Index is stale: 3 commits behind HEAD, 1 uncommitted file changed (indexed at 1a2b3c4d5e6f on 2026-11-02T19:37:48Z). Run llm-semantic index <path> to bring it up to date.` — or `Index staleness unknown: <reason>...` when it cannot be measured.
-- `--json` and `--min` keep their stdout schema unchanged (board decision, 2026-10-31); the same line goes to **stderr** instead, so the JSON stays parseable.
+- `--json` and `--min` keep their stdout schema unchanged so existing scripts keep working; the same line goes to **stderr** instead, so the JSON stays parseable.
 - A fresh index prints no line. Only `--axi` says `fresh`, because that is the output an agent branches on.
 - The record is written only by an `index` or `index-update` in which every file indexed. A run where any file failed leaves the previous record in place, so the index keeps reporting how far behind it was.
 
