@@ -611,3 +611,20 @@ func TestServer_StartupBannerPrintsAStampedVersionOnce(t *testing.T) {
 		t.Errorf("startup banner = %q, want v1.2.0 once", stderr)
 	}
 }
+func TestPrintVersion_IgnoresOtherArguments(t *testing.T) {
+	// Without a version flag the server must start as before.
+	var out bytes.Buffer
+	if printVersion(nil, &out) || printVersion([]string{"serve"}, &out) || out.Len() != 0 {
+		t.Errorf("printVersion handled a non-version invocation: %q", out.String())
+	}
+}
+
+func TestStartedBanner_PrintsTheVersionOnce(t *testing.T) {
+	// A release build stamps "v1.2.0"; the banner prefixed another "v" -> "vv1.2.0".
+	for _, v := range []string{"v1.2.0", "1.2.0"} {
+		got := startedBanner(v, 16)
+		if !strings.Contains(got, "v1.2.0") || strings.Contains(got, "vv1.2.0") {
+			t.Errorf("banner for %q = %q", v, got)
+		}
+	}
+}
