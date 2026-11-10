@@ -437,10 +437,10 @@ func TestDiagnoseZeroEdgesSurfacesALookupFailure(t *testing.T) {
 	}
 	cleanup()
 
-	if _, err := diagnoseZeroEdges(context.Background(), rs, "validate_token", "callers of", 0); err == nil {
+	if _, err := diagnoseZeroEdges(context.Background(), rs, "validate_token", "callers of", true, 0); err == nil {
 		t.Error("a failed lookup over a closed index returned no error")
 	}
-	if zero, err := diagnoseZeroEdges(context.Background(), rs, "validate_token", "callers of", 1); zero != nil || err != nil {
+	if zero, err := diagnoseZeroEdges(context.Background(), rs, "validate_token", "callers of", true, 1); zero != nil || err != nil {
 		t.Errorf("a non-empty answer was diagnosed: %+v, %v", zero, err)
 	}
 }

@@ -29,7 +29,7 @@ func assertSymbolLanguages(t *testing.T, rs RefStorage) {
 	if err != nil {
 		t.Fatalf("SymbolLanguages: %v", err)
 	}
-	want := []SymbolLanguage{{Language: "go", HasEdges: true}, {Language: "py", HasEdges: false}}
+	want := []SymbolLanguage{{Language: "go", HasEdges: true, HasCallEdges: true}, {Language: "py", HasEdges: false}}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("SymbolLanguages(Shared) = %+v, want %+v", got, want)
 	}
@@ -109,4 +109,32 @@ func TestQdrantStorage_SymbolLanguagesDelegateToParallelIndex(t *testing.T) {
 	}
 
 	assertSymbolLanguages(t, storage)
+}
+
+// TestSymbolLanguages_ImportEdgesAreNotCallEdges defends the `callers`
+// diagnosis against a language whose chunker records imports but no calls.
+// Counting the import as an edge would report "recorded in the call graph" for
+// a language whose calls were never indexed, so an empty answer would read as
+// "none exist". `refs` answers from any edge, so HasEdges still counts it.
+func TestSymbolLanguages_ImportEdgesAreNotCallEdges(t *testing.T) {
+	storage, cleanup := createTestSQLiteStorage(t)
+	defer cleanup()
+	ctx := context.Background()
+
+	chunk := Chunk{ID: "rb-run", FilePath: "a.rb", Type: ChunkFunction, Name: "Run", Content: "x", StartLine: 1, EndLine: 2, Language: "rb"}
+	if err := storage.CreateBatch(ctx, []ChunkWithEmbedding{{Chunk: chunk, Embedding: []float32{0.1}}}); err != nil {
+		t.Fatalf("CreateBatch: %v", err)
+	}
+	if err := storage.StoreRefs(ctx, []ChunkRef{{ChunkID: "rb-run", RefType: RefImports, RefName: "json"}}); err != nil {
+		t.Fatalf("StoreRefs: %v", err)
+	}
+
+	got, err := storage.SymbolLanguages(ctx, "Run")
+	if err != nil {
+		t.Fatalf("SymbolLanguages: %v", err)
+	}
+	want := []SymbolLanguage{{Language: "rb", HasEdges: true, HasCallEdges: false}}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("SymbolLanguages(Run) = %+v, want %+v", got, want)
+	}
 }

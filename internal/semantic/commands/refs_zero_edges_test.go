@@ -125,3 +125,41 @@ func TestZeroEdgeDiagnosisRunsOnlyWhereItsResultIsPrinted(t *testing.T) {
 		}
 	}
 }
+
+// importsOnly is a RefStorage whose only edge from "Run" is an import, in a
+// language that records imports but no calls.
+type importsOnly struct{ semantic.RefStorage }
+
+func (importsOnly) GetCallersByName(context.Context, string) ([]semantic.RefEdge, error) {
+	return nil, nil
+}
+func (importsOnly) GetRefsByName(context.Context, string) ([]semantic.RefEdge, error) {
+	return []semantic.RefEdge{{ChunkRef: semantic.ChunkRef{RefType: semantic.RefImports, RefName: "json"}}}, nil
+}
+func (importsOnly) SymbolLanguages(context.Context, string) ([]semantic.SymbolLanguage, error) {
+	return []semantic.SymbolLanguage{{Language: "rb", HasEdges: true, HasCallEdges: false}}, nil
+}
+
+// TestCallersOfALanguageWithOnlyImportEdgesIsNotIndexedForEdges defends the
+// callers diagnosis: an import edge says nothing about calls, so an empty
+// callers answer in a language with no call edges must read "not indexed for
+// edges", never "recorded in the call graph", which claims none exist.
+func TestCallersOfALanguageWithOnlyImportEdgesIsNotIndexedForEdges(t *testing.T) {
+	withAXI(t)
+
+	var callers bytes.Buffer
+	if err := writeCallers(context.Background(), &callers, importsOnly{}, "Run", false, false); err != nil {
+		t.Fatalf("callers: %v", err)
+	}
+	if !strings.Contains(callers.String(), "status: "+zeroNotIndexedForEdges) {
+		t.Errorf("callers of an imports-only language is not %s:\n%s", zeroNotIndexedForEdges, callers.String())
+	}
+
+	var refs bytes.Buffer
+	if err := writeRefs(context.Background(), &refs, importsOnly{}, "Run", false, false); err != nil {
+		t.Fatalf("refs: %v", err)
+	}
+	if strings.Contains(refs.String(), "calls") || !strings.Contains(refs.String(), "imports") {
+		t.Errorf("refs should list the import and claim no call:\n%s", refs.String())
+	}
+}

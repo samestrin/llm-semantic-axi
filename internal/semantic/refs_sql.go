@@ -225,7 +225,8 @@ func getRefsByNameSQL(ctx context.Context, db *sql.DB, name string) ([]RefEdge, 
 }
 
 // symbolLanguagesSQL returns the languages chunks with this name are indexed
-// in, each with whether any edge leaves a chunk of that language.
+// in, each with whether any edge, and any call edge, leaves a chunk of that
+// language.
 //
 // Edge support is read from the index rather than from a list of chunkers that
 // record edges, so an index built before a language gained edges still reports
@@ -234,7 +235,10 @@ func symbolLanguagesSQL(ctx context.Context, db *sql.DB, name string) ([]SymbolL
 	rows, err := db.QueryContext(ctx, `
 		SELECT COALESCE(c.language, ''),
 		       EXISTS (SELECT 1 FROM chunk_refs r JOIN chunks e ON e.id = r.chunk_id
-		               WHERE COALESCE(e.language, '') = COALESCE(c.language, ''))
+		               WHERE COALESCE(e.language, '') = COALESCE(c.language, '')),
+		       EXISTS (SELECT 1 FROM chunk_refs r JOIN chunks e ON e.id = r.chunk_id
+		               WHERE r.ref_type = '`+string(RefCalls)+`'
+		                 AND COALESCE(e.language, '') = COALESCE(c.language, ''))
 		FROM chunks c
 		WHERE c.name = ?
 		GROUP BY COALESCE(c.language, '')
@@ -248,7 +252,7 @@ func symbolLanguagesSQL(ctx context.Context, db *sql.DB, name string) ([]SymbolL
 	var langs []SymbolLanguage
 	for rows.Next() {
 		var l SymbolLanguage
-		if err := rows.Scan(&l.Language, &l.HasEdges); err != nil {
+		if err := rows.Scan(&l.Language, &l.HasEdges, &l.HasCallEdges); err != nil {
 			return nil, err
 		}
 		langs = append(langs, l)
