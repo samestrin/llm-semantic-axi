@@ -34,6 +34,13 @@ func TestExitCodeForUsageErrors(t *testing.T) {
 		"invalid argument":      errors.New(`invalid argument "nope" for "--depth" flag: strconv.ParseInt: parsing "nope": invalid syntax`),
 		"wrapped unknown flag":  fmt.Errorf("running command: %w", errors.New("unknown flag: --bogus")),
 		"required flag missing": errors.New(`required flag(s) "file" not set`),
+		// cobra's positional-argument validators (args.go, v1.8.0). These were
+		// exit 1, so `llm-semantic search` with no query read as a tool failure
+		// worth retrying instead of a malformed invocation.
+		"minimum args": errors.New("requires at least 1 arg(s), only received 0"),
+		"maximum args": errors.New("accepts at most 1 arg(s), received 2"),
+		"exact args":   errors.New("accepts 1 arg(s), received 0"),
+		"range args":   errors.New("accepts between 1 and 2 arg(s), received 3"),
 	} {
 		t.Run(name, func(t *testing.T) {
 			if got := ExitCodeFor(err); got != int(goaxi.ExitUsage) {
@@ -54,6 +61,7 @@ func TestExitCodeForRuntimeErrors(t *testing.T) {
 		"permission":       errors.New("open /etc/shadow: permission denied"),
 		"mentions a flag":  errors.New("the --json flag could not be applied to this result"),
 		"mentions command": errors.New("command failed while writing output"),
+		"accepts in prose": errors.New("the server accepts 3 connections, received 4"),
 	} {
 		t.Run(name, func(t *testing.T) {
 			if got := ExitCodeFor(err); got != int(goaxi.ExitError) {
