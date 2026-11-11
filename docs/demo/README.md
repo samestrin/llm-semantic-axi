@@ -30,3 +30,12 @@ vhs docs/demo/llm-semantic.tape
 ```
 
 This writes `docs/demo/llm-semantic.gif`. Check the result is under 30 seconds before committing it.
+
+## The committed render
+
+`llm-semantic.gif` was rendered on 2026-11-11 from `main` stamped `v1.2.0`, against a Qwen3-Embedding-4B endpoint with its reranker and a fresh index of this repository. It runs **22.6 seconds** (565 frames at 40 ms each), inside the 30-second budget.
+
+Two details of the tape come from that render:
+
+- The query is `retry embedding requests with backoff`, which ranks `EmbedBatch` (`internal/semantic/embedder.go`) first. The query used before it ranked a benchmark's list of queries first.
+- `Sleep 10s` follows `search` because a reranked search took about 6 seconds: the original 6-second pause cleared the screen before the results appeared. Shorten it only against a faster endpoint, and re-check the total.

@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- `docs/demo/`: a VHS tape and its rendered GIF (22.6 s) of a real session — `--version`, `search "retry embedding requests with backoff" --axi --top 3`, and `callers EnrichForEmbedding --axi` — with a README giving the render command, the embedding endpoint and index the session needs, and the timing of the committed render.
+
 ### Changed
 
 - A wrong number of positional arguments (`llm-semantic search` with no query, `refs` with no symbol, `index a b`) exits 2 as a malformed invocation instead of 1. Under `--json` the error is printed on stdout as `{"error": true, "message": ...}` (minimal under `--min`), as it already was under `--axi`; before, stdout was empty. An unknown flag under `--json` is reported on stdout the same way.
