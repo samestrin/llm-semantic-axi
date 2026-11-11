@@ -16,7 +16,7 @@
 - An index of this repository, built with the same endpoint and model, before recording. The tape runs only the queries, so indexing time is not in the 30 seconds:
 
   ```bash
-  llm-semantic index .   # writes .index/ (not gitignored): do not commit it
+  llm-semantic index .   # writes .index/, which is gitignored
   ```
 
 `callers EnrichForEmbedding` reads the call graph recorded at index time. Go is the language that records call edges, which is why a Go symbol is queried; an empty answer for another language would mean "not indexed", not "no callers".
