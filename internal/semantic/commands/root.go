@@ -95,6 +95,45 @@ func tildePath(path, home string) string {
 	return path
 }
 
+// notIndexedHelp is the next step a bare run offers when no index exists.
+var notIndexedHelp = []string{
+	"Run `llm-semantic index .` to build the index for this directory",
+	"Run `llm-semantic --help` to see every command",
+}
+
+// rootNotIndexed is the bare run's result when no index exists.
+type rootNotIndexed struct {
+	Bin         string   `json:"bin"`
+	Description string   `json:"description"`
+	Status      string   `json:"status"`
+	Indexed     bool     `json:"indexed"`
+	Help        []string `json:"help,omitempty"`
+}
+
+// printNotIndexed reports the not_indexed state in the selected output mode.
+func printNotIndexed(jsonMode bool) error {
+	out := rootNotIndexed{
+		Bin:         executableDisplayPath(),
+		Description: rootDescription,
+		Status:      "not_indexed",
+		Indexed:     false,
+	}
+	if GlobalAXIOutput {
+		out.Help = notIndexedHelp
+	}
+	if jsonMode {
+		return emitStdout(out)
+	}
+	fmt.Printf("%s\n", out.Description)
+	fmt.Printf("Executable: %s\n\n", out.Bin)
+	fmt.Printf("Status:  %s\n", out.Status)
+	fmt.Printf("Indexed: %t\n\n", out.Indexed)
+	for _, h := range notIndexedHelp {
+		fmt.Printf("%s\n", h)
+	}
+	return nil
+}
+
 // RootCmd returns the root command for llm-semantic
 func RootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
@@ -108,12 +147,18 @@ Supports any OpenAI-compatible embedding API (TEI, Ollama, vLLM, OpenAI, Azure, 
 		// directory. --help and unknown subcommands are untouched.
 		RunE: func(cmd *cobra.Command, args []string) error {
 			jsonMode := GlobalJSONOutput || GlobalAXIOutput
+			// No index is the normal state of a fresh checkout, so the home
+			// view reports it as a definitive state and exits 0. It says
+			// not_indexed, never ok. index-status keeps failing, because
+			// scripts rely on it to check for an index; and an index that
+			// exists but cannot be read still fails below.
+			if storageType != "qdrant" && findIndexPath() == "" {
+				return printNotIndexed(jsonMode)
+			}
 			if !jsonMode {
 				fmt.Printf("%s\n", rootDescription)
 				fmt.Printf("Executable: %s\n\n", executableDisplayPath())
 			}
-			// Same handling as index-status, so a missing index is an error
-			// and a non-zero exit here too, not a friendly exit 0.
 			return runIndexStatus(cmd.Context(), GlobalJSONOutput)
 		},
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {

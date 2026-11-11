@@ -417,8 +417,8 @@ func TestRootCmdPromotesALocalJSONFlagToTheGlobal(t *testing.T) {
 
 // TestBareRunShowsStatusPathAndDescription defends the content-first rule: a
 // no-argument run prints the index status for this directory, the executable
-// path and a one-line description rather than help, and a missing index is
-// still a non-zero error (T2) rather than a friendly exit 0.
+// path and a one-line description rather than help. The no-index case is
+// TestBareRunWithNoIndexReportsNotIndexed.
 func TestBareRunShowsStatusPathAndDescription(t *testing.T) {
 	t.Run("with index", func(t *testing.T) {
 		indexedWorkspace(t)
@@ -434,20 +434,6 @@ func TestBareRunShowsStatusPathAndDescription(t *testing.T) {
 		}
 		if strings.Contains(out, "Available Commands") {
 			t.Errorf("bare run printed help:\n%s", out)
-		}
-	})
-	t.Run("without index", func(t *testing.T) {
-		newWorkspace(t)
-		var runErr error
-		out := captureStdout(t, func() { _, runErr = executeCommand(RootCmd()) })
-		if runErr == nil {
-			t.Fatal("bare run with no index returned nil; it would exit 0")
-		}
-		if !strings.Contains(runErr.Error(), "index not found") {
-			t.Errorf("err = %v", runErr)
-		}
-		if !strings.Contains(out, rootDescription) || !strings.Contains(out, "Executable: ") {
-			t.Errorf("description/path lines missing:\n%s", out)
 		}
 	})
 	// The description/path lines must not precede a machine-readable payload.
@@ -483,6 +469,129 @@ func TestBareRunShowsStatusPathAndDescription(t *testing.T) {
 			t.Errorf("--help did not print help:\n%s", out)
 		}
 	})
+}
+
+// TestBareRunWithNoIndexReportsNotIndexed defends the home view in a fresh
+// checkout, where no index is the normal state: a bare run must say so as a
+// definitive result (status not_indexed, indexed false, exit 0) and point at
+// `llm-semantic index .`, in every output mode. It must never read as ok, and
+// it must not create the .index directory it is reporting as missing.
+func TestBareRunWithNoIndexReportsNotIndexed(t *testing.T) {
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	modes := []struct {
+		name string
+		flag string
+		want func(t *testing.T, out string)
+	}{
+		{"plain", "", func(t *testing.T, out string) {
+			for _, want := range []string{rootDescription, "Executable: ~", "Status:  not_indexed", "Indexed: false", "llm-semantic index ."} {
+				if !strings.Contains(out, want) {
+					t.Errorf("plain output missing %q:\n%s", want, out)
+				}
+			}
+		}},
+		{"json", "--json", func(t *testing.T, out string) {
+			var p map[string]any
+			if err := json.Unmarshal([]byte(out), &p); err != nil {
+				t.Fatalf("not JSON: %v (%q)", err, out)
+			}
+			if p["status"] != "not_indexed" || p["indexed"] != false {
+				t.Errorf("payload = %v, want status not_indexed and indexed false", p)
+			}
+			if bin, _ := p["bin"].(string); !strings.HasPrefix(bin, "~") {
+				t.Errorf("bin = %q, want the home directory shown as ~", bin)
+			}
+		}},
+		{"axi", "--axi", func(t *testing.T, out string) {
+			for _, want := range []string{"bin: ~", "description: ", "status: not_indexed", "indexed: false", "help[", "llm-semantic index ."} {
+				if !strings.Contains(out, want) {
+					t.Errorf("axi output missing %q:\n%s", want, out)
+				}
+			}
+		}},
+	}
+	for _, m := range modes {
+		t.Run(m.name, func(t *testing.T) {
+			dir := newWorkspace(t)
+			// The test binary lives under the build cache; make its parent the
+			// home directory so the ~ shortening is observable.
+			t.Setenv("HOME", filepath.Dir(filepath.Dir(exe)))
+			args := []string{}
+			if m.flag != "" {
+				args = append(args, m.flag)
+			}
+			var runErr error
+			out := captureStdout(t, func() { _, runErr = executeCommand(RootCmd(), args...) })
+			if runErr != nil {
+				t.Fatalf("bare run %s with no index returned %v; want exit 0", m.flag, runErr)
+			}
+			m.want(t, out)
+			for _, banned := range []string{"status: ok", "up to date"} {
+				if strings.Contains(out, banned) {
+					t.Errorf("not-indexed output reads as success (%q):\n%s", banned, out)
+				}
+			}
+			if _, err := os.Stat(filepath.Join(dir, ".index")); !os.IsNotExist(err) {
+				t.Errorf("the bare run created .index (stat err = %v)", err)
+			}
+		})
+	}
+}
+
+// TestBareRunWithQdrantNeverReportsNotIndexed: Qdrant keeps no local index
+// file, so an empty directory says nothing about whether its collection is
+// indexed. Reporting not_indexed there would be a definitive false claim for
+// every Qdrant user. With the embedder offline the run must fall through to
+// the Qdrant status, which says the state is unknown.
+func TestBareRunWithQdrantNeverReportsNotIndexed(t *testing.T) {
+	for _, flag := range []string{"", "--json", "--axi"} {
+		t.Run("mode "+flag, func(t *testing.T) {
+			newWorkspace(t)
+			useEmbedder(t, newBrokenEmbedder(t))
+			args := []string{"--storage", "qdrant"}
+			if flag != "" {
+				args = append(args, flag)
+			}
+			var runErr error
+			out := captureStdout(t, func() { _, runErr = executeCommand(RootCmd(), args...) })
+			if runErr != nil {
+				t.Fatalf("bare run %s with qdrant: %v", flag, runErr)
+			}
+			if strings.Contains(out, "not_indexed") || strings.Contains(out, "Indexed: false") || strings.Contains(out, "indexed: false") || strings.Contains(out, `"indexed": false`) {
+				t.Errorf("qdrant bare run claimed not indexed:\n%s", out)
+			}
+			if !strings.Contains(out, "qdrant") {
+				t.Errorf("qdrant bare run did not report the qdrant status:\n%s", out)
+			}
+		})
+	}
+}
+
+// TestBareRunWithAnUnreadableIndexStillFails keeps "not indexed" from masking
+// "unreadable": an index file that exists but is not a database must stay an
+// error with a non-zero exit, in every mode.
+func TestBareRunWithAnUnreadableIndexStillFails(t *testing.T) {
+	for _, flag := range []string{"", "--json", "--axi"} {
+		t.Run("mode "+flag, func(t *testing.T) {
+			dir := newWorkspace(t)
+			writeFile(t, filepath.Join(dir, ".index", "semantic.db"), strings.Repeat("not a sqlite database\n", 64))
+			args := []string{}
+			if flag != "" {
+				args = append(args, flag)
+			}
+			var runErr error
+			out := captureStdout(t, func() { _, runErr = executeCommand(RootCmd(), args...) })
+			if runErr == nil {
+				t.Fatalf("bare run %s over a corrupt index returned nil; it would exit 0:\n%s", flag, out)
+			}
+			if strings.Contains(out, "not_indexed") {
+				t.Errorf("a corrupt index was reported as not indexed:\n%s", out)
+			}
+		})
+	}
 }
 
 // TestTildePath: the home directory must collapse to ~, but only on a path
