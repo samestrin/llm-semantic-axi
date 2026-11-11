@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -417,7 +418,13 @@ func TestRunPerfAgainstTheBuiltBinary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(r.Version, "v") && r.Version != "dev" {
-		t.Errorf("version stamp %q", r.Version)
+	// The stamp is whatever the binary prints: a tag locally, a bare commit
+	// in CI's tagless shallow checkout.
+	out, err := exec.Command(cli, "--version").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := strings.TrimSpace(string(out)); r.Version != want {
+		t.Errorf("version stamp %q, binary prints %q", r.Version, want)
 	}
 }
