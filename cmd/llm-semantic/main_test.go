@@ -251,3 +251,63 @@ func TestMain_FlagParseErrorWithoutAXIIsUnchanged(t *testing.T) {
 		})
 	}
 }
+
+func TestMain_UnknownFlagListsTheValidFlagsOnTheRightStream(t *testing.T) {
+	// Defends AXI principle 6 end to end: an unknown flag must be named, the
+	// command's flags listed with a pointer to --help, and the run must exit 2.
+	// Under --axi it is TOON on stdout with help[]; plain mode keeps stderr and
+	// leaves stdout empty, the documented exception.
+	cases := map[string]string{"search": "--top", "index": "--include"}
+	for sub, local := range cases {
+		wants := []string{"--bogus", "--axi", "--json", "--min", local, "llm-semantic " + sub + " --help"}
+
+		t.Run(sub+" --axi", func(t *testing.T) {
+			stdout, stderr, code := runMain(t, sub, "x", "--bogus", "--axi")
+			if code != 2 {
+				t.Errorf("exit code = %d, want 2", code)
+			}
+			for _, want := range wants {
+				if !strings.Contains(stdout, want) {
+					t.Errorf("stdout lacks %q:\n%s", want, stdout)
+				}
+			}
+			if !strings.Contains(stdout, "help[") {
+				t.Errorf("stdout carries no help[]:\n%s", stdout)
+			}
+			if stderr != "" {
+				t.Errorf("stderr should be empty under --axi: %q", stderr)
+			}
+		})
+
+		t.Run(sub+" plain", func(t *testing.T) {
+			stdout, stderr, code := runMain(t, sub, "x", "--bogus")
+			if code != 2 {
+				t.Errorf("exit code = %d, want 2", code)
+			}
+			for _, want := range wants {
+				if !strings.Contains(stderr, want) {
+					t.Errorf("stderr lacks %q:\n%s", want, stderr)
+				}
+			}
+			if stdout != "" {
+				t.Errorf("stdout should be empty in plain mode: %q", stdout)
+			}
+		})
+	}
+}
+
+func TestMain_UnknownSubcommandUnderAXICarriesHelp(t *testing.T) {
+	// The unknown-command half: named, valid commands listed, help[] on stdout,
+	// exit 2. `memory bogus` used to print help and exit 0.
+	for _, args := range [][]string{{"bogus", "--axi"}, {"memory", "bogus", "--axi"}} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			stdout, stderr, code := runMain(t, args...)
+			if code != 2 {
+				t.Errorf("exit code = %d, want 2; stdout=%q stderr=%q", code, stdout, stderr)
+			}
+			if !strings.Contains(stdout, `bogus`) || !strings.Contains(stdout, "help[") {
+				t.Errorf("stdout does not name the command and carry help[]:\n%s", stdout)
+			}
+		})
+	}
+}
