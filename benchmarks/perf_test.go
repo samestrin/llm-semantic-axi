@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -103,11 +104,17 @@ func TestRenderPerfStampsVersionDateMachineAndMethod(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// --version runs bare, so the method must not say every command gets
+	// the embedder and index flags.
+	if strings.Contains(md, "Every command also gets") {
+		t.Errorf("method line claims --version gets the embedder flags:\n%s", md)
+	}
 	for _, want := range []string{
 		"**Version:** `v9.9.9-test`",
 		"**Date:** 2026-11-11",
 		"Test CPU 3000", "8 threads", "16.0 GiB RAM", "Test OS 1 (linux/amd64)", "kernel 6.1.0-test",
 		"**Method:**", "wall clock", "warmup",
+		"Every `index` and `search` run also gets",
 		"fixed-latency local fake", "1.0 ms", "measure the tool and not a model",
 		"3,000 files",
 		"| cold start | `llm-semantic --version` | 2 | 3 | 4.0 | 5.0 | 5.0 | 6.0 |",
@@ -206,7 +213,8 @@ func TestWritePerfTableFailsOnACaseWithNoTimings(t *testing.T) {
 
 // fakePerfCLI writes a shell script standing in for llm-semantic: --version
 // prints a version, index prints $FAKE_INDEX_JSON (or a clean result for
-// $FAKE_FILES files), search prints $FAKE_SEARCH_JSON (or one result), and
+// $FAKE_FILES files, or $FAKE_LATER_FILES from the second call counted in
+// $FAKE_COUNTER on), search prints $FAKE_SEARCH_JSON (or one result), and
 // $FAKE_FAIL names a subcommand that exits 1.
 func fakePerfCLI(t *testing.T) string {
 	t.Helper()
@@ -216,8 +224,13 @@ case "$1" in
   --version) echo "v0.0.0-fake" ;;
   index)
     [ "$FAKE_FAIL" = index ] && { echo "index broke" >&2; exit 1; }
+    files=${FAKE_FILES:-0}
+    if [ -n "$FAKE_COUNTER" ]; then
+      n=$(( $(cat "$FAKE_COUNTER" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$FAKE_COUNTER"
+      [ "$n" -ge 2 ] && [ -n "$FAKE_LATER_FILES" ] && files=$FAKE_LATER_FILES
+    fi
     if [ -n "$FAKE_INDEX_JSON" ]; then echo "$FAKE_INDEX_JSON"
-    else echo "{\"files_processed\":${FAKE_FILES:-0},\"files_skipped\":0,\"chunks_created\":9,\"errors\":[]}"; fi ;;
+    else echo "{\"files_processed\":$files,\"files_skipped\":0,\"chunks_created\":9,\"errors\":[]}"; fi ;;
   search)
     [ "$FAKE_FAIL" = search ] && { echo "search broke" >&2; exit 1; }
     if [ -n "$FAKE_SEARCH_JSON" ]; then echo "$FAKE_SEARCH_JSON"
@@ -333,6 +346,60 @@ func TestRunPerfRefusesASmallBenchDir(t *testing.T) {
 	if err := RunPerf(context.Background(), cfg, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "3000") {
 		t.Fatalf("a 12-file BENCH_DIR was accepted as the large input: %v", err)
 	}
+}
+
+// benchDir writes n files into a directory standing in for BENCH_DIR.
+func benchDir(t *testing.T, n int) string {
+	t.Helper()
+	dir := t.TempDir()
+	for i := 0; i < n; i++ {
+		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("f%d.go", i)), []byte("package f\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+func assertNothingWritten(t *testing.T, dir string) {
+	t.Helper()
+	for _, f := range []string{PerfJSONFile, PerfResultsFile} {
+		if _, err := os.Stat(filepath.Join(dir, f)); !os.IsNotExist(err) {
+			t.Errorf("%s written by a failed run", f)
+		}
+	}
+}
+
+// Defends a BENCH_DIR run against reporting the large case when index
+// processed fewer files than the floor: the directory holds enough files,
+// but the tool indexed only 2 of them, and 2 is what the table would claim.
+func TestRunPerfRefusesAnIndexBelowTheFloorOnABenchDir(t *testing.T) {
+	t.Setenv("FAKE_FILES", "2")
+	cfg := perfConfig(t, fakePerfCLI(t), 0)
+	cfg.MinFiles = 3
+	cfg.Corpus = benchDir(t, 5)
+	err := RunPerf(context.Background(), cfg, &bytes.Buffer{})
+	if err == nil || !strings.Contains(err.Error(), "processed 2 files") {
+		t.Fatalf("an index of 2 files was accepted as the large input: %v", err)
+	}
+	assertNothingWritten(t, cfg.OutDir)
+}
+
+// Defends the large case against averaging runs over different inputs: when
+// a later index run processes a different number of files than the first,
+// the timings no longer measure one input, so the run fails.
+func TestRunPerfRefusesIndexRunsOverDifferentFileCounts(t *testing.T) {
+	t.Setenv("FAKE_FILES", "5")
+	t.Setenv("FAKE_LATER_FILES", "6")
+	t.Setenv("FAKE_COUNTER", filepath.Join(t.TempDir(), "count"))
+	cfg := perfConfig(t, fakePerfCLI(t), 0)
+	cfg.MinFiles = 3
+	cfg.Corpus = benchDir(t, 6)
+	cfg.IndexRuns = 2
+	err := RunPerf(context.Background(), cfg, &bytes.Buffer{})
+	if err == nil || !strings.Contains(err.Error(), "an earlier run 5") {
+		t.Fatalf("index runs over 5 and 6 files were averaged together: %v", err)
+	}
+	assertNothingWritten(t, cfg.OutDir)
 }
 
 // Defends the generated corpus: the requested number of files, in several
