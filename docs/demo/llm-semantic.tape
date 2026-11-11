@@ -16,9 +16,9 @@ Type "llm-semantic --version"
 Enter
 Sleep 2s
 
-Type 'llm-semantic search "where is the retry logic" --axi --top 3'
+Type 'llm-semantic search "retry embedding requests with backoff" --axi --top 3'
 Enter
-Sleep 6s
+Sleep 10s
 
 Type "clear"
 Enter
