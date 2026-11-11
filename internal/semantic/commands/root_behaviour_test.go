@@ -541,6 +541,35 @@ func TestBareRunWithNoIndexReportsNotIndexed(t *testing.T) {
 	}
 }
 
+// TestBareRunWithQdrantNeverReportsNotIndexed: Qdrant keeps no local index
+// file, so an empty directory says nothing about whether its collection is
+// indexed. Reporting not_indexed there would be a definitive false claim for
+// every Qdrant user. With the embedder offline the run must fall through to
+// the Qdrant status, which says the state is unknown.
+func TestBareRunWithQdrantNeverReportsNotIndexed(t *testing.T) {
+	for _, flag := range []string{"", "--json", "--axi"} {
+		t.Run("mode "+flag, func(t *testing.T) {
+			newWorkspace(t)
+			useEmbedder(t, newBrokenEmbedder(t))
+			args := []string{"--storage", "qdrant"}
+			if flag != "" {
+				args = append(args, flag)
+			}
+			var runErr error
+			out := captureStdout(t, func() { _, runErr = executeCommand(RootCmd(), args...) })
+			if runErr != nil {
+				t.Fatalf("bare run %s with qdrant: %v", flag, runErr)
+			}
+			if strings.Contains(out, "not_indexed") || strings.Contains(out, "Indexed: false") || strings.Contains(out, "indexed: false") || strings.Contains(out, `"indexed": false`) {
+				t.Errorf("qdrant bare run claimed not indexed:\n%s", out)
+			}
+			if !strings.Contains(out, "qdrant") {
+				t.Errorf("qdrant bare run did not report the qdrant status:\n%s", out)
+			}
+		})
+	}
+}
+
 // TestBareRunWithAnUnreadableIndexStillFails keeps "not indexed" from masking
 // "unreadable": an index file that exists but is not a database must stay an
 // error with a non-zero exit, in every mode.
