@@ -163,7 +163,7 @@ func RenderPerf(r *PerfResults) (string, error) {
 	fmt.Fprintf(&b, "- **Date:** %s\n", r.Date)
 	fmt.Fprintf(&b, "- **Machine:** %s, %d threads, %.1f GiB RAM, %s, kernel %s\n",
 		r.Machine.CPU, r.Machine.Threads, float64(r.Machine.RAMBytes)/(1<<30), r.Machine.OS, r.Machine.Kernel)
-	fmt.Fprintf(&b, "- **Method:** each case runs its warmup runs untimed, then its timed runs: warmup %s; runs %s. Each timing is the wall clock of one `llm-semantic` process, from start to exit, on the release build. Every command also gets `--api-url`, `--model`, `--storage sqlite` and `--index-dir` pointing at the fake embedder and a temporary index; each `index` run starts from an empty index.\n",
+	fmt.Fprintf(&b, "- **Method:** each case runs its warmup runs untimed, then its timed runs: warmup %s; runs %s. Each timing is the wall clock of one `llm-semantic` process, from start to exit, on the release build. Every `index` and `search` run also gets `--api-url`, `--model`, `--storage sqlite` and `--index-dir` pointing at the fake embedder and a temporary index; each `index` run starts from an empty index.\n",
 		strings.Join(warm, ", "), strings.Join(runs, ", "))
 	fmt.Fprintf(&b, "- **Embeddings:** a fixed-latency local fake: a loopback OpenAI-compatible server that waits %.1f ms per request and answers with deterministic %d-dimension hash vectors, so the numbers measure the tool and not a model.\n",
 		float64(r.Embedder.LatencyMicros)/1000, r.Embedder.Dims)
