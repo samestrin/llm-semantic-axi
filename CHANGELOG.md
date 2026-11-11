@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - `docs/demo/`: a VHS tape and its rendered GIF (22.6 s) of a real session — `--version`, `search "retry embedding requests with backoff" --axi --top 3`, and `callers EnrichForEmbedding --axi` — with a README giving the render command, the embedding endpoint and index the session needs, and the timing of the committed render.
+- `docs/release-checklist.md`: release steps for re-rendering the demo after its commands change and regenerating the committed performance results with `make bench-perf-write`.
 
 ### Changed
 
