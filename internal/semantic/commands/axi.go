@@ -2,10 +2,15 @@ package commands
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/samestrin/llm-semantic-axi/pkg/output"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // GlobalAXIOutput selects TOON output.
@@ -71,4 +76,79 @@ func withHelp(err error, help ...string) error {
 var indexMissingHelp = []string{
 	"Run `llm-semantic index <path>` to build the index, then repeat this command",
 	"Run `llm-semantic index-status` to check which index this directory resolves to",
+}
+
+// helpPointer is the --axi next step for a malformed invocation of cmd.
+func helpPointer(cmd *cobra.Command) string {
+	return fmt.Sprintf("Run `%s --help` to see its commands and flags", cmd.CommandPath())
+}
+
+// flagError rejects a malformed flag with what the caller needs to retry: for
+// an unknown flag, every flag cmd accepts, and for any flag error a pointer to
+// --help. Without the list an agent learns only that its flag was wrong, and
+// spends a second call on --help to find the right one.
+//
+// It wraps rather than replaces cobra's error, so the message still starts with
+// cobra's wording and output.ExitCodeFor still classifies it as exit 2. It runs
+// during flag parsing, before any hook, embedder or storage is reached.
+func flagError(cmd *cobra.Command, err error) error {
+	msg := err.Error()
+	if strings.HasPrefix(msg, "unknown flag: ") || strings.HasPrefix(msg, "unknown shorthand flag: ") {
+		var flags []string
+		cmd.Flags().VisitAll(func(f *pflag.Flag) {
+			if !f.Hidden {
+				flags = append(flags, "--"+f.Name)
+			}
+		})
+		err = fmt.Errorf("%w; valid flags for %s: %s", err, cmd.CommandPath(), strings.Join(flags, ", "))
+	}
+	return withHelp(fmt.Errorf("%w; run `%s --help` for usage", err, cmd.CommandPath()), helpPointer(cmd))
+}
+
+// unknownCommandError names an argument that is not one of cmd's subcommands
+// and lists the ones that are. Its leading wording is cobra's own, which
+// output.ExitCodeFor classifies as exit 2.
+func unknownCommandError(cmd *cobra.Command, name string) error {
+	var names []string
+	for _, c := range cmd.Commands() {
+		if c.IsAvailableCommand() {
+			names = append(names, c.Name())
+		}
+	}
+	msg := fmt.Sprintf("unknown command %q for %q", name, cmd.CommandPath())
+	// cobra sets its default distance only inside its own lookup, which this
+	// path replaces; at zero, SuggestionsFor matches nothing but prefixes.
+	if cmd.SuggestionsMinimumDistance <= 0 {
+		cmd.SuggestionsMinimumDistance = 2
+	}
+	if s := cmd.SuggestionsFor(name); len(s) > 0 {
+		msg += fmt.Sprintf(" (did you mean %s?)", strings.Join(s, " or "))
+	}
+	msg += fmt.Sprintf("; valid commands: %s; run `%s --help` for usage", strings.Join(names, ", "), cmd.CommandPath())
+	return withHelp(errors.New(msg), helpPointer(cmd))
+}
+
+// rejectUnknownCommands makes every command that has subcommands fail on an
+// argument that names none of them.
+//
+// cobra checks this only at the root, and only when the root sets no Args. A
+// command group with no Run of its own (`memory`, `collection`) printed its
+// help and exited 0 for `memory bogus`: success reported for a typo. A group
+// gains a Run that shows its help, so that its arguments are validated at all.
+func rejectUnknownCommands(cmd *cobra.Command) {
+	for _, c := range cmd.Commands() {
+		rejectUnknownCommands(c)
+	}
+	if !cmd.HasSubCommands() {
+		return
+	}
+	cmd.Args = func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return unknownCommandError(cmd, args[0])
+		}
+		return nil
+	}
+	if !cmd.Runnable() {
+		cmd.RunE = func(cmd *cobra.Command, args []string) error { return cmd.Help() }
+	}
 }

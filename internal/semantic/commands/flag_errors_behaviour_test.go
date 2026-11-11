@@ -172,3 +172,18 @@ func TestCommandGroupWithNoSubcommandStillShowsHelp(t *testing.T) {
 		})
 	}
 }
+
+// TestUnknownSubcommandSuggestsTheNearestCommand: cobra's own root error said
+// "Did you mean search?" for a typo. Validating arguments ourselves must keep
+// that, at the root and in a command group.
+func TestUnknownSubcommandSuggestsTheNearestCommand(t *testing.T) {
+	for _, args := range [][]string{{"serch"}, {"memory", "stor"}} {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			newWorkspace(t)
+			err := executeRoot(t, args...)
+			if err == nil || !strings.Contains(err.Error(), "did you mean") {
+				t.Errorf("no suggestion for a near miss: %v", err)
+			}
+		})
+	}
+}

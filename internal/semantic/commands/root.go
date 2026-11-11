@@ -251,6 +251,12 @@ Supports any OpenAI-compatible embedding API (TEI, Ollama, vLLM, OpenAI, Azure, 
 	rootCmd.AddCommand(refsCmd())
 	rootCmd.AddCommand(setupCmd())
 
+	// A malformed invocation names what was wrong and lists what is valid.
+	// Both run before any hook, so nothing reaches an embedder or the index.
+	// The flag handler is inherited by every subcommand.
+	rootCmd.SetFlagErrorFunc(flagError)
+	rejectUnknownCommands(rootCmd)
+
 	return rootCmd
 }
 

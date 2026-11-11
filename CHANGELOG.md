@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- An unknown flag (`llm-semantic search --bogus`) is rejected by name with every flag that command accepts and a pointer to its `--help`, exit 2; an unknown subcommand lists the valid commands the same way. Under `--axi` the error is TOON on stdout with `help[]`; plain mode keeps stderr. `llm-semantic memory bogus` and `collection bogus` now fail with exit 2 instead of printing help and exiting 0.
 - `llm-semantic-mcp -v`, `-V` and `--version` print the bare version and exit 0 without starting the server or needing the CLI binary, and the started banner prints the version once (it printed `vv1.2.0` for a release build).
 - `llm-semantic -v`, `-V` and `--version` print the bare version (`dev` for an unstamped build) and exit 0, without the commit suffix. `-v` after a subcommand is unchanged: `index -v` is still `--verbose`.
 - A resumed `index` reports the files it skipped as unchanged that were chunked as text windows, and `index-status` lists them (`files_fallback`, `fallback_files`, `fallback_chunker_failed_files` under `--json` / `--axi`); the reason is now stored with each file's hash. An index built before this records it as each file is next re-indexed. (technical debt)
