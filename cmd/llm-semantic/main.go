@@ -31,10 +31,18 @@ func main() {
 	rootCmd := commands.RootCmd()
 
 	if err := rootCmd.Execute(); err != nil {
-		// A flag-parse error never reaches PersistentPreRunE, so --axi was not
-		// published; read it from the arguments instead.
-		if argsRequestAXI(os.Args[1:]) {
+		// A flag-parse or argument-count error never reaches PersistentPreRunE,
+		// so --axi was not published and a subcommand's local --json and --min
+		// were not copied to the globals; read them from the arguments instead.
+		args := os.Args[1:]
+		if argsRequest(args, "axi") {
 			output.SetDefaultAXI(true)
+		}
+		if argsRequest(args, "json") {
+			commands.GlobalJSONOutput = true
+		}
+		if argsRequest(args, "min") {
+			commands.GlobalMinOutput = true
 		}
 		f := output.New(commands.GlobalJSONOutput, commands.GlobalMinOutput, os.Stdout)
 		os.Exit(f.PrintError(err))
@@ -45,17 +53,17 @@ func isVersionFlag(a string) bool {
 	return a == "-v" || a == "-V" || a == "--version"
 }
 
-// argsRequestAXI reports whether the arguments ask for --axi, ignoring anything
-// after a "--" terminator and honouring --axi=false.
-func argsRequestAXI(args []string) bool {
+// argsRequest reports whether the arguments ask for the boolean flag --name,
+// ignoring anything after a "--" terminator and honouring --name=false.
+func argsRequest(args []string, name string) bool {
 	requested := false
 	for _, a := range args {
 		if a == "--" {
 			break
 		}
-		if a == "--axi" {
+		if a == "--"+name {
 			requested = true
-		} else if v, ok := strings.CutPrefix(a, "--axi="); ok {
+		} else if v, ok := strings.CutPrefix(a, "--"+name+"="); ok {
 			b, err := strconv.ParseBool(v)
 			requested = err == nil && b
 		}

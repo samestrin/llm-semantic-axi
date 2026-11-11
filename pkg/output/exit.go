@@ -18,6 +18,10 @@ import (
 //	flag needs an argument: --file
 //	invalid argument "nope" for "--depth" flag: strconv.ParseInt: ...
 //	required flag(s) "file" not set
+//	requires at least 1 arg(s), only received 0
+//	accepts at most 1 arg(s), received 2
+//	accepts 1 arg(s), received 0
+//	accepts between 1 and 2 arg(s), received 3
 //
 // This is a string match, and it is fragile by nature: cobra exports no typed
 // error for any of these. TestExitCodeForUsageErrors pins the exact wording so
@@ -40,6 +44,9 @@ var usageMarkers = [][]string{
 	{"flag needs an argument: "},
 	{`invalid argument "`, ` for "`, " flag"},
 	{`required flag(s) "`, " not set"},
+	{"requires at least ", " arg(s), only received "},
+	// Exact, at-most and between all share this shape.
+	{"accepts ", " arg(s), received "},
 }
 
 // ExitCodeFor classifies err into the process status the AXI contract expects.

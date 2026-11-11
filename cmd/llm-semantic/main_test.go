@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"os/exec"
@@ -309,5 +310,84 @@ func TestMain_UnknownSubcommandUnderAXICarriesHelp(t *testing.T) {
 				t.Errorf("stdout does not name the command and carry help[]:\n%s", stdout)
 			}
 		})
+	}
+}
+
+func TestMain_ArgumentCountErrorsExitTwoOnTheRequestedStream(t *testing.T) {
+	// Defends epic review finding F1: a wrong number of positional arguments is
+	// a malformed invocation, but it exited 1, and under --json it printed
+	// nothing on stdout. Every subcommand declares its own local --json, which
+	// shadows the root flag, and cobra rejects the arguments before
+	// PersistentPreRunE would have copied it to GlobalJSONOutput.
+	cases := map[string][]string{
+		"search, too few": {"search"},
+		"refs, too few":   {"refs"},
+		"index, too many": {"index", "a", "b"},
+	}
+	for name, args := range cases {
+		t.Run(name+" plain", func(t *testing.T) {
+			stdout, stderr, code := runMain(t, args...)
+			if code != 2 {
+				t.Errorf("exit code = %d, want 2; stderr=%q", code, stderr)
+			}
+			if stdout != "" || !strings.Contains(stderr, "arg(s)") {
+				t.Errorf("plain error should be on stderr only: stdout=%q stderr=%q", stdout, stderr)
+			}
+		})
+
+		t.Run(name+" --json", func(t *testing.T) {
+			stdout, stderr, code := runMain(t, append(args, "--json")...)
+			if code != 2 {
+				t.Errorf("exit code = %d, want 2; stdout=%q stderr=%q", code, stdout, stderr)
+			}
+			var got struct {
+				Error   bool   `json:"error"`
+				Message string `json:"message"`
+			}
+			if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+				t.Fatalf("stdout is not a JSON error: %v; stdout=%q stderr=%q", err, stdout, stderr)
+			}
+			if !got.Error || !strings.Contains(got.Message, "arg(s)") {
+				t.Errorf("stdout JSON = %+v, want error: true naming the argument count", got)
+			}
+			if stderr != "" {
+				t.Errorf("stderr should be empty under --json: %q", stderr)
+			}
+		})
+
+		t.Run(name+" --json --min", func(t *testing.T) {
+			stdout, _, code := runMain(t, append(args, "--json", "--min")...)
+			if code != 2 {
+				t.Errorf("exit code = %d, want 2", code)
+			}
+			if !strings.Contains(stdout, `"err":true`) {
+				t.Errorf("stdout carries no minimal JSON error: %q", stdout)
+			}
+		})
+
+		t.Run(name+" --axi", func(t *testing.T) {
+			stdout, _, code := runMain(t, append(args, "--axi")...)
+			if code != 2 {
+				t.Errorf("exit code = %d, want 2", code)
+			}
+			if !strings.Contains(stdout, "error: true") {
+				t.Errorf("stdout carries no TOON error: %q", stdout)
+			}
+		})
+	}
+}
+
+func TestMain_FlagParseErrorUnderJSONIsJSONOnStdout(t *testing.T) {
+	// The --json twin of TestMain_FlagParseErrorUnderAXIIsTOONOnStdout: an
+	// unknown flag stops parsing before --json is bound, so it must be read
+	// from the arguments. --json=false and a "--" terminator still mean plain.
+	stdout, _, code := runMain(t, "search", "--nope", "--json")
+	if code != 2 || !strings.Contains(stdout, `"error": true`) {
+		t.Errorf("exit %d, stdout=%q; want 2 and a JSON error", code, stdout)
+	}
+	for _, args := range [][]string{{"search", "--nope", "--json=false"}, {"search", "--nope", "--", "--json"}} {
+		if stdout, _, _ := runMain(t, args...); stdout != "" {
+			t.Errorf("%v: stdout should be empty: %q", args, stdout)
+		}
 	}
 }
