@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- A bare `llm-semantic` run in a directory with no index reports the state instead of failing: plain output prints the description, executable path, `Status: not_indexed` and `Indexed: false` with the hint to run `llm-semantic index .`; `--json` / `--axi` carry `bin`, `description`, `status: not_indexed`, `indexed: false` and (under `--axi`) a `help[]` list. It exits 0 and creates no `.index`. `index-status` in the same directory still exits 1, and an index that exists but cannot be read still fails with exit 1.
 - An unknown flag (`llm-semantic search --bogus`) is rejected by name with every flag that command accepts and a pointer to its `--help`, exit 2; an unknown subcommand lists the valid commands the same way. Under `--axi` the error is TOON on stdout with `help[]`; plain mode keeps stderr. `llm-semantic memory bogus` and `collection bogus` now fail with exit 2 instead of printing help and exiting 0.
 - `llm-semantic-mcp -v`, `-V` and `--version` print the bare version and exit 0 without starting the server or needing the CLI binary, and the started banner prints the version once (it printed `vv1.2.0` for a release build).
 - `llm-semantic -v`, `-V` and `--version` print the bare version (`dev` for an unstamped build) and exit 0, without the commit suffix. `-v` after a subcommand is unchanged: `index -v` is still `--verbose`.
