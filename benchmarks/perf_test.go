@@ -242,9 +242,13 @@ func perfConfig(t *testing.T, cli string, files int) PerfConfig {
 
 // Defends the measuring path end to end against a stand-in CLI: three cases,
 // each with its runs timed, written to the JSON and rendered to the table.
+// The binary is named by a relative path, as `make bench-perf-write` names
+// build/llm-semantic, though the commands run in a scratch directory.
 func TestRunPerfWritesTheJSONAndTheTable(t *testing.T) {
 	t.Setenv("FAKE_FILES", "12")
-	cfg := perfConfig(t, fakePerfCLI(t), 12)
+	cli := fakePerfCLI(t)
+	t.Chdir(filepath.Dir(filepath.Dir(cli)))
+	cfg := perfConfig(t, filepath.Join(filepath.Base(filepath.Dir(cli)), "llm-semantic"), 12)
 	if err := RunPerf(context.Background(), cfg, &bytes.Buffer{}); err != nil {
 		t.Fatal(err)
 	}
