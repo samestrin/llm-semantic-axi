@@ -1,0 +1,90 @@
+{
+  "version": "v1.1.0-11-gc1ec2a4",
+  "date": "2026-11-11",
+  "machine": {
+    "cpu": "Intel(R) Xeon(R) W-2295 CPU @ 3.00GHz",
+    "threads": 36,
+    "ram_bytes": 151584903168,
+    "os": "Debian GNU/Linux 13 (trixie) (linux/amd64)",
+    "kernel": "7.0.0-38-generic"
+  },
+  "embedder": {
+    "latency_us": 1000,
+    "dims": 256
+  },
+  "corpus": {
+    "source": "generated",
+    "files": 3000
+  },
+  "cases": [
+    {
+      "name": "cold start",
+      "command": "llm-semantic --version",
+      "warmup": 3,
+      "runs": 20,
+      "timings_ns": [
+        4267181,
+        4148372,
+        4310549,
+        4306486,
+        4292214,
+        4929854,
+        4160532,
+        4152745,
+        4077856,
+        3997796,
+        4169787,
+        3936832,
+        3907879,
+        3849122,
+        3969038,
+        3883787,
+        3837344,
+        3753381,
+        3764523,
+        3770839
+      ]
+    },
+    {
+      "name": "typical command",
+      "command": "llm-semantic search \"load the config file and validate it\" --json",
+      "warmup": 3,
+      "runs": 20,
+      "timings_ns": [
+        88999628,
+        93175237,
+        90057290,
+        87799658,
+        86778924,
+        87224679,
+        85809905,
+        87013430,
+        88385613,
+        89155039,
+        89154609,
+        91429723,
+        92954476,
+        88765748,
+        89571977,
+        89585863,
+        88374601,
+        87183966,
+        86940586,
+        87330854
+      ]
+    },
+    {
+      "name": "large input",
+      "command": "llm-semantic index \u003ccorpus\u003e --json",
+      "warmup": 1,
+      "runs": 5,
+      "timings_ns": [
+        32430694564,
+        33200502506,
+        35090783875,
+        33680003146,
+        33080995890
+      ]
+    }
+  ]
+}

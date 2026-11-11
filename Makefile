@@ -1,4 +1,4 @@
-.PHONY: build build-all test test-race test-cover lint vet fmt install clean hooks bench-tokens bench-tokens-write bench-generate
+.PHONY: build build-all test test-race test-cover lint vet fmt install clean hooks bench-tokens bench-tokens-write bench-generate bench-perf bench-perf-write
 
 CLI_BINARY := llm-semantic
 MCP_BINARY := llm-semantic-mcp
@@ -63,6 +63,16 @@ bench-tokens:
 
 bench-tokens-write:
 	go run ./benchmarks/cmd/count-tokens -write
+
+# Performance benchmark (benchmarks/results-performance.md). bench-perf
+# regenerates the table from results-performance.json; bench-perf-write times
+# the release build against a loopback fake embedder and rewrites both. The
+# large input is generated unless BENCH_DIR names a directory of 3,000+ files.
+bench-perf:
+	go run ./benchmarks/cmd/perf
+
+bench-perf-write: build
+	go run ./benchmarks/cmd/perf -measure -cli $(BUILD_DIR)/$(CLI_BINARY)
 
 # Regenerates the outputs from the pinned commit; needs git and go, no network.
 bench-generate:
