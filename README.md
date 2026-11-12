@@ -10,7 +10,7 @@
 - Following a call chain by hand costs an agent many reads. `callers` and `refs` answer from call edges recorded at index time, with no language server, for Go, JavaScript, TypeScript, Python and Rust.
 - Tool output is paid for in tokens. `--axi` prints TOON, a token-dense format built to the [AXI](https://axi.md) principles, with four fields per result, long content cut and a stated total.
 - An empty answer is easy to misread as "none exist". Every command says which kind of empty it is: no match, an empty index, a symbol not indexed, a language with no recorded call edges, or an index that is behind the working tree.
-- Code, docs and stored decisions are different questions. Profiles (`code`, `docs`, `memory`, `sprints`) give each its own index, so a docs question is not answered from source.
+- Code, docs and stored decisions are different questions. Profiles (`code`, `docs`, `memory`, `sprints`) keep each in its own index when each points at its own `--index-dir` (sqlite) or collection (Qdrant), so a docs question is not answered from source.
 
 ## Install
 
