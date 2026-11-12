@@ -188,6 +188,95 @@ func containsPath(paths []string, want string) bool {
 	return false
 }
 
+// TestUpdate_RemovedFallbackFileLeavesNoStaleRow defends the release-gate
+// sequence on the full-scan path: index a file that fell back, delete it from
+// the tree, run index-update. The hash row (with its fallback reason) must go
+// with the chunks, or index-status keeps listing a file that is gone and every
+// later scan counts the same removal again. The kept fallback file proves the
+// delete does not wipe the record of a file that is still indexed.
+func TestUpdate_RemovedFallbackFileLeavesNoStaleRow(t *testing.T) {
+	dir, mgr := fallbackFixture(t, map[string]string{
+		"good.fb": "fine",
+		"bad.fb":  "BROKEN",
+		"kept.fb": "BROKEN too",
+	})
+	ctx := context.Background()
+	if _, err := mgr.Index(ctx, dir, IndexOptions{}); err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+	badPath := filepath.Join(dir, "bad.fb")
+	keptPath := filepath.Join(dir, "kept.fb")
+	if err := os.Remove(badPath); err != nil {
+		t.Fatalf("remove bad.fb: %v", err)
+	}
+
+	result, err := mgr.Update(ctx, dir, UpdateOptions{})
+	if err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	if result.FilesRemoved != 1 {
+		t.Errorf("FilesRemoved = %d, want 1", result.FilesRemoved)
+	}
+
+	fallbacks, err := mgr.storage.(FallbackStore).ListFallbackFiles(ctx)
+	if err != nil {
+		t.Fatalf("ListFallbackFiles: %v", err)
+	}
+	if _, ok := fallbacks[badPath]; ok {
+		t.Errorf("ListFallbackFiles still names the deleted file: %v", fallbacks)
+	}
+	if fallbacks[keptPath] != FallbackParseFailed {
+		t.Errorf("kept fallback file reason = %q, want %q; fallbacks = %v", fallbacks[keptPath], FallbackParseFailed, fallbacks)
+	}
+	if hash, err := mgr.storage.GetFileHash(ctx, badPath); err != nil || hash != "" {
+		t.Errorf("deleted file hash = %q, %v; want no hash row left", hash, err)
+	}
+
+	// A second scan must not count the same removal again.
+	again, err := mgr.Update(ctx, dir, UpdateOptions{})
+	if err != nil {
+		t.Fatalf("second Update: %v", err)
+	}
+	if again.FilesRemoved != 0 {
+		t.Errorf("second Update FilesRemoved = %d, want 0: the removal was already applied", again.FilesRemoved)
+	}
+}
+
+// TestUpdateGit_DeletedFallbackFileLeavesNoStaleRow defends the same invariant
+// on the git path's deleted-file loop, which reaches DeleteByFilePath through
+// a different caller than the full scan.
+func TestUpdateGit_DeletedFallbackFileLeavesNoStaleRow(t *testing.T) {
+	dir, mgr := fallbackFixture(t, map[string]string{"good.fb": "fine", "bad.fb": "BROKEN"})
+	gitRun(t, dir, "init")
+	gitRun(t, dir, "add", ".")
+	gitRun(t, dir, "commit", "-m", "initial")
+	ctx := context.Background()
+	if _, err := mgr.Index(ctx, dir, IndexOptions{}); err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+	badPath := filepath.Join(dir, "bad.fb")
+	gitRun(t, dir, "rm", "-q", "bad.fb")
+	gitRun(t, dir, "commit", "-m", "drop bad.fb")
+
+	result, err := mgr.UpdateGit(ctx, dir, "HEAD~1", UpdateOptions{})
+	if err != nil {
+		t.Fatalf("UpdateGit: %v", err)
+	}
+	if result.FilesRemoved != 1 {
+		t.Errorf("FilesRemoved = %d, want 1", result.FilesRemoved)
+	}
+	fallbacks, err := mgr.storage.(FallbackStore).ListFallbackFiles(ctx)
+	if err != nil {
+		t.Fatalf("ListFallbackFiles: %v", err)
+	}
+	if _, ok := fallbacks[badPath]; ok {
+		t.Errorf("ListFallbackFiles still names the deleted file: %v", fallbacks)
+	}
+	if hash, err := mgr.storage.GetFileHash(ctx, badPath); err != nil || hash != "" {
+		t.Errorf("deleted file hash = %q, %v; want no hash row left", hash, err)
+	}
+}
+
 // Defends the reason reaching the result: a chunker that errors or panics is
 // windowed like a parse error is, but the summary must be able to tell the two
 // apart, or the output blames the file's syntax for a broken chunker.

@@ -152,3 +152,38 @@ func TestUpdate_ClearsTheFallbackOfAFixedFile(t *testing.T) {
 		t.Errorf("after the fix ListFallbackFiles = %v, %v; want none", got, err)
 	}
 }
+
+// TestSQLiteStorage_DeleteByFilePathIsAtomic defends the chunk delete and the
+// file_hashes delete sharing one transaction: when the hash delete fails, the
+// chunks must survive. A half-applied delete leaves the file searchable with
+// no hash row, so every later scan re-embeds it as changed. The dropped table
+// is the injected failure; a real database in t.TempDir makes it cheap.
+func TestSQLiteStorage_DeleteByFilePathIsAtomic(t *testing.T) {
+	storage, err := NewSQLiteStorage(filepath.Join(t.TempDir(), "atomic.db"), 4)
+	if err != nil {
+		t.Fatalf("NewSQLiteStorage: %v", err)
+	}
+	t.Cleanup(func() { storage.Close() })
+	ctx := context.Background()
+
+	chunk := Chunk{ID: "atomic-1", FilePath: "/r/a.go", Type: ChunkFunction, Name: "A", Language: "go"}
+	if err := storage.Create(ctx, chunk, []float32{0.1, 0.2, 0.3, 0.4}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := storage.SetFileHashWithFallback(ctx, "/r/a.go", "h1", FallbackParseFailed); err != nil {
+		t.Fatalf("SetFileHashWithFallback: %v", err)
+	}
+
+	// Sabotage only the second delete.
+	if _, err := storage.db.Exec(`DROP TABLE file_hashes`); err != nil {
+		t.Fatalf("drop file_hashes: %v", err)
+	}
+
+	if _, err := storage.DeleteByFilePath(ctx, "/r/a.go"); err == nil {
+		t.Fatal("DeleteByFilePath succeeded with the file_hashes table missing; want the failure surfaced")
+	}
+	chunks, err := storage.List(ctx, ListOptions{FilePath: "/r/a.go"})
+	if err != nil || len(chunks) != 1 {
+		t.Errorf("chunks after the failed delete = %d, %v; want the chunk delete rolled back", len(chunks), err)
+	}
+}
