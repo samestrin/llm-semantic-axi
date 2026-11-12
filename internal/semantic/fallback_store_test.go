@@ -156,36 +156,63 @@ func TestUpdate_ClearsTheFallbackOfAFixedFile(t *testing.T) {
 }
 
 // TestSQLiteStorage_DeleteByFilePathIsAtomic defends the chunk delete and the
-// file_hashes delete sharing one transaction: when the hash delete fails, the
-// chunks must survive. A half-applied delete leaves the file searchable with
-// no hash row, so every later scan re-embeds it as changed. The dropped table
-// is the injected failure; a real database in t.TempDir makes it cheap.
+// file_hashes delete sharing one transaction: when either delete fails, the
+// other must be rolled back. A half-applied delete leaves the file searchable
+// with no hash row (re-embedded as changed on every later scan) or unsearchable
+// with a stale one. The aborting triggers and the cancelled context are the
+// injected failures; a real database in t.TempDir makes them cheap.
 func TestSQLiteStorage_DeleteByFilePathIsAtomic(t *testing.T) {
-	storage, err := NewSQLiteStorage(filepath.Join(t.TempDir(), "atomic.db"), 4)
-	if err != nil {
-		t.Fatalf("NewSQLiteStorage: %v", err)
-	}
-	t.Cleanup(func() { storage.Close() })
-	ctx := context.Background()
+	for _, tc := range []struct {
+		name     string
+		sabotage func(t *testing.T, s *SQLiteStorage) context.Context
+	}{
+		{"hash delete fails", func(t *testing.T, s *SQLiteStorage) context.Context {
+			if _, err := s.db.Exec(`CREATE TRIGGER sabotage_hash_delete BEFORE DELETE ON file_hashes BEGIN SELECT RAISE(ABORT, 'sabotage'); END;`); err != nil {
+				t.Fatalf("create sabotage trigger: %v", err)
+			}
+			return context.Background()
+		}},
+		{"chunk delete fails", func(t *testing.T, s *SQLiteStorage) context.Context {
+			if _, err := s.db.Exec(`CREATE TRIGGER sabotage_delete BEFORE DELETE ON chunks BEGIN SELECT RAISE(ABORT, 'sabotage'); END;`); err != nil {
+				t.Fatalf("create sabotage trigger: %v", err)
+			}
+			return context.Background()
+		}},
+		{"context cancelled", func(t *testing.T, s *SQLiteStorage) context.Context {
+			ctx, cancel := context.WithCancel(context.Background())
+			cancel()
+			return ctx
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			storage, err := NewSQLiteStorage(filepath.Join(t.TempDir(), "atomic.db"), 4)
+			if err != nil {
+				t.Fatalf("NewSQLiteStorage: %v", err)
+			}
+			t.Cleanup(func() { storage.Close() })
+			ctx := context.Background()
 
-	chunk := Chunk{ID: "atomic-1", FilePath: "/r/a.go", Type: ChunkFunction, Name: "A", Language: "go"}
-	if err := storage.Create(ctx, chunk, []float32{0.1, 0.2, 0.3, 0.4}); err != nil {
-		t.Fatalf("Create: %v", err)
-	}
-	if err := storage.SetFileHashWithFallback(ctx, "/r/a.go", "h1", FallbackParseFailed); err != nil {
-		t.Fatalf("SetFileHashWithFallback: %v", err)
-	}
+			chunk := Chunk{ID: "atomic-1", FilePath: "/r/a.go", Type: ChunkFunction, Name: "A", Language: "go"}
+			if err := storage.Create(ctx, chunk, []float32{0.1, 0.2, 0.3, 0.4}); err != nil {
+				t.Fatalf("Create: %v", err)
+			}
+			if err := storage.SetFileHashWithFallback(ctx, "/r/a.go", "h1", FallbackParseFailed); err != nil {
+				t.Fatalf("SetFileHashWithFallback: %v", err)
+			}
 
-	// Sabotage only the second delete.
-	if _, err := storage.db.Exec(`DROP TABLE file_hashes`); err != nil {
-		t.Fatalf("drop file_hashes: %v", err)
-	}
+			deleteCtx := tc.sabotage(t, storage)
+			if _, err := storage.DeleteByFilePath(deleteCtx, "/r/a.go"); err == nil {
+				t.Fatal("DeleteByFilePath succeeded; want the failure surfaced")
+			}
 
-	if _, err := storage.DeleteByFilePath(ctx, "/r/a.go"); err == nil {
-		t.Fatal("DeleteByFilePath succeeded with the file_hashes table missing; want the failure surfaced")
-	}
-	chunks, err := storage.List(ctx, ListOptions{FilePath: "/r/a.go"})
-	if err != nil || len(chunks) != 1 {
-		t.Errorf("chunks after the failed delete = %d, %v; want the chunk delete rolled back", len(chunks), err)
+			// Both records survive the failed delete.
+			if hash, err := storage.GetFileHash(ctx, "/r/a.go"); err != nil || hash != "h1" {
+				t.Errorf("hash after the failed delete = %q, %v; want it rolled back", hash, err)
+			}
+			chunks, err := storage.List(ctx, ListOptions{FilePath: "/r/a.go"})
+			if err != nil || len(chunks) != 1 {
+				t.Errorf("chunks after the failed delete = %d, %v; want the chunk delete rolled back", len(chunks), err)
+			}
+		})
 	}
 }
