@@ -2,7 +2,7 @@
 
 - **Audited:** 2026-11-01, on a `make build` of `main` at `d7daeaf`.
 - **Method:** by hand. `axi-axi` is not installed on the build host. Each principle was checked against the text on https://axi.md, by running `build/llm-semantic` in an empty temp directory and reading the code the output comes from.
-- **Status:** a snapshot. The gaps below have since been closed. The README's "AXI conformance" section is now the current record; this file is only history.
+- **Status:** a snapshot. The gaps below have since been closed. [axi-conformance.md](axi-conformance.md) is now the current record (the README links it); this file is only history.
 
 | # | Principle (axi.md) | Verdict | Evidence | Closed by |
 |---|---|---|---|---|
