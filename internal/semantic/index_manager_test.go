@@ -205,7 +205,9 @@ func Foo() {}
 	mgr := NewIndexManager(storage, embedder, factory)
 
 	// Index first
-	mgr.Index(context.Background(), tmpDir, IndexOptions{})
+	if _, err := mgr.Index(context.Background(), tmpDir, IndexOptions{}); err != nil {
+		t.Fatalf("Index() error = %v", err)
+	}
 
 	// Get status
 	status, err := mgr.Status(context.Background())
@@ -228,8 +230,12 @@ func TestIndexManager_WithExcludes(t *testing.T) {
 	// Create directory structure
 	srcDir := filepath.Join(tmpDir, "src")
 	vendorDir := filepath.Join(tmpDir, "vendor")
-	os.MkdirAll(srcDir, 0755)
-	os.MkdirAll(vendorDir, 0755)
+	if err := os.MkdirAll(srcDir, 0755); err != nil {
+		t.Fatalf("Failed to create src dir: %v", err)
+	}
+	if err := os.MkdirAll(vendorDir, 0755); err != nil {
+		t.Fatalf("Failed to create vendor dir: %v", err)
+	}
 
 	// Write files
 	os.WriteFile(filepath.Join(srcDir, "main.go"), []byte("package main\nfunc Main() {}"), 0644)
@@ -810,7 +816,9 @@ func TestIndexManager_ExcludeTests(t *testing.T) {
 
 	// Create test directory structure
 	testsDir := filepath.Join(tmpDir, "__tests__")
-	os.MkdirAll(testsDir, 0755)
+	if err := os.MkdirAll(testsDir, 0755); err != nil {
+		t.Fatalf("Failed to create tests dir: %v", err)
+	}
 
 	// Write source files
 	os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte("package main\nfunc Main() {}"), 0644)
@@ -1027,7 +1035,7 @@ func TestIndexManager_EmbedBatchSize_ReducesAPICalls(t *testing.T) {
 		}
 	}
 	storage1, _ := NewSQLiteStorage(":memory:", 4)
-	defer storage1.Close()
+	defer func() { _ = storage1.Close() }()
 	embedder1 := &trackingEmbedder{embedding: []float32{0.1, 0.2, 0.3, 0.4}}
 	mgr1 := NewIndexManager(storage1, embedder1, factory)
 
@@ -1046,7 +1054,7 @@ func TestIndexManager_EmbedBatchSize_ReducesAPICalls(t *testing.T) {
 		}
 	}
 	storage2, _ := NewSQLiteStorage(":memory:", 4)
-	defer storage2.Close()
+	defer func() { _ = storage2.Close() }()
 	embedder2 := &trackingEmbedder{embedding: []float32{0.1, 0.2, 0.3, 0.4}}
 	mgr2 := NewIndexManager(storage2, embedder2, factory)
 

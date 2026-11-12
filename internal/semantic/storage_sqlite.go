@@ -604,7 +604,17 @@ func (s *SQLiteStorage) DeleteByFilePath(ctx context.Context, filePath string) (
 		return 0, ErrStorageClosed
 	}
 
-	result, err := s.db.ExecContext(ctx, `DELETE FROM chunks WHERE file_path = ?`, filePath)
+	// The hash row (which carries the fallback reason) must go with the
+	// chunks, in one transaction: a surviving row makes index-status list a
+	// deleted file as indexed, and makes Update count the removal again on
+	// every later scan. A failed delete leaves both tables as they were.
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	result, err := tx.ExecContext(ctx, `DELETE FROM chunks WHERE file_path = ?`, filePath)
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete chunks by file path: %w", err)
 	}
@@ -612,6 +622,14 @@ func (s *SQLiteStorage) DeleteByFilePath(ctx context.Context, filePath string) (
 	rows, err := result.RowsAffected()
 	if err != nil {
 		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM file_hashes WHERE file_path = ?`, filePath); err != nil {
+		return 0, fmt.Errorf("failed to delete file hash by file path: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("failed to commit delete by file path: %w", err)
 	}
 	return int(rows), nil
 }

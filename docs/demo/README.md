@@ -19,7 +19,7 @@
   llm-semantic index .   # writes .index/, which is gitignored
   ```
 
-`callers EnrichForEmbedding` reads the call graph recorded at index time. Go is the language that records call edges, which is why a Go symbol is queried; an empty answer for another language would mean "not indexed", not "no callers".
+`callers EnrichForEmbedding` reads the call graph recorded at index time. Go, JavaScript, TypeScript, Python and Rust record call edges; a Go symbol is queried because it exercises the richest edge recording. An empty answer in any other language would mean "not indexed for edges", not "no callers".
 
 ## Render
 

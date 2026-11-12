@@ -305,6 +305,67 @@ func StorageTestSuite(t *testing.T, newStorage func() (Storage, func())) {
 		}
 	})
 
+	// Defends the file-removal invariant on every backend: deleting a file's
+	// chunks must delete its file-hash record (and fallback reason) with them.
+	// A surviving row makes index-status list a file that is gone as indexed
+	// as text windows, and makes Update count the same removal on every later
+	// scan. The kept file proves the delete is scoped to one path.
+	t.Run("DeleteByFilePath_RemovesFileHashAndFallback", func(t *testing.T) {
+		storage, cleanup := newStorage()
+		defer cleanup()
+		ctx := context.Background()
+
+		removedPath := "/path/gone.go"
+		keptPath := "/path/kept.py"
+		fs, ok := storage.(FallbackStore)
+		if !ok {
+			t.Fatalf("%T does not implement FallbackStore; the fallback half of this invariant would go untested", storage)
+		}
+		for _, fp := range []string{removedPath, keptPath} {
+			chunk := Chunk{ID: "fh-" + fp, FilePath: fp, Type: ChunkFunction, Name: "F", Language: "go"}
+			if err := storage.Create(ctx, chunk, []float32{0.1, 0.2, 0.3, 0.4}); err != nil {
+				t.Fatalf("Create(%s): %v", fp, err)
+			}
+			if err := fs.SetFileHashWithFallback(ctx, fp, "hash-"+fp, FallbackParseFailed); err != nil {
+				t.Fatalf("SetFileHashWithFallback(%s): %v", fp, err)
+			}
+		}
+
+		if _, err := storage.DeleteByFilePath(ctx, removedPath); err != nil {
+			t.Fatalf("DeleteByFilePath() error = %v", err)
+		}
+
+		if hash, err := storage.GetFileHash(ctx, removedPath); err != nil || hash != "" {
+			t.Errorf("removed file hash = %q, %v; want no hash row left", hash, err)
+		}
+		fallbacks, err := fs.ListFallbackFiles(ctx)
+		if err != nil {
+			t.Fatalf("ListFallbackFiles() error = %v", err)
+		}
+		if _, ok := fallbacks[removedPath]; ok {
+			t.Errorf("ListFallbackFiles() still names the removed file: %v", fallbacks)
+		}
+		files, err := storage.ListIndexedFiles(ctx)
+		if err != nil {
+			t.Fatalf("ListIndexedFiles() error = %v", err)
+		}
+		if files[removedPath] {
+			t.Errorf("ListIndexedFiles() still names the removed file %s", removedPath)
+		}
+
+		// The kept file is untouched: hash, fallback reason and chunk survive.
+		if hash, err := storage.GetFileHash(ctx, keptPath); err != nil || hash != "hash-"+keptPath {
+			t.Errorf("kept file hash = %q, %v; want it unchanged", hash, err)
+		}
+		if fallbacks[keptPath] != FallbackParseFailed {
+			t.Errorf("kept file fallback = %q, want %q", fallbacks[keptPath], FallbackParseFailed)
+		}
+		kept, err := storage.List(ctx, ListOptions{FilePath: keptPath})
+		if err != nil || len(kept) != 1 {
+			t.Errorf("kept file chunks = %d, %v; want 1", len(kept), err)
+		}
+	})
+
 	t.Run("Stats", func(t *testing.T) {
 		storage, cleanup := newStorage()
 		defer cleanup()
