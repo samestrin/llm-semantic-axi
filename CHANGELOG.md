@@ -8,16 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- A terminal demo in the README, with a short recording of the version command, semantic search and caller lookup, plus steps to record it again.
-- A performance benchmark program and saved results for startup, a typical search and indexing 3,000 generated files.
-- A release checklist for re-recording the demo and refreshing the benchmark results.
-- A README Performance section with the latest timings, test setup and links to the benchmark program and raw results.
+- The README Demo section now shows the terminal recording and links the tape and steps to record it again.
+- The README Performance section now shows the latest benchmark results and links the benchmark program, raw results and release checklist.
 
 ## [1.2.0] - 2026-11-12
 
 ### Added
 
 - `skills/llm-semantic/SKILL.md`: the Agent Skill is committed in the repository, so `npx skills add samestrin/llm-semantic-axi --skill llm-semantic` installs it without running `setup`. It is byte-identical to the skill `llm-semantic setup` writes into `.claude/skills/llm-semantic/`, and a test fails when the two differ.
+- `docs/demo/`: a VHS tape and its rendered GIF (22.6 s) of a real session — `--version`, `search "retry embedding requests with backoff" --axi --top 3`, and `callers EnrichForEmbedding --axi` — with a README giving the render command, the embedding endpoint and index the session needs, and the timing of the committed render.
+- `docs/release-checklist.md`: release steps for re-rendering the demo after its commands change and regenerating the committed performance results with `make bench-perf-write`.
 
 ### Changed
 
