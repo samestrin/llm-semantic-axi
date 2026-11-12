@@ -11,6 +11,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The README Demo section now shows the terminal recording and links the tape and steps to record it again.
 - The README Performance section now shows the latest benchmark results and links the benchmark program, raw results and release checklist.
 
+### Fixed
+
+- Removing a file and running `index-update` no longer leaves its record behind in a SQLite index: `index-status` stops listing the deleted file under text windows, and later updates stop counting the same removal again.
+- `docs/demo/README.md` now says Go, JavaScript, TypeScript, Python and Rust record call edges, matching `docs/languages.md`; it said Go only.
+
 ## [1.2.0] - 2026-11-12
 
 ### Added
