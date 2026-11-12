@@ -38,6 +38,6 @@ Rust records a call when the callee is a bare name (`helper()`, `helper::<T>()`)
 
 An `imports` edge, in any language, names a module or package, and a module has no chunk, so `refs` always lists it as unresolved. `import debounce from "lodash/debounce"` is not linked to a local `function debounce`, and Go's `import "net/http"` is not linked to a `func http`.
 
-**An index built before this change has no JavaScript, TypeScript, Python or Rust edges. Run `llm-semantic index --force` to rebuild it;** `index-update` does not re-chunk files whose hash is unchanged.
+**An index built before those edges were recorded has no JavaScript, TypeScript, Python or Rust edges. Run `llm-semantic index --force` to rebuild it;** `index-update` does not re-chunk files whose hash is unchanged.
 
 The commands say which case an empty answer is, in plain and `--axi` output (`--axi` adds a `status` field): `symbol not indexed` when no chunk carries the name, `not indexed for edges` when the symbol is indexed only in languages the index holds no edges for, and `recorded in the call graph` only when an empty answer is genuine. `--json` keeps its old shape and does not carry this.

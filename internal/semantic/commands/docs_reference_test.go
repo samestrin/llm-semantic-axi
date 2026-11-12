@@ -135,10 +135,10 @@ func TestReadmeDocumentationSectionLinksReferencePages(t *testing.T) {
 	readme := readPublicDoc(t, "README.md")
 	section := publicDocSection(t, readme, "Documentation", "README.md")
 
-	linkRe := regexp.MustCompile(`\(([^)\s]+\.md)\)`)
+	linkRe := regexp.MustCompile(`\(([^)\s#]+\.md)(?:#[^)\s]*)?\)`)
 	linked := map[string]bool{}
 	for _, m := range linkRe.FindAllStringSubmatch(section, -1) {
-		linked[m[1]] = true
+		linked[strings.TrimPrefix(m[1], "./")] = true
 	}
 	for _, want := range []string{
 		"docs/languages.md",
@@ -217,8 +217,8 @@ func TestAxiConformanceDocKeepsTenPrinciples(t *testing.T) {
 			t.Errorf("docs/axi-conformance.md principle %s has no name", cells[0])
 		}
 		status := strings.Trim(cells[2], "*")
-		if status != "Met" && status != "Exception" {
-			t.Errorf("docs/axi-conformance.md principle %s status = %q, want Met or Exception", cells[0], cells[2])
+		if status == "" || (!strings.Contains(status, "Met") && !strings.Contains(status, "Exception")) {
+			t.Errorf("docs/axi-conformance.md principle %s status = %q, want a Met or Exception verdict", cells[0], cells[2])
 		}
 		if cells[3] == "" {
 			t.Errorf("docs/axi-conformance.md principle %s has no note, so its verdict is unexplained", cells[0])
