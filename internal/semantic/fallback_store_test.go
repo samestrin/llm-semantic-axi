@@ -72,7 +72,9 @@ func TestSQLiteStorage_OpenAFileHashesTableWithoutFallbackReason(t *testing.T) {
 		INSERT INTO file_hashes (file_path, content_hash) VALUES ('/r/old.py', 'old')`); err != nil {
 		t.Fatalf("legacy schema: %v", err)
 	}
-	db.Close()
+	if err := db.Close(); err != nil {
+		t.Fatalf("close legacy db: %v", err)
+	}
 
 	storage, err := NewSQLiteStorage(path, 4)
 	if err != nil {
