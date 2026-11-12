@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-12
+
 ### Added
 
 - `skills/llm-semantic/SKILL.md`: the Agent Skill is committed in the repository, so `npx skills add samestrin/llm-semantic-axi --skill llm-semantic` installs it without running `setup`. It is byte-identical to the skill `llm-semantic setup` writes into `.claude/skills/llm-semantic/`, and a test fails when the two differ.
@@ -119,3 +121,8 @@ First standalone release, extracted from [samestrin/llm-tools](https://github.co
 ### Coverage gate
 
 CI fails below 80% total coverage rather than printing a percentage and moving on. The sibling repo only echoes the number, which is how its coverage drifted unobserved.
+
+[Unreleased]: https://github.com/samestrin/llm-semantic-axi/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/samestrin/llm-semantic-axi/compare/v1.1.0...v1.2.0
+[1.1.0]: https://github.com/samestrin/llm-semantic-axi/compare/v1.0.0...v1.1.0
+[1.0.0]: https://github.com/samestrin/llm-semantic-axi/releases/tag/v1.0.0
