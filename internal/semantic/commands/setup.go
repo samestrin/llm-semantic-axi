@@ -24,9 +24,12 @@ const setupHookCommand = "llm-semantic index-status || true"
 // file carrying it is migrated to setupHookCommand rather than left to error.
 const legacySetupHookCommand = "llm-semantic"
 
+// setupSkillContent is also committed at skills/llm-semantic/SKILL.md, the copy
+// `npx skills add` installs. TestCommittedSkillEqualsWhatSetupWrites fails when
+// the two differ, so change both together.
 const setupSkillContent = `---
 name: llm-semantic
-description: Semantic code search over a local index. Use to find code by meaning, or to look up callers and references of a Go symbol, when grep on exact text is not enough.
+description: Semantic code search over a local index. Use to find code by meaning, or to look up callers and references of a symbol, when grep on exact text is not enough.
 ---
 
 # llm-semantic
@@ -35,7 +38,7 @@ Run ` + "`llm-semantic`" + ` with no arguments to see whether this directory has
 
 - ` + "`llm-semantic index .`" + ` builds the index; ` + "`llm-semantic index-update`" + ` refreshes it.
 - ` + "`llm-semantic search \"<query>\"`" + ` finds code by meaning.
-- ` + "`llm-semantic callers <symbol>`" + ` and ` + "`llm-semantic refs <symbol>`" + ` work for Go only. An empty result for any other language means not indexed, not that none exist.
+- ` + "`llm-semantic callers <symbol>`" + ` and ` + "`llm-semantic refs <symbol>`" + ` work for Go, JavaScript, TypeScript, Python and Rust. An empty result for any other language means not indexed, not that none exist.
 - Add ` + "`--json`" + ` or ` + "`--axi`" + ` for machine-readable output.
 `
 
