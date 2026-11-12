@@ -13,6 +13,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `skills/llm-semantic/SKILL.md`: the Agent Skill is committed in the repository, so `npx skills add samestrin/llm-semantic-axi --skill llm-semantic` installs it without running `setup`. It is byte-identical to the skill `llm-semantic setup` writes into `.claude/skills/llm-semantic/`, and a test fails when the two differ.
 - `docs/demo/`: a VHS tape and its rendered GIF (22.6 s) of a real session — `--version`, `search "retry embedding requests with backoff" --axi --top 3`, and `callers EnrichForEmbedding --axi` — with a README giving the render command, the embedding endpoint and index the session needs, and the timing of the committed render.
 - `docs/release-checklist.md`: release steps for re-rendering the demo after its commands change and regenerating the committed performance results with `make bench-perf-write`.
+- README: a `## Demo` section after the badges embeds the committed `docs/demo/llm-semantic.gif` by relative path and links `docs/demo/README.md` for the tape and render steps, with no hosted recording link.
+- README: a `## Performance` section between output modes and how it works reproduces the generated `benchmarks/results-performance.md` table and its version, date, machine, method, embeddings and large-input stamp, with links to the program and the raw JSON. `TestReadmePerformanceTableMatchesTheGeneratedResults` fails when any table row in the README differs from the generated file, and `TestReadmeDemoEmbedsTheCommittedGIF` fails when the demo stops embedding the committed GIF.
 
 ### Changed
 
