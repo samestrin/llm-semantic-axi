@@ -1,152 +1,268 @@
 # llm-semantic
 
-> Semantic code search for agents. Local embeddings, three stores, one token-dense output format.
+`llm-semantic` is a semantic code search CLI for coding agents and the people who run them: it indexes a codebase into local embeddings, finds code by meaning, and answers "what calls this" from a recorded call graph.
 
-![Go](https://img.shields.io/github/go-mod/go-version/samestrin/llm-semantic-axi)
-![License](https://img.shields.io/github/license/samestrin/llm-semantic-axi)
+[![CI](https://github.com/samestrin/llm-semantic-axi/actions/workflows/test.yml/badge.svg)](https://github.com/samestrin/llm-semantic-axi/actions/workflows/test.yml) [![Release](https://img.shields.io/github/v/release/samestrin/llm-semantic-axi)](https://github.com/samestrin/llm-semantic-axi/releases/latest) [![License](https://img.shields.io/github/license/samestrin/llm-semantic-axi)](LICENSE)
 
-A semantic search CLI built to the [AXI](https://axi.md) principles, so its output is cheap for a model to read and hard for a model to misread. It indexes a codebase into an embedding store and answers questions like "where is the auth logic" that grep cannot, and it tracks call edges so it can answer "what calls this" without a full language server.
+## Why
 
-Two binaries:
-
-- `llm-semantic` — the CLI. This is the product.
-- `llm-semantic-mcp` — an MCP server that shells out to the CLI. A fallback for environments that cannot run a CLI, not the primary surface.
-
-Extracted from [samestrin/llm-tools](https://github.com/samestrin/llm-tools), which carried three unrelated tools in one Go module. This binary links sqlite, qdrant and tree-sitter and is around 38MB — a cost anyone wanting the 7MB file tool used to pay as well. That is why it now lives here.
+- Grep finds exact text, not intent. `llm-semantic search "where is the retry logic"` finds the code that does it, whatever it is named.
+- Following a call chain by hand costs an agent many reads. `callers` and `refs` answer from call edges recorded at index time, with no language server, for Go, JavaScript, TypeScript, Python and Rust.
+- Tool output is paid for in tokens. `--axi` prints TOON, a token-dense format built to the [AXI](https://axi.md) principles, with four fields per result, long content cut and a stated total.
+- An empty answer is easy to misread as "none exist". Every command says which kind of empty it is: no match, an empty index, a symbol not indexed, a language with no recorded call edges, or an index that is behind the working tree.
+- Code, docs and stored decisions are different questions. Profiles (`code`, `docs`, `memory`, `sprints`) give each its own index, so a docs question is not answered from source.
 
 ## Install
 
-The download installer fetches the latest release and installs both binaries into `~/.local/bin`. It needs no sudo, no clone and no Go — only `sh`, `curl` or `wget`, `tar` and `sha256sum` or `shasum`:
+The download installer is the common path. It installs `llm-semantic` and `llm-semantic-mcp` from the latest release into `~/.local/bin`, and needs no sudo, no clone and no Go: only `sh`, `curl` or `wget`, `tar`, `awk`, and `sha256sum` or `shasum`.
 
 ```bash
 curl -fsSL https://github.com/samestrin/llm-semantic-axi/releases/latest/download/install-release.sh | sh
 ```
 
-The archive is verified against the release's `SHA256SUMS.txt` before anything is written; a mismatch or a cut-off download stops the install with the existing binaries untouched. Options (each also readable from the environment variable named after it): `--version vX.Y.Z` (`LLM_SEMANTIC_VERSION`) to pin a release, `--dir DIR` (`LLM_SEMANTIC_INSTALL_DIR`) to change the install directory, `--base-url URL` (`LLM_SEMANTIC_BASE_URL`) and `--timeout SECS` (`LLM_SEMANTIC_INSTALL_TIMEOUT`).
+It checks the archive against the release's `SHA256SUMS.txt` before writing anything; a mismatch, a missing checksum or a cut-off download stops the install and leaves the existing binaries untouched. Options, each also read from the environment variable named after it: `--version vX.Y.Z` (`LLM_SEMANTIC_VERSION`) pins a release, `--dir DIR` (`LLM_SEMANTIC_INSTALL_DIR`) changes the install directory, `--base-url URL` (`LLM_SEMANTIC_BASE_URL`) changes where the assets are fetched from, and `--timeout SECS` (`LLM_SEMANTIC_INSTALL_TIMEOUT`) limits each download. Pass options through the pipe with `sh -s --`, for example `| sh -s -- --dir /opt/bin`.
 
-**The install directory must be on your `PATH`.** `llm-semantic-mcp` finds the CLI through `PATH`, so the MCP server cannot run until it is. If `~/.local/bin` is not already on it, add this to your shell profile and open a new shell (the installer prints the same warning when it detects this):
+The install directory must be on your `PATH`: `llm-semantic-mcp` finds the CLI through `PATH`, so the MCP server cannot run until it is. The installer warns when it is not. Add this to your shell profile and open a new shell:
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-### Building from source
+### Release archive by hand
 
-Requires Go. This is the alternative when you want to hack on the tool rather than just run it:
+Each release publishes `llm-semantic-<os>-<arch>.tar.gz` for `linux` and `darwin` on `amd64` and `arm64`, each holding both binaries, plus `SHA256SUMS.txt`. Download one, check it, and put the binaries on your `PATH`:
+
+```bash
+curl -fsSLO https://github.com/samestrin/llm-semantic-axi/releases/latest/download/llm-semantic-linux-amd64.tar.gz
+curl -fsSLO https://github.com/samestrin/llm-semantic-axi/releases/latest/download/SHA256SUMS.txt
+grep ' llm-semantic-linux-amd64.tar.gz$' SHA256SUMS.txt | sha256sum -c -
+tar -xzf llm-semantic-linux-amd64.tar.gz
+mkdir -p ~/.local/bin && mv llm-semantic llm-semantic-mcp ~/.local/bin/
+```
+
+On macOS, use `shasum -a 256 -c -` in place of `sha256sum -c -`. Windows has raw `llm-semantic-windows-amd64.exe` and `llm-semantic-mcp-windows-amd64.exe` binaries on the release page, also listed in `SHA256SUMS.txt`; the installer does not support Windows.
+
+### With Go
+
+Requires Go 1.24 or newer:
+
+```bash
+go install github.com/samestrin/llm-semantic-axi/cmd/llm-semantic@latest
+go install github.com/samestrin/llm-semantic-axi/cmd/llm-semantic-mcp@latest
+```
+
+The binaries land in `$(go env GOPATH)/bin`. A `go install` build is not stamped with a version, so `llm-semantic --version` prints `dev`.
+
+### From source
 
 ```bash
 git clone https://github.com/samestrin/llm-semantic-axi.git
 cd llm-semantic-axi
-sudo ./install.sh   # builds and installs to /usr/local/bin
+make build          # both binaries in ./build/
+sudo ./install.sh   # or: build and install both to /usr/local/bin
 ```
 
-Or build only:
+### For coding agents
+
+Two ways to tell an agent the tool exists:
+
+- `llm-semantic setup`, run in a project, registers the tool with Claude Code: it merges a SessionStart hook into `.claude/settings.json` (other keys are kept) and writes the Agent Skill to `.claude/skills/llm-semantic/SKILL.md`. It prints each path as `wrote`, `unchanged` or, with `--dry-run`, `would write`. It is safe to re-run, never prompts, and never touches your home directory. The hook runs `llm-semantic index-status || true`, so a session in a project with no index starts without a hook error.
+- `npx skills add samestrin/llm-semantic-axi --skill llm-semantic` installs the same skill, [`skills/llm-semantic/SKILL.md`](skills/llm-semantic/SKILL.md), through the `skills` CLI for any agent it supports. It adds no hook.
+
+### Upgrade
+
+Re-run the installer, or `go install ...@latest`, or `git pull && make build` in a clone. Then re-run `llm-semantic setup` in each project that used it, so the skill text matches the new binary. When the changelog says a release adds call edges for a language, rebuild the index with `llm-semantic index --force`: `index-update` does not re-chunk files whose content is unchanged.
+
+### Uninstall
 
 ```bash
-make build     # binaries land in ./build/
+rm ~/.local/bin/llm-semantic ~/.local/bin/llm-semantic-mcp   # installer or archive
+rm "$(go env GOPATH)/bin/llm-semantic" "$(go env GOPATH)/bin/llm-semantic-mcp"   # go install
+sudo rm /usr/local/bin/llm-semantic /usr/local/bin/llm-semantic-mcp   # install.sh
+```
+
+In each indexed project, delete `.index/` (the sqlite index). Where `setup` ran, delete `.claude/skills/llm-semantic/` and remove the `llm-semantic index-status || true` hook from `.claude/settings.json` by hand. Where `npx skills add` ran, `npx skills remove llm-semantic` removes the skill.
+
+## Quick start
+
+There is no bundled model, so `index` and `search` need an OpenAI-compatible embedding endpoint (TEI, Ollama, vLLM, OpenAI, Azure). Point the tool at yours, index a repository and query it:
+
+```bash
+curl -fsSL https://github.com/samestrin/llm-semantic-axi/releases/latest/download/install-release.sh | sh
+export LLM_SEMANTIC_API_URL=http://localhost:8080 LLM_SEMANTIC_MODEL=nomic-embed-text   # your endpoint and its model
+git clone https://github.com/samestrin/llm-semantic-axi.git && cd llm-semantic-axi
+llm-semantic index .
+llm-semantic search "retry embedding requests with backoff" --top 3
+llm-semantic callers EnrichForEmbedding
+```
+
+Output of `index` and `callers` (trimmed, paths shortened). Which results `search` returns depends on the model your endpoint serves, so its output is not shown here.
+
+```text
+$ llm-semantic index .
+Indexing .../llm-semantic-axi...
+  [100/302 files] 869 chunks...
+  [200/302 files] 2211 chunks...
+  [300/302 files] 3435 chunks...
+  [302/302 files] 3451 chunks...
+
+Running initial calibration...
+Indexed 302 files, created 3451 chunks
+
+$ llm-semantic callers EnrichForEmbedding
+5 caller(s) of EnrichForEmbedding
+
+  .../internal/semantic/embed_enrichment_test.go:8  TestEnrichForEmbedding
+  .../internal/semantic/embed_enrichment_test.go:152  TestEnrichForEmbedding_EmptyContent
+  .../internal/semantic/index_manager.go:377  indexWithCrossFileBatching
+  .../internal/semantic/index_manager.go:686  processFileWithDiff
+  .../internal/semantic/index_manager.go:1228  prepareFile
 ```
 
 ## Usage
 
+| Command | What it does |
+|---|---|
+| `llm-semantic` | With no arguments, shows the index status for this directory. With no index it prints `Status: not_indexed` and the next step, and exits 0. |
+| `index [path]` | Builds the index for a directory. `--force` re-indexes every file. |
+| `index-update [path]` | Re-indexes the files changed since a git ref (`--since`, default `HEAD~1`), or every changed file with `--no-git`. |
+| `index-status` | Shows files, chunks, calibration and text-window files. Exits 1 when there is no index. |
+| `search <query>` | Finds code by meaning. `code-search`, `docs-search` and `memory-search` are the same search on one profile. |
+| `multisearch <q1> [q2] ...` | Runs several queries, removes duplicates and boosts results more than one query found. |
+| `callers <symbol>` | Lists what calls a symbol, from recorded call edges. |
+| `refs <symbol>` | Lists what a symbol calls, imports and uses. |
+| `memory <store\|search\|list\|delete\|promote\|stats\|import>` | Stores and searches question and answer pairs (decisions, clarifications). |
+| `collection delete` | Deletes every chunk in one profile. Requires `--force`. |
+| `setup` | Registers the tool with Claude Code in this project (see Install). |
+
+Every command accepts `--help`. A long run of options is in `llm-semantic <command> --help`.
+
 ```bash
-# no arguments: content-first — prints the index status for this directory
-# (in an unindexed directory it states not_indexed and exits 0; `index-status`
-# is the one that errors with exit 1 there, so a missing index is never silent)
-llm-semantic
-
-# index a repository
-llm-semantic index .
-
-# ask a question of it
-llm-semantic search "where is the retry logic" --axi
-
-# what calls this symbol, and what does it reference
-llm-semantic callers Decode
-llm-semantic refs Decode
-
-# incremental update after a commit
+# build, then refresh after a commit
+llm-semantic index . --exclude-tests
 llm-semantic index-update .
+
+# search, narrowed to a path and a chunk type, as TOON
+llm-semantic search "where is the retry logic" --path internal/ --type function --top 5 --axi
+
+# hybrid dense and lexical search, then several phrasings at once
+llm-semantic search "parse the config file" --hybrid
+llm-semantic multisearch "load config" "validate config" "config defaults"
+
+# the call graph
+llm-semantic callers EnrichForEmbedding
+llm-semantic refs EnrichForEmbedding
+
+# decisions
+llm-semantic memory store --question "Which store backs the index?" --answer "sqlite by default; qdrant for large corpora"
+llm-semantic memory search "index storage"
+
+# a separate index for docs
+llm-semantic index docs/ --index-dir .index/docs
+llm-semantic docs-search "how stale is the index" --index-dir .index/docs
+
+# preview what setup would write
+llm-semantic setup --dry-run
 ```
 
-`llm-semantic setup` registers the tool with Claude Code for the current project: it merges a SessionStart hook into `.claude/settings.json` (other keys kept) and writes an Agent Skill to `.claude/skills/llm-semantic/SKILL.md`. It prints each path as `wrote`, `unchanged` or (with `--dry-run`) `would write` — and the same statuses as `would_write` / `unchanged` / `wrote` under `--json` and `--axi`. It is safe to re-run, and never prompts or touches your home directory. The SessionStart hook it registers runs `llm-semantic index-status || true`, tolerating the non-zero exit a missing index raises, so a session in an un-indexed project starts without a hook error.
+`--profile` names the index being addressed: `code` (the default), `docs`, `memory` or `sprints`. A profile is separate only when it points somewhere separate. With the default sqlite store, give each profile its own `--index-dir`. With `--storage qdrant`, a profile's collection comes from `--collection`, the config file's `<profile>_collection`, or the last part of a non-default `--index-dir`; otherwise every profile shares one collection. The config file also gives each profile its own include and exclude scope.
 
-Full command list: `callers`, `code-search`, `collection`, `docs-search`, `index`, `index-status`, `index-update`, `memory`, `memory-search`, `multisearch`, `refs`, `search`, `setup`.
+## Configuration
 
-### Three stores, not one
+Flags win over environment variables, and environment variables over defaults. Secrets are named here, never shown.
 
-The `--profile` flag selects which index is being addressed: `code`, `docs`, `memory` or `sprints`. They are separate collections with separate include/exclude scopes, so a docs question is not answered from source and a stored decision is not buried under a thousand functions.
+| Name | Default | Meaning |
+|---|---|---|
+| `LLM_SEMANTIC_API_URL` / `--api-url` | `http://localhost:8080` | Embedding endpoint (OpenAI-compatible unless `--embedder` says otherwise). |
+| `LLM_SEMANTIC_MODEL` / `--model` | `nomic-embed-text` | Embedding model the endpoint serves. |
+| `LLM_SEMANTIC_API_KEY` / `--api-key` | unset, then `OPENAI_API_KEY` | Key for the default `openai` embedder. |
+| `--embedder` | `openai` | Request shape: `openai`, `cohere`, `huggingface` or `openrouter`. |
+| `COHERE_API_KEY`, `OPENROUTER_API_KEY` | unset | Key for `--embedder cohere` or `openrouter` when `--api-key` is not set. |
+| `HUGGING_FACE_API_KEY`, `HUGGINGFACE_API_KEY`, `HF_TOKEN` | unset | Key for `--embedder huggingface`, read in that order. |
+| `LLM_SEMANTIC_EMBEDDER_TIMEOUT` | `60` | Seconds one embedding request may take. |
+| `LLM_SEMANTIC_RERANKER_API_URL` | unset | Reranker endpoint. When set, searches rerank unless `--no-rerank` is given. |
+| `LLM_SEMANTIC_RERANKER_MODEL` | `Qwen/Qwen3-Reranker-0.6B` | Reranker model. |
+| `--storage` | `sqlite` | `sqlite` keeps the index in `.index/semantic.db` with no server; `qdrant` uses a Qdrant instance. |
+| `--index-dir` | `.index` | Directory of the sqlite index. |
+| `QDRANT_API_URL` | unset | Qdrant URL; required with `--storage qdrant`. |
+| `QDRANT_API_KEY` | unset | Qdrant key; required unless `QDRANT_INSECURE` is `true`. |
+| `QDRANT_INSECURE` | unset | `true` allows Qdrant with no key, for a local or trusted network. |
+| `QDRANT_COLLECTION` / `--collection` | `llm_semantic` | Qdrant collection name. |
+| `--profile` | `code` | Index to address: `code`, `docs`, `memory` or `sprints`. |
+| `--config` | `.planning/.config/config.yaml` when it exists | YAML file whose `semantic:` section sets `<profile>_storage`, `<profile>_collection`, `<profile>_include` and `<profile>_exclude` per profile. |
+| `LLM_SEMANTIC_TIMEOUT` | `120` | Seconds `llm-semantic-mcp` lets one CLI command run. |
+| `LLM_SEMANTIC_VERSION` / `--version` | latest | Installer: release to install. |
+| `LLM_SEMANTIC_INSTALL_DIR` / `--dir` | `~/.local/bin` | Installer: install directory. |
+| `LLM_SEMANTIC_BASE_URL` / `--base-url` | the release download URL | Installer: where the assets are fetched from. |
+| `LLM_SEMANTIC_INSTALL_TIMEOUT` / `--timeout` | `600` | Installer: seconds each download may take. |
 
-### Storage backends
-
-Two things to set up before the first `index`: a storage backend and an embedding endpoint.
-
-**Storage** defaults to sqlite and needs no setup: `--storage sqlite` keeps everything in `.index/semantic.db` inside the indexed directory, pure Go, no server. For larger corpora, `--storage qdrant` points at a Qdrant instance instead; configure it with the `QDRANT_API_URL` and `QDRANT_API_KEY` environment variables, and name the collection with `--collection` (default: `QDRANT_COLLECTION` env, or `llm_semantic`).
-
-**Embeddings**: any OpenAI-compatible embedding endpoint works — TEI, Ollama, vLLM, OpenAI, Azure. There is no bundled model, so an endpoint must be reachable before indexing. Set `--api-url` and `--model` (and `--api-key` if the endpoint needs one), or the `LLM_SEMANTIC_API_URL`, `LLM_SEMANTIC_MODEL` and `LLM_SEMANTIC_API_KEY` environment variables:
-
-```bash
-export LLM_SEMANTIC_API_URL=http://localhost:8080   # your TEI / Ollama / vLLM endpoint
-export LLM_SEMANTIC_MODEL=bge-small-en-v1.5         # the model that endpoint serves
-llm-semantic index .
-```
-
-`--embedder` additionally selects the Cohere, HuggingFace or OpenRouter request shapes when the endpoint is not OpenAI-shaped.
-
-## Output modes (AXI)
+## Output and exit codes
 
 | Flag | Output |
 |---|---|
-| `--axi` | TOON — token-dense, the format to give a model |
-| `--json` | JSON |
-| `--min` | minimal / token-optimized |
-| *(none)* | human-readable text |
+| none | Human-readable text. |
+| `--json` | JSON. Keeps its pre-AXI schema (full fields, no total) so existing scripts keep working. |
+| `--min` | Minimal, token-optimized form. |
+| `--axi` | TOON, the token-dense AXI format to give a model: four fields per result, content cut at 200 characters with `--full` for the rest, a `total`, a `status` for empty answers and a `help` list of next steps. |
 
-TOON encoding goes through [go-axi](https://github.com/samestrin/go-axi), which guards against the failure mode the raw codec has: a type it cannot encode does not error, it emits **empty output**, and a command then silently prints nothing.
+Search-family output also says how far the index is behind the working tree (`fresh`, `stale` or `unknown`). Under `--json` and `--min` that line goes to stderr so stdout keeps its schema.
 
-## AXI conformance
+| Exit code | Meaning |
+|---|---|
+| `0` | Success, including a definitive empty answer: no match, a symbol not indexed, or a bare run with no index. |
+| `1` | The command failed: no index for `index-status`, an unreachable endpoint, or a destructive command refused without `--force` or `--yes`. In plain mode the error goes to stderr; under `--json` and `--axi` it is an `error: true` object on stdout. |
+| `2` | Usage error: an unknown flag or command, or a missing argument. The message names what was wrong and lists the valid choices. |
 
-`llm-semantic` is built to the ten principles on [axi.md](https://axi.md). Seven are met; three are stated exceptions: TOON is opt-in through `--axi` (row 1), a malformed invocation exits 2 and plain-mode errors go to stderr (row 6), and `setup` targets Claude Code only (row 7). [docs/axi-conformance.md](docs/axi-conformance.md) is the full table with the note on each row, including the standing `--json` exception for principles 2-5.
+`llm-semantic -v`, `-V` and `--version` print the bare version and exit 0, and so do the same flags on `llm-semantic-mcp`.
 
-## Known limit: call edges exist for Go, JavaScript, TypeScript, Python and Rust only
+## How it works
 
-`callers` and `refs` read call edges from the index, and only the Go, JavaScript, TypeScript, Python and Rust chunkers emit them. **An empty `callers` result in a Java, C# or any other language with no recorded edges means "not indexed for edges", not "no callers."** Do not read it as proof.
+`index` splits each file into chunks (functions, methods and types through tree-sitter, or `go/ast` for Go; sections for Markdown; text windows for other text), embeds each chunk through the endpoint and stores the vectors with the call edges it found. `search` embeds the query and ranks chunks by similarity, optionally fused with a lexical index (`--hybrid`) and reranked. `callers` and `refs` read the stored edges and never call the endpoint.
 
-[docs/languages.md](docs/languages.md) lists every indexed extension with its chunker and its call-edge column, and the per-language limits: which JavaScript, TypeScript, Python and Rust calls are recorded and which are not, and why an `imports` edge is never a resolved link. **An index built before those edges existed has none of them. Run `llm-semantic index --force` to rebuild it;** `index-update` does not re-chunk files whose hash is unchanged.
+`llm-semantic-mcp` is an MCP server that runs the CLI with `--axi` for each tool call. It is a fallback for environments that cannot run a CLI; the CLI is the product. TOON encoding goes through [go-axi](https://github.com/samestrin/go-axi), which guards against the raw codec's failure mode: a type it cannot encode does not error, it emits empty output, and a command then silently prints nothing.
 
-The commands say which case an empty answer is, in plain and `--axi` output (`--axi` adds a `status` field): `symbol not indexed` when no chunk carries the name, `not indexed for edges` when the symbol is indexed only in languages the index holds no edges for, and `recorded in the call graph` only when an empty answer is genuine. `--json` keeps its old shape and does not carry this.
+The tool was extracted from [samestrin/llm-tools](https://github.com/samestrin/llm-tools), which carried three unrelated tools in one Go module. This binary links sqlite, Qdrant and tree-sitter and is around 38 MB, a cost anyone wanting the small file tool used to pay as well, so it lives here on its own.
 
-## How stale the index is
+## Limits
 
-The search family (`search`, its profile aliases, `multisearch`, `callers`, `refs`) reports how far the index is behind the working tree, so a search over old code does not read like a search over current code. `--axi` carries a `stale` object (`fresh`, `stale` or `unknown`, with counts only when they were measured); plain output ends with an `Index is stale: ...` or `Index staleness unknown: ...` line, and `--json` / `--min` print that line on stderr so their stdout schema is unchanged. A fresh index prints no line. [docs/staleness.md](docs/staleness.md) is the full contract, including when the record behind it is written.
-
-## For integrators
-
-Tools that read `llm-semantic`'s data directly (such as [atcr](https://github.com/samestrin/atcr)) should build against the published storage contract: [docs/storage-contract.md](docs/storage-contract.md). It is `contract_version: 1` and covers the Qdrant store only — the five point kinds (chunks, `file_hash` bookkeeping, calibration metadata, memory entries, retrieval logs), their payload keys and value shapes, and the filter rule that chunks are exactly the points carrying a `chunk_id` payload key. The default sqlite file (`.index/semantic.db`) is an internal implementation detail and is not part of the contract.
+- **`callers` and `refs` record call edges for Go, JavaScript, TypeScript, Python and Rust only.** In any other language, an empty answer means "not indexed for edges", not "no callers"; the output says so. Even in those five languages some call shapes are not recorded, so an empty answer is not proof. [docs/languages.md](docs/languages.md) lists what each language records.
+- An index built before a language gained call edges has none for it until `llm-semantic index --force`.
+- There is no bundled embedding model. `index` and `search` fail without a reachable endpoint, and the quality of `search` is the quality of the model you point it at.
+- TOON is opt-in through `--axi`; the default output is plain text.
+- A usage error exits 2, and plain-mode errors go to stderr, not stdout.
+- `--json` keeps its pre-AXI schema: no truncation, no `total`, no zero-result message. Those are in `--axi` and plain output only.
+- `setup` targets Claude Code only and registers no session-end hook. Other agents get the skill through `npx skills add`, without a hook.
+- The installer supports Linux and macOS on `amd64` and `arm64`. Windows has raw binaries only.
+- The sqlite file (`.index/semantic.db`) is an internal detail. Only the Qdrant store has a published contract.
 
 ## Documentation
 
-- [docs/languages.md](docs/languages.md) — every indexed extension, its chunker, and the call-edge limits behind `callers` and `refs`.
-- [docs/staleness.md](docs/staleness.md) — how the search family reports an index that is behind the working tree, in each output mode.
-- [docs/axi-conformance.md](docs/axi-conformance.md) — the ten axi.md principles, each met or stated as an exception with its reason.
-- [docs/storage-contract.md](docs/storage-contract.md) — the published Qdrant storage contract (`contract_version: 1`) for tools that read the index directly.
-- [docs/axi-audit.md](docs/axi-audit.md) — history: the 2026-11-01 audit snapshot that [docs/axi-conformance.md](docs/axi-conformance.md) replaced.
+- [docs/languages.md](docs/languages.md): every indexed extension, its chunker, and the call-edge limits behind `callers` and `refs`.
+- [docs/staleness.md](docs/staleness.md): how the search family reports an index that is behind the working tree, in each output mode.
+- [docs/axi-conformance.md](docs/axi-conformance.md): the ten axi.md principles, each met or stated as an exception with its reason.
+- [docs/storage-contract.md](docs/storage-contract.md): the published Qdrant storage contract (`contract_version: 1`) for tools that read the index directly, such as [atcr](https://github.com/samestrin/atcr).
+- [docs/axi-audit.md](docs/axi-audit.md): history, the 2026-11-01 audit snapshot that [docs/axi-conformance.md](docs/axi-conformance.md) replaced.
+- [skills/llm-semantic/SKILL.md](skills/llm-semantic/SKILL.md): the Agent Skill that `setup` and `npx skills add` install.
 
 ## Development
 
 ```bash
+make build       # both binaries into ./build/; the MCP end-to-end tests need them
 make test        # go test ./...
-make test-race   # race detector — CI runs this
-make lint        # go vet + gofmt check
+make test-race   # race detector, as CI runs it
+make lint        # go vet and the gofmt check
 make test-cover  # coverage profile and total
 make hooks       # opt in to the pre-commit hook
 ```
 
-CI gates coverage at 80% and fails below it. See `AGENTS.md` for house rules.
+CI fails below 80% coverage. [AGENTS.md](AGENTS.md) has the house rules for changes.
 
-## Support policy
+Support is best effort. Issues and pull requests are read and answered as time allows, with no response-time or fix-time guarantee. To get an answer sooner, include a reproduction against a tagged release.
 
-Support is best effort. This is a personal open-source project: issues and pull requests are read and answered as time allows, with no response-time or fix-time guarantee. If you need an answer sooner, include a reproduction against a tagged release.
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
-MIT
+MIT, see [LICENSE](LICENSE).
