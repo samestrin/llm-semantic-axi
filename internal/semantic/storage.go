@@ -133,7 +133,9 @@ type Storage interface {
 	// Delete removes a chunk by its ID
 	Delete(ctx context.Context, id string) error
 
-	// DeleteByFilePath removes all chunks for a given file path
+	// DeleteByFilePath removes all chunks for a given file path, and the
+	// file's hash record (with its fallback reason) with them, so a deleted
+	// file is no longer reported as indexed.
 	DeleteByFilePath(ctx context.Context, filePath string) (int, error)
 
 	// DeleteByDomain removes all chunks for a given domain (e.g., "code", "docs", "memory")
