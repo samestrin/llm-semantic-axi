@@ -4,6 +4,12 @@
 
 [![CI](https://github.com/samestrin/llm-semantic-axi/actions/workflows/test.yml/badge.svg)](https://github.com/samestrin/llm-semantic-axi/actions/workflows/test.yml) [![Release](https://img.shields.io/github/v/release/samestrin/llm-semantic-axi)](https://github.com/samestrin/llm-semantic-axi/releases/latest) [![License](https://img.shields.io/github/license/samestrin/llm-semantic-axi)](LICENSE)
 
+## Demo
+
+![A terminal session running --version, a search with --axi, and a callers query](docs/demo/llm-semantic.gif)
+
+The session runs `--version`, a `search` with `--axi` and a `callers` query against a release binary, with nothing mocked. [docs/demo/README.md](docs/demo/README.md) has the tape and the steps to render the GIF again.
+
 ## Why
 
 - Grep finds exact text, not intent. `llm-semantic search "where is the retry logic"` finds the code that does it, whatever it is named.
@@ -215,6 +221,23 @@ Search-family output also says how far the index is behind the working tree (`fr
 
 `llm-semantic -v`, `-V` and `--version` print the bare version and exit 0, and so do the same flags on `llm-semantic-mcp`.
 
+## Performance
+
+- **Version:** `v1.1.0-11-gc1ec2a4` (`llm-semantic --version`)
+- **Date:** 2026-11-11
+- **Machine:** Intel(R) Xeon(R) W-2295 CPU @ 3.00GHz, 36 threads, 141.2 GiB RAM, Debian GNU/Linux 13 (trixie) (linux/amd64), kernel 7.0.0-38-generic
+- **Method:** each case runs its warmup runs untimed, then its timed runs: warmup 3 (cold start), 3 (typical command), 1 (large input); runs 20 (cold start), 20 (typical command), 5 (large input). Each timing is the wall clock of one `llm-semantic` process, from start to exit, on the release build. Every `index` and `search` run also gets `--api-url`, `--model`, `--storage sqlite` and `--index-dir` pointing at the fake embedder and a temporary index; each `index` run starts from an empty index.
+- **Embeddings:** a fixed-latency local fake: a loopback OpenAI-compatible server that waits 1.0 ms per request and answers with deterministic 256-dimension hash vectors, so the numbers measure the tool and not a model.
+- **Large input:** 3,000 files, a corpus the program generates (Go, Python and Markdown files).
+
+| Case | Command | Warmup | Runs | Min (ms) | Median (ms) | Mean (ms) | Max (ms) |
+|---|---|---:|---:|---:|---:|---:|---:|
+| cold start | `llm-semantic --version` | 3 | 20 | 3.8 | 4.0 | 4.1 | 4.9 |
+| typical command | `llm-semantic search "load the config file and validate it" --json` | 3 | 20 | 85.8 | 88.6 | 88.8 | 93.2 |
+| large input | `llm-semantic index <corpus> --json` | 1 | 5 | 32430.7 | 33200.5 | 33496.6 | 35090.8 |
+
+Every timing is in [benchmarks/results-performance.json](benchmarks/results-performance.json). Measured by [`benchmarks/cmd/perf`](benchmarks/cmd/perf/main.go).
+
 ## How it works
 
 `index` splits each file into chunks (functions, methods and types through tree-sitter, or `go/ast` for Go; sections for Markdown; text windows for other text), embeds each chunk through the endpoint and stores the vectors with the call edges it found. `search` embeds the query and ranks chunks by similarity, optionally fused with a lexical index (`--hybrid`) and reranked. `callers` and `refs` read the stored edges and never call the endpoint.
@@ -243,6 +266,9 @@ The tool was extracted from [samestrin/llm-tools](https://github.com/samestrin/l
 - [docs/storage-contract.md](docs/storage-contract.md): the published Qdrant storage contract (`contract_version: 1`) for tools that read the index directly, such as [atcr](https://github.com/samestrin/atcr).
 - [docs/axi-audit.md](docs/axi-audit.md): history, the 2026-11-01 audit snapshot that [docs/axi-conformance.md](docs/axi-conformance.md) replaced.
 - [skills/llm-semantic/SKILL.md](skills/llm-semantic/SKILL.md): the Agent Skill that `setup` and `npx skills add` install.
+- [benchmarks/](benchmarks/): the performance program, its raw JSON and the committed table it generates.
+- [docs/demo/](docs/demo/): the VHS tape, the rendered GIF and the steps to render it again.
+- [docs/release-checklist.md](docs/release-checklist.md): what to re-run and re-render at each release.
 
 ## Development
 
