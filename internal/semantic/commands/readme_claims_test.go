@@ -294,7 +294,6 @@ func sourceEnvVars(t *testing.T) map[string]bool {
 	t.Helper()
 	root := filepath.Join("..", "..", "..")
 	vars := map[string]bool{}
-	goRe := regexp.MustCompile(`(?:Getenv|LookupEnv)\("([A-Z][A-Z0-9_]*)"\)`)
 	err := filepath.WalkDir(root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -309,8 +308,12 @@ func sourceEnvVars(t *testing.T) map[string]bool {
 		if err != nil {
 			return err
 		}
-		for _, m := range goRe.FindAllStringSubmatch(string(data), -1) {
-			vars[m[1]] = true
+		reads, _, err := goEnvReads(p, string(data))
+		if err != nil {
+			return err
+		}
+		for v := range reads {
+			vars[v] = true
 		}
 		return nil
 	})
@@ -324,6 +327,16 @@ func sourceEnvVars(t *testing.T) map[string]bool {
 		}
 	}
 	return vars
+}
+
+// goEnvReads returns the environment variables a Go file reads.
+func goEnvReads(name, src string) (map[string]bool, []string, error) {
+	goRe := regexp.MustCompile(`(?:Getenv|LookupEnv)\("([A-Z][A-Z0-9_]*)"\)`)
+	reads := map[string]bool{}
+	for _, m := range goRe.FindAllStringSubmatch(src, -1) {
+		reads[m[1]] = true
+	}
+	return reads, nil, nil
 }
 
 // readmeEnvVars returns each environment variable the README names: a $NAME
@@ -444,5 +457,43 @@ func TestReadmeVoiceCheckCatchesEachBreak(t *testing.T) {
 		if v := voiceViolations([]string{good}); len(v) != 0 {
 			t.Errorf("voice check flagged %q: %v", good, v)
 		}
+	}
+}
+
+// TestGoEnvReadsCountsOnlyRealCalls defends the variable guard's oracle: a
+// regex over the source counted os.Getenv("X") in a comment or a string as a
+// read, so a README naming a variable nothing reads could pass. Only a call
+// counts, and a call whose name is not a literal is reported, because the
+// oracle cannot tell which variable it reads.
+func TestGoEnvReadsCountsOnlyRealCalls(t *testing.T) {
+	src := `package p
+
+import "os"
+
+// os.Getenv("IN_COMMENT") is not a read.
+const doc = "os.Getenv(\"IN_STRING\")"
+
+func f(name string) {
+	_ = os.Getenv("REAL_GETENV")
+	_, _ = os.LookupEnv("REAL_LOOKUP")
+	_ = os.Getenv(name)
+}
+`
+	reads, indirect, err := goEnvReads("p.go", src)
+	if err != nil {
+		t.Fatalf("goEnvReads: %v", err)
+	}
+	for _, v := range []string{"REAL_GETENV", "REAL_LOOKUP"} {
+		if !reads[v] {
+			t.Errorf("missed the call reading %s: %v", v, reads)
+		}
+	}
+	for _, v := range []string{"IN_COMMENT", "IN_STRING"} {
+		if reads[v] {
+			t.Errorf("counted %s, which no call reads", v)
+		}
+	}
+	if len(indirect) != 1 || !strings.Contains(indirect[0], "p.go:11") {
+		t.Errorf("indirect reads = %v, want the os.Getenv(name) call at p.go:11", indirect)
 	}
 }
