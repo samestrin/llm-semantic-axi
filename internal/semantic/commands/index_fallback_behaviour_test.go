@@ -23,7 +23,11 @@ func storedChunks(t *testing.T) map[string][]semantic.Chunk {
 	if err != nil {
 		t.Fatalf("reopen index: %v", err)
 	}
-	defer storage.Close()
+	defer func() {
+		if err := storage.Close(); err != nil {
+			t.Errorf("close index: %v", err)
+		}
+	}()
 	chunks, err := storage.List(context.Background(), semantic.ListOptions{})
 	if err != nil {
 		t.Fatalf("List: %v", err)
@@ -251,17 +255,22 @@ func TestIndexStatusLabelsAChunkerFailureAsOne(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reopen index: %v", err)
 	}
+	closeIndex := func() {
+		if err := storage.Close(); err != nil {
+			t.Errorf("close index: %v", err)
+		}
+	}
 	good := filepath.Join(dir, "good.py")
 	hash, err := storage.GetFileHash(context.Background(), good)
 	if err != nil || hash == "" {
-		storage.Close()
+		closeIndex()
 		t.Fatalf("good.py has no stored hash (%q, %v); the test needs it indexed", hash, err)
 	}
 	if err := storage.SetFileHashWithFallback(context.Background(), good, hash, semantic.FallbackChunkerFailed); err != nil {
-		storage.Close()
+		closeIndex()
 		t.Fatalf("record the chunker failure: %v", err)
 	}
-	storage.Close()
+	closeIndex()
 
 	plain := captureStdout(t, func() {
 		if err := runIndexStatus(context.Background(), false); err != nil {

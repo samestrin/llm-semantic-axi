@@ -80,7 +80,11 @@ func TestSQLiteStorage_OpenAFileHashesTableWithoutFallbackReason(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSQLiteStorage on a legacy file_hashes table: %v", err)
 	}
-	t.Cleanup(func() { storage.Close() })
+	t.Cleanup(func() {
+		if err := storage.Close(); err != nil {
+			t.Errorf("close storage: %v", err)
+		}
+	})
 	ctx := context.Background()
 
 	if hash, err := storage.GetFileHash(ctx, "/r/old.py"); err != nil || hash != "old" {
@@ -189,7 +193,11 @@ func TestSQLiteStorage_DeleteByFilePathIsAtomic(t *testing.T) {
 			if err != nil {
 				t.Fatalf("NewSQLiteStorage: %v", err)
 			}
-			t.Cleanup(func() { storage.Close() })
+			t.Cleanup(func() {
+				if err := storage.Close(); err != nil {
+					t.Errorf("close storage: %v", err)
+				}
+			})
 			ctx := context.Background()
 
 			chunk := Chunk{ID: "atomic-1", FilePath: "/r/a.go", Type: ChunkFunction, Name: "A", Language: "go"}
