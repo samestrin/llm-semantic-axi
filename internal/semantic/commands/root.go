@@ -208,6 +208,13 @@ Supports any OpenAI-compatible embedding API (TEI, Ollama, vLLM, OpenAI, Azure, 
 			// Resolve storage type from config (if not explicitly set via flag)
 			// This must happen after loading config but before any command runs
 			storageType = resolveStorageType(cmd)
+			if err := validateStorageType(storageType); err != nil {
+				if f := cmd.Flag("storage"); f != nil && f.Changed {
+					// Worded as cobra words a bad flag value, so it exits 2.
+					return withHelp(fmt.Errorf("invalid argument %q for \"--storage\" flag: use 'sqlite' or 'qdrant'", storageType), helpPointer(cmd))
+				}
+				return fmt.Errorf("config storage setting: %w", err)
+			}
 
 			return nil
 		},
@@ -619,4 +626,13 @@ func initSearchComponents(ctx context.Context, createStorageFn func(indexPath st
 	}, cleanup, nil
 }
 
-func validateStorageType(s string) error { return nil }
+// validateStorageType refuses a backend name nothing implements. Every command
+// reads any name but "qdrant" as SQLite, so an unknown one would otherwise be
+// answered from a backend the caller did not ask for.
+func validateStorageType(s string) error {
+	switch s {
+	case "", "sqlite", "qdrant":
+		return nil
+	}
+	return fmt.Errorf("%q is not a storage backend: use 'sqlite' or 'qdrant'", s)
+}
