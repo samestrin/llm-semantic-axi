@@ -2,11 +2,15 @@ package commands
 
 import (
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -308,9 +312,12 @@ func sourceEnvVars(t *testing.T) map[string]bool {
 		if err != nil {
 			return err
 		}
-		reads, _, err := goEnvReads(p, string(data))
+		reads, indirect, err := goEnvReads(p, string(data))
 		if err != nil {
 			return err
+		}
+		for _, at := range indirect {
+			t.Errorf("%s reads an environment variable by a non-literal name, which this check cannot see", at)
 		}
 		for v := range reads {
 			vars[v] = true
@@ -329,14 +336,40 @@ func sourceEnvVars(t *testing.T) map[string]bool {
 	return vars
 }
 
-// goEnvReads returns the environment variables a Go file reads.
+// goEnvReads returns the environment variables a Go file reads: the literal
+// name in each os.Getenv or os.LookupEnv call. A name in a comment or a string
+// is not a read. A call whose name is not a literal is returned in indirect as
+// file:line, because no oracle reading the source can say which variable it is.
 func goEnvReads(name, src string) (map[string]bool, []string, error) {
-	goRe := regexp.MustCompile(`(?:Getenv|LookupEnv)\("([A-Z][A-Z0-9_]*)"\)`)
-	reads := map[string]bool{}
-	for _, m := range goRe.FindAllStringSubmatch(src, -1) {
-		reads[m[1]] = true
+	fset := token.NewFileSet()
+	file, err := parser.ParseFile(fset, name, src, 0)
+	if err != nil {
+		return nil, nil, err
 	}
-	return reads, nil, nil
+	reads := map[string]bool{}
+	var indirect []string
+	ast.Inspect(file, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok || len(call.Args) != 1 {
+			return true
+		}
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || (sel.Sel.Name != "Getenv" && sel.Sel.Name != "LookupEnv") {
+			return true
+		}
+		if pkg, ok := sel.X.(*ast.Ident); !ok || pkg.Name != "os" {
+			return true
+		}
+		if lit, ok := call.Args[0].(*ast.BasicLit); ok && lit.Kind == token.STRING {
+			if v, err := strconv.Unquote(lit.Value); err == nil {
+				reads[v] = true
+				return true
+			}
+		}
+		indirect = append(indirect, fset.Position(call.Pos()).String())
+		return true
+	})
+	return reads, indirect, nil
 }
 
 // readmeEnvVars returns each environment variable the README names: a $NAME
