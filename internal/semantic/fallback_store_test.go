@@ -3,8 +3,10 @@ package semantic
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -32,6 +34,17 @@ func assertFallbackStore(t *testing.T, fs FallbackStore, storage Storage) {
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("ListFallbackFiles = %v, want %v", got, want)
 	}
+	// The per-file read answers for one file without listing the index.
+	for path, want := range map[string]FallbackReason{
+		"/r/parse.py":   FallbackParseFailed,
+		"/r/chunker.py": FallbackChunkerFailed,
+		"/r/clean.py":   FallbackNone,
+		"/r/absent.py":  FallbackNone,
+	} {
+		if got, err := fs.GetFallbackReason(ctx, path); err != nil || got != want {
+			t.Errorf("GetFallbackReason(%s) = %q, %v; want %q", path, got, err, want)
+		}
+	}
 	if hash, err := storage.GetFileHash(ctx, "/r/parse.py"); err != nil || hash != "h1" {
 		t.Errorf("GetFileHash after SetFileHashWithFallback = %q, %v; want h1", hash, err)
 	}
@@ -46,6 +59,9 @@ func assertFallbackStore(t *testing.T, fs FallbackStore, storage Storage) {
 	}
 	if _, still := got["/r/parse.py"]; still || len(got) != 1 {
 		t.Errorf("ListFallbackFiles after a clean re-hash = %v, want only chunker.py", got)
+	}
+	if reason, err := fs.GetFallbackReason(ctx, "/r/parse.py"); err != nil || reason != FallbackNone {
+		t.Errorf("GetFallbackReason after a clean re-hash = %q, %v; want none", reason, err)
 	}
 }
 
@@ -222,5 +238,36 @@ func TestSQLiteStorage_DeleteByFilePathIsAtomic(t *testing.T) {
 				t.Errorf("chunks after the failed delete = %d, %v; want the chunk delete rolled back", len(chunks), err)
 			}
 		})
+	}
+}
+
+// TestSQLiteStorage_GetFallbackReasonErrors defends the per-file read against
+// reporting "did not fall back" when it could not read: UpdateGit would then
+// restore a fallen-back file as clean, and index-status would under-report it.
+// Closing storage.db directly leaves the closed flag false, so the read
+// reaches the database instead of the guard.
+func TestSQLiteStorage_GetFallbackReasonErrors(t *testing.T) {
+	ctx := context.Background()
+
+	broken := newFileStorage(t)
+	if err := broken.db.Close(); err != nil {
+		t.Fatalf("close underlying database: %v", err)
+	}
+	reason, err := broken.GetFallbackReason(ctx, "/r/parse.py")
+	if err == nil {
+		t.Errorf("GetFallbackReason with a closed database = %q, nil; want the database error", reason)
+	} else if errors.Is(err, ErrStorageClosed) || !strings.Contains(err.Error(), "failed to get fallback reason") {
+		t.Errorf("GetFallbackReason with a closed database error = %v, want it wrapped as failed to get fallback reason", err)
+	}
+
+	closed, err := NewSQLiteStorage(filepath.Join(t.TempDir(), "index.db"), 4)
+	if err != nil {
+		t.Fatalf("NewSQLiteStorage: %v", err)
+	}
+	if err := closed.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if _, err := closed.GetFallbackReason(ctx, "/r/parse.py"); !errors.Is(err, ErrStorageClosed) {
+		t.Errorf("GetFallbackReason on closed storage error = %v, want ErrStorageClosed", err)
 	}
 }

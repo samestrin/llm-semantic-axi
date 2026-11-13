@@ -314,7 +314,7 @@ func resultHelp(total int) []string {
 		}
 	}
 	return []string{
-		"Run `llm-semantic callers <name>` or `llm-semantic refs <name>` on a result to see its call sites (Go only)",
+		"Run `llm-semantic callers <name>` or `llm-semantic refs <name>` on a result to see its call sites (Go, JavaScript, TypeScript, Python and Rust)",
 		"Narrow with `--path <prefix>` or `--type <kind>`, or raise `--top` for more results",
 	}
 }

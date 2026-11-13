@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- The `--axi` next step after a search hit says `callers` and `refs` show call sites for Go, JavaScript, TypeScript, Python and Rust. It said Go only.
+- `index-update` in git mode reads each changed file's fallback reason on its own. It listed every fallen-back file in the index once per changed file, so an update cost grew with the size of the index times the number of changed files.
+- `docs/storage-contract.md` cites the functions that write each point and key instead of line numbers, which had drifted (`SetFileHash` was cited about 100 lines from where it is). A test fails on a line-number citation or a cited symbol that no longer exists.
+
 ## [1.2.0] - 2026-11-12
 
 ### Added
