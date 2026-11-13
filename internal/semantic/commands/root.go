@@ -618,3 +618,5 @@ func initSearchComponents(ctx context.Context, createStorageFn func(indexPath st
 		Embedder: embedder,
 	}, cleanup, nil
 }
+
+func validateStorageType(s string) error { return nil }

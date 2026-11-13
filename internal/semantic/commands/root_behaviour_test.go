@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/samestrin/llm-semantic-axi/internal/semantic/config"
+	"github.com/samestrin/llm-semantic-axi/pkg/output"
 	"github.com/spf13/cobra"
 )
 
@@ -631,4 +632,57 @@ func TestRootCmd_AutoDiscoversTheSharedDefaultConfigPath(t *testing.T) {
 	if loadedConfig == nil || loadedConfig.MaxResults != 7 {
 		t.Fatalf("default config was not auto-loaded: %+v", loadedConfig)
 	}
+}
+
+// TestUnknownStorageIsRejected defends against an unknown --storage being
+// read as SQLite: `--storage redis` in a directory with no index printed
+// not_indexed and exited 0, a definitive answer about a backend never opened.
+// The flag is a malformed invocation (exit 2); a config value is not a flag,
+// so it fails as an error (exit 1). Both name the valid backends.
+func TestUnknownStorageIsRejected(t *testing.T) {
+	t.Run("flag", func(t *testing.T) {
+		newWorkspace(t)
+		var err error
+		out := captureStdout(t, func() { _, err = executeCommand(RootCmd(), "--storage", "redis") })
+		if err == nil {
+			t.Fatalf("--storage redis succeeded:\n%s", out)
+		}
+		if strings.Contains(out, "not_indexed") {
+			t.Errorf("--storage redis reported a state for a backend it never opened:\n%s", out)
+		}
+		if !strings.Contains(err.Error(), `"redis"`) || !strings.Contains(err.Error(), "sqlite") || !strings.Contains(err.Error(), "qdrant") {
+			t.Errorf("error %q does not name the bad value and the valid backends", err)
+		}
+		if code := output.ExitCodeFor(err); code != 2 {
+			t.Errorf("exit code = %d for a bad --storage, want 2", code)
+		}
+	})
+
+	t.Run("config", func(t *testing.T) {
+		dir := newWorkspace(t)
+		cfgPath := filepath.Join(dir, "config.yaml")
+		if err := os.WriteFile(cfgPath, []byte("semantic:\n  code_storage: redis\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		var err error
+		out := captureStdout(t, func() { _, err = executeCommand(RootCmd(), "--config", cfgPath, "--profile", "code") })
+		if err == nil {
+			t.Fatalf("code_storage: redis succeeded:\n%s", out)
+		}
+		if strings.Contains(out, "not_indexed") {
+			t.Errorf("code_storage: redis reported a state for a backend it never opened:\n%s", out)
+		}
+		if !strings.Contains(err.Error(), `"redis"`) || !strings.Contains(err.Error(), "sqlite") {
+			t.Errorf("error %q does not name the bad value and the valid backends", err)
+		}
+	})
+
+	t.Run("valid backends pass", func(t *testing.T) {
+		for _, backend := range []string{"sqlite", "qdrant"} {
+			newWorkspace(t)
+			if err := validateStorageType(backend); err != nil {
+				t.Errorf("validateStorageType(%q) = %v, want nil", backend, err)
+			}
+		}
+	})
 }
