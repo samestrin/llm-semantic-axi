@@ -73,6 +73,11 @@ type FallbackStore interface {
 
 	// ListFallbackFiles returns each indexed file that fell back, with why.
 	ListFallbackFiles(ctx context.Context) (map[string]FallbackReason, error)
+
+	// GetFallbackReason returns why one file fell back, or FallbackNone when it
+	// did not or is not indexed. It reads that file's record alone, so a caller
+	// asking about one file does not pay for listing the index.
+	GetFallbackReason(ctx context.Context, filePath string) (FallbackReason, error)
 }
 
 // ChunkWithEmbedding pairs a chunk with its embedding for batch operations

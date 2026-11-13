@@ -1431,11 +1431,13 @@ func (m *IndexManager) snapshotFile(ctx context.Context, filePath string) (*file
 	if snap.hash, err = m.storage.GetFileHash(ctx, filePath); err != nil {
 		return nil, fmt.Errorf("failed to read stored hash: %w", err)
 	}
-	fellBack, err := m.storedFallbacks(ctx)
-	if err != nil {
-		return nil, err
+	// Read this file's reason alone: listing every fallen-back file per changed
+	// file made an update O(changed x indexed).
+	if fs, ok := m.storage.(FallbackStore); ok {
+		if snap.reason, err = fs.GetFallbackReason(ctx, filePath); err != nil {
+			return nil, fmt.Errorf("failed to read the fallback reason: %w", err)
+		}
 	}
-	snap.reason = fellBack[filePath]
 	return snap, nil
 }
 

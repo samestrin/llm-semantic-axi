@@ -948,6 +948,29 @@ func (s *SQLiteStorage) SetFileHashWithFallback(ctx context.Context, filePath, h
 	return nil
 }
 
+// GetFallbackReason returns why one file fell back, or FallbackNone when it did
+// not or is not indexed.
+func (s *SQLiteStorage) GetFallbackReason(ctx context.Context, filePath string) (FallbackReason, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.closed {
+		return FallbackNone, ErrStorageClosed
+	}
+
+	var reason string
+	err := s.db.QueryRowContext(ctx,
+		`SELECT fallback_reason FROM file_hashes WHERE file_path = ?`,
+		filePath).Scan(&reason)
+	if errors.Is(err, sql.ErrNoRows) {
+		return FallbackNone, nil
+	}
+	if err != nil {
+		return FallbackNone, fmt.Errorf("failed to get fallback reason: %w", err)
+	}
+	return FallbackReason(reason), nil
+}
+
 // ListFallbackFiles returns each indexed file that fell back, with why.
 func (s *SQLiteStorage) ListFallbackFiles(ctx context.Context) (map[string]FallbackReason, error) {
 	s.mu.RLock()

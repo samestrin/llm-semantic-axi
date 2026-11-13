@@ -1497,6 +1497,30 @@ func (s *QdrantStorage) ListFallbackFiles(ctx context.Context) (map[string]Fallb
 	return result, nil
 }
 
+// GetFallbackReason returns why one file fell back, or FallbackNone when it did
+// not or is not indexed, reading that file's file_hash point alone.
+func (s *QdrantStorage) GetFallbackReason(ctx context.Context, filePath string) (FallbackReason, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if s.closed {
+		return FallbackNone, ErrStorageClosed
+	}
+
+	points, err := s.client.Get(ctx, &qdrant.GetPoints{
+		CollectionName: s.collectionName,
+		Ids:            []*qdrant.PointId{qdrant.NewID(fileHashID(filePath))},
+		WithPayload:    qdrant.NewWithPayloadInclude("fallback_reason"),
+	})
+	if err != nil {
+		return FallbackNone, fmt.Errorf("failed to get fallback reason: %w", err)
+	}
+	if len(points) == 0 {
+		return FallbackNone, nil
+	}
+	return FallbackReason(points[0].Payload["fallback_reason"].GetStringValue()), nil
+}
+
 // GetFileHash retrieves the stored content hash for a file path
 func (s *QdrantStorage) GetFileHash(ctx context.Context, filePath string) (string, error) {
 	s.mu.RLock()
