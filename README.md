@@ -240,7 +240,7 @@ Every timing is in [benchmarks/results-performance.json](benchmarks/results-perf
 
 ## How it works
 
-`index` splits each file into chunks (functions, methods and types through tree-sitter, or `go/ast` for Go; sections for Markdown; text windows for other text), embeds each chunk through the endpoint and stores the vectors with the call edges it found. `search` embeds the query and ranks chunks by similarity, optionally fused with a lexical index (`--hybrid`) and reranked. `callers` and `refs` read the stored edges and never call the endpoint.
+`index` splits each file into chunks (functions, methods and types through tree-sitter, or `go/ast` for Go; sections for Markdown; text windows for other text), embeds each chunk through the endpoint and stores the vectors with the call edges it found. `search` embeds the query and ranks chunks by similarity, optionally fused with a lexical index (`--hybrid`) and reranked. `callers` and `refs` read the stored edges. With the default SQLite storage they never call the endpoint; with Qdrant they call it once, to learn the embedding dimension before opening the collection.
 
 `llm-semantic-mcp` is an MCP server that runs the CLI with `--axi` for each tool call. It is a fallback for environments that cannot run a CLI; the CLI is the product. TOON encoding goes through [go-axi](https://github.com/samestrin/go-axi), which guards against the raw codec's failure mode: a type it cannot encode does not error, it emits empty output, and a command then silently prints nothing.
 
