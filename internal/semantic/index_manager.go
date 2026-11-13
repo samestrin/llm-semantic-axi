@@ -868,10 +868,15 @@ func (m *IndexManager) Update(ctx context.Context, rootPath string, opts UpdateO
 		}
 	}
 
-	// Check for removed files
+	// Check for removed files. A failed delete leaves the file searchable, so it
+	// is named rather than counted as removed.
 	for indexed := range indexedFiles {
 		if !currentFiles[indexed] {
-			removed, _ := m.storage.DeleteByFilePath(ctx, indexed)
+			removed, err := m.storage.DeleteByFilePath(ctx, indexed)
+			if err != nil {
+				result.addSkipped(indexed, fmt.Errorf("failed to remove deleted file from the index: %w", err))
+				continue
+			}
 			result.ChunksRemoved += removed
 			result.FilesRemoved++
 		}
@@ -935,11 +940,22 @@ func (m *IndexManager) UpdateGit(ctx context.Context, rootPath string, gitRef st
 			result.addSkipped(absPath, err)
 			continue
 		}
-		removed, _ := m.storage.DeleteByFilePath(ctx, absPath)
-		result.ChunksRemoved += removed
+		// Keep a copy of the old chunks, so a store that fails after they are
+		// deleted can put them back.
+		old, err := m.snapshotFile(ctx, absPath)
+		if err != nil {
+			result.addSkipped(absPath, err)
+			continue
+		}
+		removed, err := m.storage.DeleteByFilePath(ctx, absPath)
+		if err != nil {
+			result.addSkipped(absPath, fmt.Errorf("failed to remove the old chunks: %w", err))
+			continue
+		}
 
 		indexResult := &IndexResult{}
 		if err := m.storePreparedFile(ctx, prepared, indexResult, 0, 0); err == nil {
+			result.ChunksRemoved += removed
 			result.FilesUpdated++
 			result.ChunksCreated += indexResult.ChunksCreated
 			for _, path := range indexResult.FallbackFiles {
@@ -952,15 +968,23 @@ func (m *IndexManager) UpdateGit(ctx context.Context, rootPath string, gitRef st
 				}
 				result.addFallback(path, reason)
 			}
+		} else if restoreErr := m.restoreFile(ctx, absPath, old); restoreErr != nil {
+			result.ChunksRemoved += removed
+			result.addSkipped(absPath, fmt.Errorf("%w; restoring the old chunks also failed, so the file is not searchable until it is re-indexed: %v", err, restoreErr))
 		} else {
 			result.addSkipped(absPath, err)
 		}
 	}
 
-	// Handle deleted files
+	// Handle deleted files. A failed delete leaves the file searchable, so it is
+	// named rather than counted as removed.
 	for _, relPath := range deleted {
 		absPath := filepath.Join(rootPath, relPath)
-		removed, _ := m.storage.DeleteByFilePath(ctx, absPath)
+		removed, err := m.storage.DeleteByFilePath(ctx, absPath)
+		if err != nil {
+			result.addSkipped(absPath, fmt.Errorf("failed to remove deleted file from the index: %w", err))
+			continue
+		}
 		if removed > 0 {
 			result.ChunksRemoved += removed
 			result.FilesRemoved++
@@ -1369,6 +1393,65 @@ func (m *IndexManager) storePreparedFile(ctx context.Context, p *preparedFile, r
 	}
 
 	return nil
+}
+
+// fileSnapshot is a file's indexed state: its chunks with their embeddings,
+// and its hash with the reason it fell back.
+type fileSnapshot struct {
+	chunks []ChunkWithEmbedding
+	hash   string
+	reason FallbackReason
+}
+
+// snapshotFile reads a file's indexed state, so it can be restored if replacing
+// it fails part way.
+func (m *IndexManager) snapshotFile(ctx context.Context, filePath string) (*fileSnapshot, error) {
+	chunks, err := m.storage.List(ctx, ListOptions{FilePath: filePath})
+	if err != nil {
+		return nil, fmt.Errorf("failed to read the old chunks: %w", err)
+	}
+	ids := make([]string, len(chunks))
+	for i, c := range chunks {
+		ids[i] = c.ID
+	}
+	embeddings, err := m.storage.ReadEmbeddings(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read the old embeddings: %w", err)
+	}
+	snap := &fileSnapshot{chunks: make([]ChunkWithEmbedding, len(chunks))}
+	for i, c := range chunks {
+		emb, ok := embeddings[c.ID]
+		if !ok {
+			return nil, fmt.Errorf("old chunk %s has no stored embedding to restore", c.ID)
+		}
+		// List does not return the content hash; it is derived from the content.
+		c.ContentHash = c.ComputeContentHash()
+		snap.chunks[i] = ChunkWithEmbedding{Chunk: c, Embedding: emb}
+	}
+	if snap.hash, err = m.storage.GetFileHash(ctx, filePath); err != nil {
+		return nil, fmt.Errorf("failed to read stored hash: %w", err)
+	}
+	fellBack, err := m.storedFallbacks(ctx)
+	if err != nil {
+		return nil, err
+	}
+	snap.reason = fellBack[filePath]
+	return snap, nil
+}
+
+// restoreFile replaces whatever is stored for a file with snap. The restored
+// hash is the old content's, so the next update still re-indexes the file.
+func (m *IndexManager) restoreFile(ctx context.Context, filePath string, snap *fileSnapshot) error {
+	if _, err := m.storage.DeleteByFilePath(ctx, filePath); err != nil {
+		return err
+	}
+	if err := m.storage.CreateBatch(ctx, snap.chunks); err != nil {
+		return err
+	}
+	if snap.hash == "" {
+		return nil
+	}
+	return m.setFileHash(ctx, filePath, snap.hash, snap.reason)
 }
 
 // extractAndStoreRefs checks if the chunker implements RefExtractor and if
