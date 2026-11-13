@@ -2,6 +2,7 @@ package semantic
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"os"
 	"path/filepath"
@@ -212,5 +213,228 @@ func TestUpdateGit_FailedRestoreSaysTheFileIsUnsearchable(t *testing.T) {
 	}
 	if result.ChunksRemoved != 1 {
 		t.Errorf("ChunksRemoved = %d, want the 1 old chunk that is gone", result.ChunksRemoved)
+	}
+}
+
+// faultStorage wraps a real SQLiteStorage and fails the nth call of a named
+// method (counting from 1), so each read the F2 recovery path depends on can
+// be failed on its own. It keeps the FallbackStore methods, which the
+// recovery path reads and writes through.
+type faultStorage struct {
+	*SQLiteStorage
+	failOn map[string]int // method name -> call number to fail
+	calls  map[string]int
+	// noEmbeddings makes ReadEmbeddings return no rows without an error.
+	noEmbeddings bool
+}
+
+var errFault = errors.New("injected fault")
+
+func newFaultStorage(inner *SQLiteStorage, failOn map[string]int) *faultStorage {
+	return &faultStorage{SQLiteStorage: inner, failOn: failOn, calls: map[string]int{}}
+}
+
+func (s *faultStorage) fault(method string) error {
+	s.calls[method]++
+	if n, ok := s.failOn[method]; ok && n == s.calls[method] {
+		return errFault
+	}
+	return nil
+}
+
+func (s *faultStorage) List(ctx context.Context, opts ListOptions) ([]Chunk, error) {
+	if err := s.fault("List"); err != nil {
+		return nil, err
+	}
+	return s.SQLiteStorage.List(ctx, opts)
+}
+
+func (s *faultStorage) ReadEmbeddings(ctx context.Context, ids []string) (map[string][]float32, error) {
+	if err := s.fault("ReadEmbeddings"); err != nil {
+		return nil, err
+	}
+	if s.noEmbeddings {
+		return map[string][]float32{}, nil
+	}
+	return s.SQLiteStorage.ReadEmbeddings(ctx, ids)
+}
+
+func (s *faultStorage) GetFileHash(ctx context.Context, filePath string) (string, error) {
+	if err := s.fault("GetFileHash"); err != nil {
+		return "", err
+	}
+	return s.SQLiteStorage.GetFileHash(ctx, filePath)
+}
+
+func (s *faultStorage) ListFallbackFiles(ctx context.Context) (map[string]FallbackReason, error) {
+	if err := s.fault("ListFallbackFiles"); err != nil {
+		return nil, err
+	}
+	return s.SQLiteStorage.ListFallbackFiles(ctx)
+}
+
+func (s *faultStorage) DeleteByFilePath(ctx context.Context, filePath string) (int, error) {
+	if err := s.fault("DeleteByFilePath"); err != nil {
+		return 0, err
+	}
+	return s.SQLiteStorage.DeleteByFilePath(ctx, filePath)
+}
+
+func (s *faultStorage) CreateBatch(ctx context.Context, chunks []ChunkWithEmbedding) error {
+	if err := s.fault("CreateBatch"); err != nil {
+		return err
+	}
+	return s.SQLiteStorage.CreateBatch(ctx, chunks)
+}
+
+// gitUpdateFixture indexes one.go (function One) in a fresh repository over a
+// real sqlite database, then commits an edit renaming it to Two.
+type gitUpdateFixture struct {
+	repo, path, dbPath, oldHash string
+	inner                       *SQLiteStorage
+	recorded                    *LastIndex
+}
+
+func newGitUpdateFixture(t *testing.T) *gitUpdateFixture {
+	t.Helper()
+	f := &gitUpdateFixture{repo: t.TempDir()}
+	gitRun(t, f.repo, "init", "-q")
+	commitGoFile(t, f.repo, "one.go", "One")
+	f.dbPath = filepath.Join(t.TempDir(), "index.db")
+	inner, err := NewSQLiteStorage(f.dbPath, 4)
+	if err != nil {
+		t.Fatalf("NewSQLiteStorage: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := inner.Close(); err != nil {
+			t.Errorf("close storage: %v", err)
+		}
+	})
+	f.inner = inner
+	ctx := context.Background()
+	if _, err := NewIndexManager(inner, &trackingEmbedder{embedding: []float32{0.1, 0.2, 0.3, 0.4}}, goFactory()).Index(ctx, f.repo, IndexOptions{}); err != nil {
+		t.Fatalf("Index: %v", err)
+	}
+	f.path = filepath.Join(f.repo, "one.go")
+	if f.oldHash, err = inner.GetFileHash(ctx, f.path); err != nil || f.oldHash == "" {
+		t.Fatalf("one.go has no stored hash (%q, %v)", f.oldHash, err)
+	}
+	if f.recorded = mustLastIndex(t, inner); f.recorded == nil || f.recorded.Commit == "" {
+		t.Fatalf("Index recorded no commit (%+v)", f.recorded)
+	}
+	commitGoFile(t, f.repo, "one.go", "Two")
+	return f
+}
+
+func (f *gitUpdateFixture) update(t *testing.T, storage Storage) *UpdateResult {
+	t.Helper()
+	mgr := NewIndexManager(storage, &trackingEmbedder{embedding: []float32{0.1, 0.2, 0.3, 0.4}}, goFactory())
+	result, err := mgr.UpdateGit(context.Background(), f.repo, "HEAD~1", UpdateOptions{Domain: "code"})
+	if err != nil {
+		t.Fatalf("UpdateGit: %v", err)
+	}
+	return result
+}
+
+// assertSkippedAndUntouched checks one.go was named as skipped with want in
+// its error, and that its old chunk, hash and the last index are as they were.
+func (f *gitUpdateFixture) assertSkippedAndUntouched(t *testing.T, result *UpdateResult, want string) {
+	t.Helper()
+	ctx := context.Background()
+	if result.FilesSkipped != 1 || len(result.Errors) != 1 || !strings.Contains(result.Errors[0], f.path) || !strings.Contains(result.Errors[0], want) {
+		t.Errorf("skipped %d, errors %v; want one.go named with %q", result.FilesSkipped, result.Errors, want)
+	}
+	if result.FilesUpdated != 0 || result.ChunksRemoved != 0 {
+		t.Errorf("updated %d files, removed %d chunks; want 0 and 0", result.FilesUpdated, result.ChunksRemoved)
+	}
+	chunks, err := f.inner.GetChunksByFilePath(ctx, f.path)
+	if err != nil || len(chunks) != 1 || chunks[0].Name != "One" {
+		t.Errorf("one.go chunks = %+v (err %v), want the old One chunk", chunks, err)
+	}
+	if hash, err := f.inner.GetFileHash(ctx, f.path); err != nil || hash != f.oldHash {
+		t.Errorf("one.go hash = %q (err %v), want the old %q", hash, err, f.oldHash)
+	}
+	if got := mustLastIndex(t, f.inner); got == nil || got.Commit != f.recorded.Commit {
+		t.Errorf("last index = %+v, want it left at %s", got, f.recorded.Commit)
+	}
+}
+
+// TestUpdateGit_UnreadableOldStateLeavesTheFileAlone defends the snapshot
+// guards: if any read of a file's indexed state fails, the old chunks must
+// not be deleted, since a later store failure would then have nothing to put
+// back and the file would drop out of search while reported only as skipped.
+func TestUpdateGit_UnreadableOldStateLeavesTheFileAlone(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		failOn map[string]int
+		noEmb  bool
+		want   string
+	}{
+		{"list chunks", map[string]int{"List": 1}, false, "failed to read the old chunks"},
+		{"read embeddings", map[string]int{"ReadEmbeddings": 1}, false, "failed to read the old embeddings"},
+		{"missing embedding", nil, true, "has no stored embedding"},
+		// The first GetFileHash is fileNeedsUpdate's; the second is the snapshot's.
+		{"read hash", map[string]int{"GetFileHash": 2}, false, "failed to read stored hash"},
+		{"read fallbacks", map[string]int{"ListFallbackFiles": 1}, false, "failed to read the files that fell back"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newGitUpdateFixture(t)
+			storage := newFaultStorage(f.inner, tc.failOn)
+			storage.noEmbeddings = tc.noEmb
+			result := f.update(t, storage)
+			f.assertSkippedAndUntouched(t, result, tc.want)
+			if storage.calls["DeleteByFilePath"] != 0 {
+				t.Errorf("DeleteByFilePath called %d times after the old state could not be read, want 0", storage.calls["DeleteByFilePath"])
+			}
+		})
+	}
+}
+
+// TestUpdateGit_RestoreDeleteFailureSaysNotSearchable defends restoreFile's
+// first step: if clearing the failed store cannot be done, nothing is put
+// back, and the error must say the file is not searchable.
+func TestUpdateGit_RestoreDeleteFailureSaysNotSearchable(t *testing.T) {
+	f := newGitUpdateFixture(t)
+	storage := newFaultStorage(f.inner, map[string]int{"CreateBatch": 1, "DeleteByFilePath": 2})
+	result := f.update(t, storage)
+	if result.FilesSkipped != 1 || len(result.Errors) != 1 || !strings.Contains(result.Errors[0], "not searchable") || !strings.Contains(result.Errors[0], errFault.Error()) {
+		t.Errorf("skipped %d, errors %v; want one.go named as not searchable with the delete error", result.FilesSkipped, result.Errors)
+	}
+	if storage.calls["CreateBatch"] != 1 {
+		t.Errorf("CreateBatch called %d times; restore must stop at the failed delete", storage.calls["CreateBatch"])
+	}
+	if got := mustLastIndex(t, f.inner); got == nil || got.Commit != f.recorded.Commit {
+		t.Errorf("last index = %+v, want it left at %s", got, f.recorded.Commit)
+	}
+}
+
+// TestUpdateGit_RestoreWithNoOldHashWritesNone defends restoreFile's
+// empty-hash return: a file indexed with chunks but no hash row gets its
+// chunks back and no invented hash, so the next update still re-indexes it.
+func TestUpdateGit_RestoreWithNoOldHashWritesNone(t *testing.T) {
+	f := newGitUpdateFixture(t)
+	db, err := sql.Open("sqlite", f.dbPath)
+	if err != nil {
+		t.Fatalf("open index: %v", err)
+	}
+	if _, err := db.Exec(`DELETE FROM file_hashes WHERE file_path = ?`, f.path); err != nil {
+		t.Fatalf("drop hash row: %v", err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatalf("close index: %v", err)
+	}
+
+	result := f.update(t, newFaultStorage(f.inner, map[string]int{"CreateBatch": 1}))
+	if result.FilesSkipped != 1 || len(result.Errors) != 1 || strings.Contains(result.Errors[0], "not searchable") {
+		t.Errorf("skipped %d, errors %v; want one.go skipped with its old chunks restored", result.FilesSkipped, result.Errors)
+	}
+	ctx := context.Background()
+	chunks, err := f.inner.GetChunksByFilePath(ctx, f.path)
+	if err != nil || len(chunks) != 1 || chunks[0].Name != "One" {
+		t.Errorf("one.go chunks = %+v (err %v), want the old One chunk back", chunks, err)
+	}
+	// An empty hash row also reads back as "", so ask whether a row exists.
+	if indexed, err := f.inner.ListIndexedFiles(ctx); err != nil || indexed[f.path] {
+		t.Errorf("one.go has a hash row after restoring a file that had none (err %v)", err)
 	}
 }
