@@ -166,30 +166,42 @@ func diagnoseZeroEdges(ctx context.Context, rs semantic.RefStorage, symbol, noun
 		}, nil
 	}
 
-	var withEdges, without []string
+	// noCalls holds the languages with import or type edges but no call edges:
+	// for callers they are not covered, but "records no edges" would be false.
+	var withEdges, without, noCalls []string
 	for _, l := range langs {
 		name := l.Language
 		if name == "" {
 			name = "unknown language"
 		}
-		if l.HasEdges && (!calls || l.HasCallEdges) {
+		switch {
+		case l.HasEdges && (!calls || l.HasCallEdges):
 			withEdges = append(withEdges, name)
-		} else {
+		case l.HasEdges:
+			noCalls = append(noCalls, name)
+		default:
 			without = append(without, name)
 		}
 	}
 
 	if len(withEdges) == 0 {
+		kind := "edges"
+		if len(noCalls) > 0 {
+			kind = "call edges"
+		}
 		return &zeroEdges{
 			Status: zeroNotIndexedForEdges,
-			Message: fmt.Sprintf("No %s %s: not indexed for edges (%s is indexed as %s, and the index records no edges for it), so this does not mean none exist",
-				noun, symbol, symbol, strings.Join(without, ", ")),
+			Message: fmt.Sprintf("No %s %s: not indexed for edges (%s is indexed as %s, and the index records no %s for it), so this does not mean none exist",
+				noun, symbol, symbol, strings.Join(append(without, noCalls...), ", "), kind),
 		}, nil
 	}
 
 	msg := fmt.Sprintf("No %s %s recorded in the call graph", noun, symbol)
 	if len(without) > 0 {
 		msg += fmt.Sprintf("; its %s chunks are not indexed for edges", strings.Join(without, ", "))
+	}
+	if len(noCalls) > 0 {
+		msg += fmt.Sprintf("; its %s chunks record no call edges", strings.Join(noCalls, ", "))
 	}
 	return &zeroEdges{Status: zeroNoneRecorded, Message: msg}, nil
 }

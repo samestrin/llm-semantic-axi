@@ -79,8 +79,8 @@ type PerfResults struct {
 }
 
 // Validate refuses results that would print a number nobody measured: a
-// case with no timings, a zero timing, fewer timings than runs, or a blank
-// stamp.
+// case with no timings, a zero timing, fewer timings than runs, a blank
+// stamp, a negative embedder latency or an embedder with no dimensions.
 func (r *PerfResults) Validate() error {
 	var missing []string
 	for name, blank := range map[string]bool{
@@ -88,6 +88,7 @@ func (r *PerfResults) Validate() error {
 		"machine cpu": r.Machine.CPU == "", "machine threads": r.Machine.Threads <= 0,
 		"machine ram": r.Machine.RAMBytes == 0, "machine os": r.Machine.OS == "",
 		"machine kernel": r.Machine.Kernel == "", "corpus files": r.Corpus.Files <= 0,
+		"embedder dims": r.Embedder.Dims <= 0,
 	} {
 		if blank {
 			missing = append(missing, name)
@@ -96,6 +97,9 @@ func (r *PerfResults) Validate() error {
 	if len(missing) > 0 {
 		sort.Strings(missing)
 		return fmt.Errorf("results lack %s", strings.Join(missing, ", "))
+	}
+	if r.Embedder.LatencyMicros < 0 {
+		return fmt.Errorf("embedder latency is %d us; a wait cannot be negative", r.Embedder.LatencyMicros)
 	}
 	if len(r.Cases) == 0 {
 		return errors.New("results hold no cases")
