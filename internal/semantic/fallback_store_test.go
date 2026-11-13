@@ -32,6 +32,17 @@ func assertFallbackStore(t *testing.T, fs FallbackStore, storage Storage) {
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("ListFallbackFiles = %v, want %v", got, want)
 	}
+	// The per-file read answers for one file without listing the index.
+	for path, want := range map[string]FallbackReason{
+		"/r/parse.py":   FallbackParseFailed,
+		"/r/chunker.py": FallbackChunkerFailed,
+		"/r/clean.py":   FallbackNone,
+		"/r/absent.py":  FallbackNone,
+	} {
+		if got, err := fs.GetFallbackReason(ctx, path); err != nil || got != want {
+			t.Errorf("GetFallbackReason(%s) = %q, %v; want %q", path, got, err, want)
+		}
+	}
 	if hash, err := storage.GetFileHash(ctx, "/r/parse.py"); err != nil || hash != "h1" {
 		t.Errorf("GetFileHash after SetFileHashWithFallback = %q, %v; want h1", hash, err)
 	}
@@ -46,6 +57,9 @@ func assertFallbackStore(t *testing.T, fs FallbackStore, storage Storage) {
 	}
 	if _, still := got["/r/parse.py"]; still || len(got) != 1 {
 		t.Errorf("ListFallbackFiles after a clean re-hash = %v, want only chunker.py", got)
+	}
+	if reason, err := fs.GetFallbackReason(ctx, "/r/parse.py"); err != nil || reason != FallbackNone {
+		t.Errorf("GetFallbackReason after a clean re-hash = %q, %v; want none", reason, err)
 	}
 }
 

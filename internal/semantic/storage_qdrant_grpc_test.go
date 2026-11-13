@@ -1015,6 +1015,9 @@ func TestQdrantStorage_ClosedStorageRejectsEveryOperation(t *testing.T) {
 	if _, err := storage.GetFileHash(ctx, "/a.go"); !errors.Is(err, ErrStorageClosed) {
 		t.Errorf("GetFileHash = %v, want ErrStorageClosed", err)
 	}
+	if _, err := storage.GetFallbackReason(ctx, "/a.go"); !errors.Is(err, ErrStorageClosed) {
+		t.Errorf("GetFallbackReason = %v, want ErrStorageClosed", err)
+	}
 	if _, err := storage.GetMemory(ctx, "m"); !errors.Is(err, ErrStorageClosed) {
 		t.Errorf("GetMemory = %v, want ErrStorageClosed", err)
 	}
@@ -1653,6 +1656,21 @@ func TestQdrantStorage_GetFileHashWrapsFailure(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "failed to get file hash") {
 		t.Errorf("error = %q, want it to mention the file hash", err)
+	}
+}
+
+// TestQdrantStorage_GetFallbackReasonWrapsFailure pins that a failed lookup
+// is an error, not the "did not fall back" empty reason.
+func TestQdrantStorage_GetFallbackReasonWrapsFailure(t *testing.T) {
+	storage, fq := newFakeQdrantStorage(t, "reasonfail", 4)
+	fq.setFailure("GetPoints", status.Error(codes.Unavailable, "down"))
+
+	_, err := storage.GetFallbackReason(context.Background(), "/a.go")
+	if err == nil {
+		t.Fatal("expected GetFallbackReason to fail when the point lookup fails")
+	}
+	if !strings.Contains(err.Error(), "failed to get fallback reason") {
+		t.Errorf("error = %q, want it to mention the fallback reason", err)
 	}
 }
 

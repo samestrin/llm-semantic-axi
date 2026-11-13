@@ -273,6 +273,13 @@ func (s *faultStorage) ListFallbackFiles(ctx context.Context) (map[string]Fallba
 	return s.SQLiteStorage.ListFallbackFiles(ctx)
 }
 
+func (s *faultStorage) GetFallbackReason(ctx context.Context, filePath string) (FallbackReason, error) {
+	if err := s.fault("GetFallbackReason"); err != nil {
+		return FallbackNone, err
+	}
+	return s.SQLiteStorage.GetFallbackReason(ctx, filePath)
+}
+
 func (s *faultStorage) DeleteByFilePath(ctx context.Context, filePath string) (int, error) {
 	if err := s.fault("DeleteByFilePath"); err != nil {
 		return 0, err
@@ -375,7 +382,7 @@ func TestUpdateGit_UnreadableOldStateLeavesTheFileAlone(t *testing.T) {
 		{"missing embedding", nil, true, "has no stored embedding"},
 		// The first GetFileHash is fileNeedsUpdate's; the second is the snapshot's.
 		{"read hash", map[string]int{"GetFileHash": 2}, false, "failed to read stored hash"},
-		{"read fallbacks", map[string]int{"ListFallbackFiles": 1}, false, "failed to read the files that fell back"},
+		{"read fallback reason", map[string]int{"GetFallbackReason": 1}, false, "failed to read the fallback reason"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newGitUpdateFixture(t)
@@ -387,6 +394,31 @@ func TestUpdateGit_UnreadableOldStateLeavesTheFileAlone(t *testing.T) {
 				t.Errorf("DeleteByFilePath called %d times after the old state could not be read, want 0", storage.calls["DeleteByFilePath"])
 			}
 		})
+	}
+}
+
+// TestUpdateGit_SnapshotReadsOnlyTheChangedFilesFallback defends the cost of
+// an incremental update: snapshotting a changed file must read that file's
+// fallback reason, not list every fallen-back file in the index, which made
+// UpdateGit O(changed x indexed). The reason it reads must still be restored
+// when the store fails.
+func TestUpdateGit_SnapshotReadsOnlyTheChangedFilesFallback(t *testing.T) {
+	f := newGitUpdateFixture(t)
+	ctx := context.Background()
+	if err := f.inner.SetFileHashWithFallback(ctx, f.path, f.oldHash, FallbackParseFailed); err != nil {
+		t.Fatalf("SetFileHashWithFallback: %v", err)
+	}
+	storage := newFaultStorage(f.inner, map[string]int{"CreateBatch": 1})
+	result := f.update(t, storage)
+	f.assertSkippedAndUntouched(t, result, errFault.Error())
+	if n := storage.calls["ListFallbackFiles"]; n != 0 {
+		t.Errorf("ListFallbackFiles called %d times during UpdateGit, want 0", n)
+	}
+	if n := storage.calls["GetFallbackReason"]; n != 1 {
+		t.Errorf("GetFallbackReason called %d times for one changed file, want 1", n)
+	}
+	if reason, err := f.inner.GetFallbackReason(ctx, f.path); err != nil || reason != FallbackParseFailed {
+		t.Errorf("restored fallback reason = %q, %v; want %q", reason, err, FallbackParseFailed)
 	}
 }
 
