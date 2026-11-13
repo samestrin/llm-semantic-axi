@@ -197,3 +197,73 @@ func TestCallersAndRefsWriteTheJSONStalenessLineToTheGivenStderr(t *testing.T) {
 		}
 	}
 }
+
+// TestZeroCallersInALanguageWithOnlyImportEdges defends the callers wording
+// for a language whose chunks record import or type edges but no call edges:
+// it said "the index records no edges for it" and "its java chunks are not
+// indexed for edges", both false when the index holds that language's import
+// edges. callers answers from call edges, so it must say no CALL edges.
+func TestZeroCallersInALanguageWithOnlyImportEdges(t *testing.T) {
+	ctx := context.Background()
+	storage, err := semantic.NewSQLiteStorage(filepath.Join(t.TempDir(), "semantic.db"), 4)
+	if err != nil {
+		t.Fatalf("NewSQLiteStorage: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := storage.Close(); err != nil {
+			t.Errorf("close: %v", err)
+		}
+	})
+	emb := []float32{0.1, 0.2, 0.3, 0.4}
+	for _, c := range []semantic.Chunk{
+		{ID: "java-widget", FilePath: "/r/Widget.java", Type: semantic.ChunkFunction, Name: "Widget", Language: "java"},
+		{ID: "java-user", FilePath: "/r/User.java", Type: semantic.ChunkFunction, Name: "User", Language: "java"},
+		{ID: "go-widget", FilePath: "/r/widget.go", Type: semantic.ChunkFunction, Name: "Gadget", Language: "go"},
+		{ID: "go-caller", FilePath: "/r/caller.go", Type: semantic.ChunkFunction, Name: "Caller", Language: "go"},
+	} {
+		if err := storage.Create(ctx, c, emb); err != nil {
+			t.Fatalf("Create %s: %v", c.ID, err)
+		}
+	}
+	if err := storage.StoreRefs(ctx, []semantic.ChunkRef{
+		{ChunkID: "java-user", RefType: semantic.RefImports, RefName: "Widget"},
+		{ChunkID: "go-caller", RefType: semantic.RefCalls, RefName: "Other"},
+	}); err != nil {
+		t.Fatalf("StoreRefs: %v", err)
+	}
+
+	zero, err := diagnoseZeroEdges(ctx, storage, "Widget", "callers of", true, 0)
+	if err != nil {
+		t.Fatalf("diagnoseZeroEdges: %v", err)
+	}
+	if zero.Status != zeroNotIndexedForEdges {
+		t.Errorf("status = %q, want %q", zero.Status, zeroNotIndexedForEdges)
+	}
+	if strings.Contains(zero.Message, "records no edges") || !strings.Contains(zero.Message, "records no call edges") {
+		t.Errorf("message %q must say java records no call edges, not no edges", zero.Message)
+	}
+
+	// The same name in Go, which records call edges, and in Java.
+	if err := storage.Create(ctx, semantic.Chunk{ID: "go-widget2", FilePath: "/r/w2.go", Type: semantic.ChunkFunction, Name: "Widget", Language: "go"}, emb); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	zero, err = diagnoseZeroEdges(ctx, storage, "Widget", "callers of", true, 0)
+	if err != nil {
+		t.Fatalf("diagnoseZeroEdges: %v", err)
+	}
+	if zero.Status != zeroNoneRecorded {
+		t.Errorf("status = %q, want %q", zero.Status, zeroNoneRecorded)
+	}
+	if strings.Contains(zero.Message, "not indexed for edges") || !strings.Contains(zero.Message, "its java chunks record no call edges") {
+		t.Errorf("message %q must say the java chunks record no call edges", zero.Message)
+	}
+
+	// refs counts any edge, so java's import edge is edge support there.
+	zero, err = diagnoseZeroEdges(ctx, storage, "Widget", "references from", false, 0)
+	if err != nil {
+		t.Fatalf("diagnoseZeroEdges: %v", err)
+	}
+	if zero.Message != "No references from Widget recorded in the call graph" {
+		t.Errorf("refs message = %q, want none recorded with no caveat", zero.Message)
+	}
+}
