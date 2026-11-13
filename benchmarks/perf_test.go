@@ -86,6 +86,11 @@ func TestValidateRefusesAMissingStamp(t *testing.T) {
 		"os":      func(r *PerfResults) { r.Machine.OS = "" },
 		"kernel":  func(r *PerfResults) { r.Machine.Kernel = "" },
 		"files":   func(r *PerfResults) { r.Corpus.Files = 0 },
+		// The embedder line prints both; a negative wait or a vector of no
+		// size is a number nobody measured.
+		"negative latency": func(r *PerfResults) { r.Embedder.LatencyMicros = -1 },
+		"zero dims":        func(r *PerfResults) { r.Embedder.Dims = 0 },
+		"negative dims":    func(r *PerfResults) { r.Embedder.Dims = -256 },
 	} {
 		r := samplePerf()
 		mut(r)
