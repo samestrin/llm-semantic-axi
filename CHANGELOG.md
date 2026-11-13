@@ -15,6 +15,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - Removing a file and running `index-update` no longer leaves its record behind in a SQLite index: `index-status` stops listing the deleted file under text windows, and later updates stop counting the same removal again.
 - `docs/demo/README.md` now says Go, JavaScript, TypeScript, Python and Rust record call edges, matching `docs/languages.md`; it said Go only.
+- `index-update` no longer counts a file it failed to remove from the index: the delete error was discarded, the file was counted in `files_removed` and the last indexed commit moved on while the file was still searchable. The file is now named in `errors`, counted in `files_skipped`, and the last indexed commit stays where it was. This applies to the full scan and to git mode, for deleted and changed files.
+- `index-update` in git mode keeps a changed file searchable when its new chunks fail to store. The old chunks had already been deleted, so a file named in `errors` had dropped out of search. The old chunks and hash are now put back, and the next update re-indexes the file. If putting them back also fails, the error says the file is not searchable until it is re-indexed.
+- An unknown storage backend is rejected. `--storage redis` was read as SQLite, so a bare run in a directory with no index printed `not_indexed` and exited 0. The flag now exits 2, and an unknown `storage` value in the config exits 1. Both name `sqlite` and `qdrant`.
+- `callers` in a language that records import or type edges but no call edges now says the index records no call edges for it. It said the index "records no edges" for that language, or that its chunks "are not indexed for edges", which was false.
+- README: `callers` and `refs` never call the embedding endpoint with SQLite storage, but with Qdrant they call it once to learn the embedding dimension. The README said they never call it.
+- The README environment variable check reads `os.Getenv` and `os.LookupEnv` calls from the Go syntax tree, so a variable named in a comment or a string no longer counts as read. A call that reads a variable whose name is not a literal now fails the check.
+- The performance benchmark (`make bench-perf` and `make bench-perf-write`) refuses results with a negative embedder latency or an embedder with no dimensions, as it already refused a zero timing.
 
 ## [1.2.0] - 2026-11-12
 
