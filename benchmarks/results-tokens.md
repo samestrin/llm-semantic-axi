@@ -19,13 +19,13 @@ Totals over 10 queries:
 |---|---|---:|---:|---:|---:|
 | JSON | `--json` | 38831 | 129875 | 3883.1 | 100.0% |
 | TOON | `--axi` | 11020 | 38012 | 1102.0 | 28.4% |
-| Plain | *(none)* | 6007 | 19361 | 600.7 | 15.5% |
+| Plain | `--plain` | 6007 | 19361 | 600.7 | 15.5% |
 
 On these 10 queries, `--axi` printed 28.4% of the tokens `--json` printed, and plain output printed 15.5%.
 
 Tokens per query:
 
-| # | Query | `--json` | `--axi` | *(none)* |
+| # | Query | `--json` | `--axi` | `--plain` |
 |---:|---|---:|---:|---:|
 | 1 | where is the retry logic for embedding requests | 3078 | 1134 | 525 |
 | 2 | how does the index decide a file needs re-indexing | 5327 | 1086 | 657 |

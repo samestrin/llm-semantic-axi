@@ -58,11 +58,13 @@ type Format struct {
 }
 
 // Formats lists the measured modes. JSON comes first: it is the baseline the
-// others are compared to, and the generator checks its result count.
+// others are compared to, and the generator checks its result count. Every
+// mode passes its flag explicitly — the CLI's default is not a measured mode —
+// and Flag is how the results table names the flags in Flags.
 var Formats = []Format{
 	{Dir: "json", Ext: "json", Name: "JSON", Flag: "`--json`", Says: "`--json`", Flags: []string{"--json"}},
 	{Dir: "axi", Ext: "toon", Name: "TOON", Flag: "`--axi`", Says: "`--axi`", Flags: []string{"--axi"}},
-	{Dir: "plain", Ext: "txt", Name: "Plain", Flag: "*(none)*", Says: "plain output", Flags: nil},
+	{Dir: "plain", Ext: "txt", Name: "Plain", Flag: "`--plain`", Says: "plain output", Flags: []string{"--plain"}},
 }
 
 // OutputPath is where query i's output in format f lives under dir.
