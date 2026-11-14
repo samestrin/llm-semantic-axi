@@ -21,7 +21,7 @@ import (
 
 // PinnedCommit is the commit of this repository the outputs were generated
 // from: both the indexed source and the CLI that rendered the results.
-const PinnedCommit = "573311bad7007b55c009ec0d8746244a94038fc4"
+const PinnedCommit = "9ff21f649235f6cccc26ee86a6f8d7c84aecd853"
 
 // HashEmbedder is the stand-in embedding endpoint used to generate the
 // outputs. Text is split into words (identifiers at camelCase and _

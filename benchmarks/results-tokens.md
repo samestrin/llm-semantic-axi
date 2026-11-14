@@ -17,26 +17,26 @@ Totals over 10 queries:
 
 | Format | Flag | Tokens (cl100k) | Bytes | Tokens per query | vs `--json` |
 |---|---|---:|---:|---:|---:|
-| JSON | `--json` | 38831 | 129875 | 3883.1 | 100.0% |
-| TOON | `--axi` | 11020 | 38012 | 1102.0 | 28.4% |
-| Plain | `--plain` | 6007 | 19361 | 600.7 | 15.5% |
+| JSON | `--json` | 43941 | 145637 | 4394.1 | 100.0% |
+| TOON | `--axi` | 11291 | 38016 | 1129.1 | 25.7% |
+| Plain | `--plain` | 6771 | 21248 | 677.1 | 15.4% |
 
-On these 10 queries, `--axi` printed 28.4% of the tokens `--json` printed, and plain output printed 15.5%.
+On these 10 queries, `--axi` printed 25.7% of the tokens `--json` printed, and plain output printed 15.4%.
 
 Tokens per query:
 
 | # | Query | `--json` | `--axi` | `--plain` |
 |---:|---|---:|---:|---:|
-| 1 | where is the retry logic for embedding requests | 3078 | 1134 | 525 |
-| 2 | how does the index decide a file needs re-indexing | 5327 | 1086 | 657 |
-| 3 | where are call edges extracted from Go source | 3446 | 1113 | 596 |
-| 4 | how is TOON output encoded | 3601 | 1087 | 531 |
-| 5 | how are dense and lexical search results fused | 4804 | 1122 | 665 |
-| 6 | where is the sqlite schema created | 3548 | 1047 | 600 |
-| 7 | how does the lock file stop two indexers running at once | 2770 | 1090 | 563 |
-| 8 | how are memory entries stored and searched | 3883 | 1046 | 563 |
-| 9 | how does the MCP server run the CLI | 4245 | 1137 | 638 |
-| 10 | where are the tree-sitter chunkers registered | 4129 | 1158 | 669 |
+| 1 | where is the retry logic for embedding requests | 4368 | 1212 | 654 |
+| 2 | how does the index decide a file needs re-indexing | 4885 | 1124 | 785 |
+| 3 | where are call edges extracted from Go source | 5068 | 1103 | 690 |
+| 4 | how is TOON output encoded | 2718 | 1087 | 560 |
+| 5 | how are dense and lexical search results fused | 4795 | 1133 | 675 |
+| 6 | where is the sqlite schema created | 4364 | 1118 | 676 |
+| 7 | how does the lock file stop two indexers running at once | 4235 | 1104 | 680 |
+| 8 | how are memory entries stored and searched | 3666 | 1061 | 568 |
+| 9 | how does the MCP server run the CLI | 4918 | 1170 | 706 |
+| 10 | where are the tree-sitter chunkers registered | 4924 | 1179 | 777 |
 <!-- tokens:end -->
 
 ### Why plain text is the smallest
@@ -51,8 +51,8 @@ So plain is a list of where to look, and `--axi` is the start of what is there. 
 
 ## Method
 
-- **Corpus and tool, pinned.** The index is built from this repository at commit `573311bad7007b55c009ec0d8746244a94038fc4` (`PinnedCommit` in `generate.go`), and the CLI that renders the results is built from the same commit. The benchmark files themselves were added after it.
-- **Queries.** The ten questions in `queries.txt`, fixed. Each is run once per mode as `llm-semantic search "<query>"` with `--json`, `--axi`, or no flag, and default settings otherwise (`--top 10`, dense search, the `code` profile, sqlite storage).
+- **Corpus and tool, pinned.** The index is built from this repository at commit `9ff21f649235f6cccc26ee86a6f8d7c84aecd853` (`PinnedCommit` in `generate.go`), and the CLI that renders the results is built from the same commit. That commit is epic 27's merge, where TOON became the default output and `--plain` was added. The benchmark files themselves are part of the pinned source, so the index includes the outputs checked in at that commit and some queries return benchmark files.
+- **Queries.** The ten questions in `queries.txt`, fixed. Each is run once per mode as `llm-semantic search "<query>"` with `--json`, `--axi`, or `--plain`, and default settings otherwise (`--top 10`, dense search, the `code` profile, sqlite storage).
 - **Same results in every mode.** All three modes of a query read the same index with the same query vector, so they render the same ten results; only the rendering differs. The generator refuses to write outputs for a query whose `--json` result list is empty, so no number here measures an empty answer, and it refuses a `--axi` or plain output whose stated count (`total: N`, `N results for`) differs from the `--json` count.
 - **What is counted.** Standard output only, as the command prints it. In `--json` mode the staleness line goes to standard error and is not counted; in the other modes there is none, because the index is fresh.
 - **Paths.** The commit is checked out into a temporary directory; the generator rewrites that directory to `/work/llm-semantic-axi` in every output so the files do not depend on the machine they were made on, and refuses to write an output in which the temporary path survives.

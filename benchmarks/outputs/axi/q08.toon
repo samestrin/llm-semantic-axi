@@ -1,20 +1,20 @@
-help[2]: Run `llm-semantic callers <name>` or `llm-semantic refs <name>` on a result to see its call sites (Go only),"Narrow with `--path <prefix>` or `--type <kind>`, or raise `--top` for more results"
+help[2]: "Run `llm-semantic callers <name>` or `llm-semantic refs <name>` on a result to see its call sites (Go, JavaScript, TypeScript, Python and Rust)","Narrow with `--path <prefix>` or `--type <kind>`, or raise `--top` for more results"
 query: how are memory entries stored and searched
 results[10]{content,file,name,score}:
   "// MemoryWithEmbedding pairs a memory entry with its embedding for batch operations\ntype MemoryWithEmbedding struct {\n\tEntry     MemoryEntry\n\tEmbedding []float32\n}","/work/llm-semantic-axi/internal/semantic/memory_entry.go:178",MemoryWithEmbedding,0.3768538
-  "// StoreMemoryBatch stores multiple memory entries with their embeddings\nfunc (s *QdrantStorage) StoreMemoryBatch(ctx context.Context, entries []MemoryWithEmbedding) error {\n\tif len(entries) == 0 {\n\t\t… (456 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/storage_qdrant.go:1063",StoreMemoryBatch,0.36784148
+  "// StoreMemoryBatch stores multiple memory entries with their embeddings\nfunc (s *QdrantStorage) StoreMemoryBatch(ctx context.Context, entries []MemoryWithEmbedding) error {\n\tif len(entries) == 0 {\n\t\t… (456 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/storage_qdrant.go:1113",StoreMemoryBatch,0.36784148
   "// MemoryListOptions configures how memory entries are listed\ntype MemoryListOptions struct {\n\tLimit  int          // Maximum number of entries to return (0 = no limit)\n\tOffset int          // Number … (153 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/memory_entry.go:184",MemoryListOptions,0.36262032
   "// MemoryStats holds memory usage statistics\ntype MemoryStats struct {\n\tChunksInMemory   int\n\tEmbeddingBytes   int64\n\tEstimatedTotalMB float64\n}","/work/llm-semantic-axi/internal/semantic/memory.go:217",MemoryStats,0.35714287
-  "// memoryResultHelp is the --axi next-step list for memory-search.\nfunc memoryResultHelp(total int) []string {\n\tif total == 0 {\n\t\treturn []string{\n\t\t\t\"Lower the cutoff with `--threshold 0` and drop fi… (151 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/commands/memory.go:1543",memoryResultHelp,0.35623524
-  "// TestQdrantStorage_MemoryTagFiltering pins the post-search tag filter, which\n// Qdrant cannot express server-side, including its case-insensitivity.\nfunc TestQdrantStorage_MemoryTagFiltering(t *test… (1252 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/storage_qdrant_grpc_test.go:1060",TestQdrantStorage_MemoryTagFiltering,0.35429138
+  "// memoryResultHelp is the --axi next-step list for memory-search.\nfunc memoryResultHelp(total int) []string {\n\tif total == 0 {\n\t\treturn []string{\n\t\t\t\"Lower the cutoff with `--threshold 0` and drop fi… (151 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/commands/memory.go:1534",memoryResultHelp,0.35623524
+  "// TestQdrantStorage_MemoryTagFiltering pins the post-search tag filter, which\n// Qdrant cannot express server-side, including its case-insensitivity.\nfunc TestQdrantStorage_MemoryTagFiltering(t *test… (1252 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/storage_qdrant_grpc_test.go:1063",TestQdrantStorage_MemoryTagFiltering,0.35429138
   "// backfillMemoryFTS5 populates the memory FTS5 index from existing memory entries.\nfunc (s *SQLiteStorage) backfillMemoryFTS5() error {\n\tvar ftsCount, memoryCount int\n\n\terr := s.db.QueryRow(`SELECT C… (584 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/fts_sqlite.go:547",backfillMemoryFTS5,0.35078037
-  "// MemoryStatsTracker is an optional interface for tracking memory retrieval statistics.\n// Storage implementations that support memory stats should implement this interface.\ntype MemoryStatsTracker i… (1151 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/storage.go:204",MemoryStatsTracker,0.34342837
+  "// MemoryStatsTracker is an optional interface for tracking memory retrieval statistics.\n// Storage implementations that support memory stats should implement this interface.\ntype MemoryStatsTracker i… (1151 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/storage.go:227",MemoryStatsTracker,0.34342837
+  "      \"content\": \"// MemoryListOptions configures how memory entries are listed\\ntype MemoryListOptions struct {\\n\\tLimit  int          // Maximum number of entries to return (0 = no limit)\\n\\tOffset … (1224 more chars, use --full for all)","/work/llm-semantic-axi/benchmarks/outputs/json/q08.json:43",q08,0.3325653
   "func entryIDs(entries []MemoryEntry) []string {\n\tout := make([]string, len(entries))\n\tfor i, e := range entries {\n\t\tout[i] = e.ID\n\t}\n\treturn out\n}","/work/llm-semantic-axi/internal/semantic/storage_sqlite_memory_filters_test.go:365",entryIDs,0.3292523
-  "// BenchmarkSearchMemory_LargeIndex benchmarks SearchMemory with a large index\n// to verify constant memory usage across batch processing\nfunc BenchmarkSearchMemory_LargeIndex(b *testing.B) {\n\t// Use … (1884 more chars, use --full for all)","/work/llm-semantic-axi/internal/semantic/storage_sqlite_bench_test.go:10",BenchmarkSearchMemory_LargeIndex,0.3282762
 stale:
   commits_behind: 0
   files_changed: 0
-  indexed_at: "2026-11-05T22:28:38Z"
-  indexed_commit: 573311bad7007b55c009ec0d8746244a94038fc4
+  indexed_at: "2026-11-14T03:47:25Z"
+  indexed_commit: 9ff21f649235f6cccc26ee86a6f8d7c84aecd853
   state: fresh
 total: 10
