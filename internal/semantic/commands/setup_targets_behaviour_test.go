@@ -199,7 +199,8 @@ func TestSetupRepairCollapsesDuplicatesAndLeavesForeignHooks(t *testing.T) {
 		{"hooks":[{"type":"command","command":"llm-semantic"},{"type":"command","command":"echo keep"}]},
 		{"hooks":[{"type":"command","command":"'/old dir/llm-semantic' index-status || true"}]},
 		{"hooks":[{"type":"command","command":"llm-semantic search foo"}]},
-		{"hooks":[{"type":"command","command":"/x/other-tool index-status || true"}]}
+		{"hooks":[{"type":"command","command":"/x/other-tool index-status || true"}]},
+		{"hooks":[{"type":"command","command":"'/a' '/b/llm-semantic' index-status || true"}]}
 	]}}`
 	os.WriteFile(p, []byte(existing), 0o644)
 
@@ -207,7 +208,7 @@ func TestSetupRepairCollapsesDuplicatesAndLeavesForeignHooks(t *testing.T) {
 		t.Fatal(err)
 	}
 	got := hookCommandsIn(t, dir, "codex")
-	want := []string{setupHookCommand, "echo keep", "llm-semantic search foo", "/x/other-tool index-status || true"}
+	want := []string{setupHookCommand, "echo keep", "llm-semantic search foo", "/x/other-tool index-status || true", "'/a' '/b/llm-semantic' index-status || true"}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("commands = %q\nwant %q", got, want)
 	}

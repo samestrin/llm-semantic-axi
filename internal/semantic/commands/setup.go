@@ -453,16 +453,14 @@ func planCodexConfig(path string) (setupAction, error) {
 // the output to the session without asking the model to reply, as the
 // SessionStart hooks do for Claude Code and Codex.
 func opencodePluginContent(command string) []byte {
-	var lit bytes.Buffer
-	enc := json.NewEncoder(&lit)
-	enc.SetEscapeHTML(false)
-	_ = enc.Encode(command) // a string always encodes
+	// A JSON string is a valid JS string literal; a string always marshals.
+	lit, _ := json.Marshal(command)
 	return []byte(strings.Join([]string{
 		"// Managed by `llm-semantic setup` for OpenCode " + opencodePinnedVersion + " (@opencode-ai/plugin " + opencodePinnedVersion + ").",
 		"// Rerun `llm-semantic setup` to update this file; edits here are overwritten.",
 		`import type { Plugin } from "@opencode-ai/plugin"`,
 		"",
-		"const command = " + strings.TrimSuffix(lit.String(), "\n"),
+		"const command = " + string(lit),
 		"",
 		"export const LlmSemantic: Plugin = async ({ $, client, directory }) => ({",
 		"  event: async ({ event }) => {",
