@@ -8,7 +8,6 @@ import (
 
 	"github.com/samestrin/llm-semantic-axi/internal/semantic"
 	"github.com/samestrin/llm-semantic-axi/internal/semantic/config"
-	"github.com/samestrin/llm-semantic-axi/pkg/output"
 	"github.com/spf13/cobra"
 )
 
@@ -162,20 +161,14 @@ Supports any OpenAI-compatible embedding API (TEI, Ollama, vLLM, OpenAI, Azure, 
 			return runIndexStatus(cmd.Context(), GlobalJSONOutput)
 		},
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			// Publish --axi to the output package first, before anything here
-			// can return an error: main() builds its error formatter after
-			// Execute, and that formatter only knows about --axi through this
-			// default. Set unconditionally, so the value is always this
-			// invocation's and never one left over from an earlier one.
-			output.SetDefaultAXI(GlobalAXIOutput)
-
-			// Sync local command flags to global vars for error handling
-			if f := cmd.Flag("json"); f != nil && f.Changed {
-				GlobalJSONOutput = true
-			}
-			if f := cmd.Flag("min"); f != nil && f.Changed {
-				GlobalMinOutput = true
-			}
+			// Publish the output mode to the output package first, before
+			// anything here can return an error: main() builds its error
+			// formatter after Execute, and that formatter only knows the mode
+			// through this default. Set unconditionally, so the value is always
+			// this invocation's and never one left over from an earlier one.
+			// Contradictory format flags never get this far: the argument check
+			// rejectContradictoryFormats installs runs first.
+			resolveOutputMode(cmd)
 
 			// Validate config path early (reject whitespace-only paths)
 			// If user explicitly set --config but with only whitespace, report error
@@ -230,18 +223,14 @@ Supports any OpenAI-compatible embedding API (TEI, Ollama, vLLM, OpenAI, Azure, 
 	rootCmd.PersistentFlags().StringVar(&embedderType, "embedder", "openai", "Embedding provider: openai (default), cohere, huggingface, openrouter")
 	rootCmd.PersistentFlags().StringVar(&configPath, "config", "", "Path to YAML config file (reads 'semantic:' section)")
 	rootCmd.PersistentFlags().StringVar(&profile, "profile", "", "Profile name: code (default), docs, memory, sprints")
-	rootCmd.PersistentFlags().BoolVar(&GlobalJSONOutput, "json", false, "Output as JSON")
-	rootCmd.PersistentFlags().BoolVar(&GlobalMinOutput, "min", false, "Minimal/token-optimized output")
-	// Registered only now that every emit site routes through emitJSON. A
-	// persistent flag is accepted by every command, so registering it earlier
-	// would have meant commands that silently ignored it — printing ordinary
-	// output and exiting 0 while a consumer parsed TOON.
-	//
-	// No PersistentPreRunE sync block, unlike --json and --min: that block
-	// exists to promote a subcommand's LOCAL flag to the global, and no
-	// subcommand declares a local --axi. It also only ever assigns true, which
-	// is the exact shape that leaked modes between invocations in llm-support.
-	rootCmd.PersistentFlags().BoolVar(&GlobalAXIOutput, "axi", false, "Output as TOON (AXI token-dense format)")
+	rootCmd.PersistentFlags().BoolVar(&GlobalJSONOutput, "json", false, "Output as JSON (compatibility mode; the default is TOON)")
+	rootCmd.PersistentFlags().BoolVar(&GlobalMinOutput, "min", false, "Minimal/token-optimized TOON or JSON payload")
+	rootCmd.PersistentFlags().BoolVar(&plainOutput, "plain", false, "Output as human-readable text")
+	// TOON is the default, so --axi changes nothing; it stays accepted so v1
+	// invocations keep working. It is bound to its own variable, not to
+	// GlobalAXIOutput, which resolveOutputMode sets from all the format flags.
+	rootCmd.PersistentFlags().BoolVar(&axiAlias, "axi", false, "Output as TOON (accepted for compatibility; TOON is the default)")
+	GlobalAXIOutput = false
 
 	// Add subcommands
 	rootCmd.AddCommand(searchCmd())
@@ -263,6 +252,7 @@ Supports any OpenAI-compatible embedding API (TEI, Ollama, vLLM, OpenAI, Azure, 
 	// The flag handler is inherited by every subcommand.
 	rootCmd.SetFlagErrorFunc(flagError)
 	rejectUnknownCommands(rootCmd)
+	rejectContradictoryFormats(rootCmd)
 
 	return rootCmd
 }
@@ -571,6 +561,8 @@ func ResetGlobalsForTesting() {
 	GlobalJSONOutput = false
 	GlobalMinOutput = false
 	GlobalAXIOutput = false
+	axiAlias = false
+	plainOutput = false
 }
 
 // searchComponents holds initialized components needed for search operations.

@@ -205,7 +205,8 @@ func TestBareRunPrintsEachModesFormat(t *testing.T) {
 
 	run := func(args ...string) string {
 		root := RootCmd()
-		root.SetArgs(args)
+		// Never nil: cobra reads os.Args when no arguments were set.
+		root.SetArgs(append([]string{}, args...))
 		var err error
 		out := captureStdout(t, func() { err = root.Execute() })
 		if err != nil {

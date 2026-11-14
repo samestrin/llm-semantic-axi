@@ -31,19 +31,25 @@ func main() {
 	rootCmd := commands.RootCmd()
 
 	if err := rootCmd.Execute(); err != nil {
-		// A flag-parse or argument-count error never reaches PersistentPreRunE,
-		// so --axi was not published and a subcommand's local --json and --min
-		// were not copied to the globals; read them from the arguments instead.
+		// A flag-parse, argument-count or format-conflict error never reaches
+		// PersistentPreRunE, so the output mode was not published and a
+		// subcommand's local --json and --min were not copied to the globals;
+		// read them from the arguments instead. TOON is the default, and it
+		// is also the answer for contradictory format flags, which name no
+		// single format: the choice must not depend on which came first.
 		args := os.Args[1:]
-		if argsRequest(args, "axi") {
-			output.SetDefaultAXI(true)
+		plain, jsonOut, axi, min := argsRequest(args, "plain"), argsRequest(args, "json"), argsRequest(args, "axi"), argsRequest(args, "min")
+		if commands.FormatFlagConflict(plain, jsonOut, axi, min) != nil {
+			// The root's --json is bound during parsing, so clear it too.
+			plain, jsonOut, commands.GlobalJSONOutput = false, false, false
 		}
-		if argsRequest(args, "json") {
+		if jsonOut {
 			commands.GlobalJSONOutput = true
 		}
-		if argsRequest(args, "min") {
+		if min {
 			commands.GlobalMinOutput = true
 		}
+		output.SetDefaultAXI(!commands.GlobalJSONOutput && !plain)
 		f := output.New(commands.GlobalJSONOutput, commands.GlobalMinOutput, os.Stdout)
 		os.Exit(f.PrintError(err))
 	}
