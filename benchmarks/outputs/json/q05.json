@@ -1,7 +1,7 @@
 [
   {
     "chunk": {
-      "id": "f6bd9482a3760133",
+      "id": "e50b53c5c827a4b6",
       "file_path": "/work/llm-semantic-axi/internal/semantic/fusion.go",
       "type": "function",
       "name": "FuseRRF",
@@ -13,12 +13,12 @@
       "domain": "code"
     },
     "score": 0.556128,
-    "relevance": "high",
+    "relevance": "medium",
     "preview": "func FuseRRF(denseResults, lexicalResults []SearchResult, k int) []SearchResult"
   },
   {
     "chunk": {
-      "id": "9abe9abb6465e78c",
+      "id": "5b1a97548be27568",
       "file_path": "/work/llm-semantic-axi/internal/semantic/search.go",
       "type": "method",
       "name": "HybridSearch",
@@ -30,29 +30,29 @@
       "domain": "code"
     },
     "score": 0.5530629,
-    "relevance": "high",
+    "relevance": "medium",
     "preview": "func (s *Searcher) HybridSearch(ctx context.Context, query string, opts HybridSearchOptions) ([]SearchResult, error)"
   },
   {
     "chunk": {
-      "id": "f2a3adcc7c581378",
+      "id": "decd10d6507ce433",
       "file_path": "/work/llm-semantic-axi/internal/semantic/storage.go",
       "type": "interface",
       "name": "LexicalSearcher",
       "signature": "type LexicalSearcher",
       "content": "// LexicalSearcher is an optional interface for storage backends that support\n// full-text search. Backends implementing this interface can be used with\n// hybrid search (dense + lexical fusion).\ntype LexicalSearcher interface {\n\t// LexicalSearch performs full-text search using FTS5.\n\t// Returns results ranked by BM25 relevance score.\n\tLexicalSearch(ctx context.Context, query string, opts LexicalSearchOptions) ([]SearchResult, error)\n}",
-      "start_line": 68,
-      "end_line": 75,
+      "start_line": 89,
+      "end_line": 96,
       "language": "go",
       "domain": "code"
     },
     "score": 0.52613366,
-    "relevance": "high",
+    "relevance": "medium",
     "preview": "type LexicalSearcher"
   },
   {
     "chunk": {
-      "id": "934ade8bb689e154",
+      "id": "ec15cedd9dcea9ef",
       "file_path": "/work/llm-semantic-axi/internal/semantic/hybrid_overlap_extra_test.go",
       "type": "function",
       "name": "TestHybridSearch_FusesDenseAndLexical",
@@ -64,12 +64,12 @@
       "domain": "code"
     },
     "score": 0.5220393,
-    "relevance": "high",
+    "relevance": "medium",
     "preview": "func TestHybridSearch_FusesDenseAndLexical(t *testing.T)"
   },
   {
     "chunk": {
-      "id": "508e3432ac6f3d0e",
+      "id": "191a00f885337958",
       "file_path": "/work/llm-semantic-axi/internal/semantic/fusion_test.go",
       "type": "function",
       "name": "TestRRFusion_EmptyDense",
@@ -81,12 +81,12 @@
       "domain": "code"
     },
     "score": 0.52139515,
-    "relevance": "high",
+    "relevance": "medium",
     "preview": "func TestRRFusion_EmptyDense(t *testing.T)"
   },
   {
     "chunk": {
-      "id": "14eeb01cbdee95b2",
+      "id": "167d6aa246b4793f",
       "file_path": "/work/llm-semantic-axi/internal/semantic/fusion.go",
       "type": "function",
       "name": "FuseRRFMemoryWithTopK",
@@ -98,12 +98,12 @@
       "domain": "code"
     },
     "score": 0.49671578,
-    "relevance": "high",
+    "relevance": "medium",
     "preview": "func FuseRRFMemoryWithTopK(denseResults, lexicalResults []MemorySearchResult, k int, topK int) []MemorySearchResult"
   },
   {
     "chunk": {
-      "id": "8725bed43f81436f",
+      "id": "f1eab2a04aa611e0",
       "file_path": "/work/llm-semantic-axi/internal/semantic/fusion.go",
       "type": "function",
       "name": "FuseRRFWithTopK",
@@ -115,12 +115,12 @@
       "domain": "code"
     },
     "score": 0.48989794,
-    "relevance": "high",
+    "relevance": "medium",
     "preview": "func FuseRRFWithTopK(denseResults, lexicalResults []SearchResult, k int, topK int) []SearchResult"
   },
   {
     "chunk": {
-      "id": "bae7cf9d27a208ec",
+      "id": "765746312cf2cdba",
       "file_path": "/work/llm-semantic-axi/internal/semantic/fts_sqlite_rebuild_test.go",
       "type": "function",
       "name": "TestSafeLexicalSearch_EscapesOperators",
@@ -132,12 +132,12 @@
       "domain": "code"
     },
     "score": 0.48730588,
-    "relevance": "high",
+    "relevance": "medium",
     "preview": "func TestSafeLexicalSearch_EscapesOperators(t *testing.T)"
   },
   {
     "chunk": {
-      "id": "917d5e9d0e1f4f62",
+      "id": "600d5354acd196bc",
       "file_path": "/work/llm-semantic-axi/internal/semantic/hybrid_overlap_extra_test.go",
       "type": "function",
       "name": "TestHybridSearch_FallsBackOnLexicalError",
@@ -149,12 +149,12 @@
       "domain": "code"
     },
     "score": 0.4844814,
-    "relevance": "high",
+    "relevance": "medium",
     "preview": "func TestHybridSearch_FallsBackOnLexicalError(t *testing.T)"
   },
   {
     "chunk": {
-      "id": "d84583c0b36cf8b0",
+      "id": "ab59549a4dadc11f",
       "file_path": "/work/llm-semantic-axi/internal/semantic/memory_search.go",
       "type": "function",
       "name": "HybridSearchMemory",
@@ -166,7 +166,7 @@
       "domain": "code"
     },
     "score": 0.48296276,
-    "relevance": "high",
+    "relevance": "medium",
     "preview": "func HybridSearchMemory(ctx context.Context, storage Storage, embedder EmbedderInterface, query string, opts HybridMemorySearchOptions) ([]MemorySearc..."
   }
 ]

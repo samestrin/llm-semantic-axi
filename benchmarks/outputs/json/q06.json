@@ -1,7 +1,23 @@
 [
   {
     "chunk": {
-      "id": "6dff0350526ad2da",
+      "id": "b5d7f8e6e8a3c6ca",
+      "file_path": "/work/llm-semantic-axi/benchmarks/outputs/plain/q06.txt",
+      "type": "file",
+      "name": "q06",
+      "content": "10 results for \"where is the sqlite schema created\"\n\n1. /work/llm-semantic-axi/internal/semantic/storage_sqlite.go:22 - SQLiteStorage (struct) [MEDIUM]\n   Score: 0.3333\n   type SQLiteStorage\n\n2. /work/llm-semantic-axi/internal/semantic/mcpserver/execute_test.go:662 - TestGetToolDefinitions_EverySchemaIsAValidObjectSchema (function) [LOW]\n   Score: 0.2906\n   func TestGetToolDefinitions_EverySchemaIsAValidObjectSchema(t *testing.T)\n\n3. /work/llm-semantic-axi/internal/semantic/mcpserver/tools.go:66 - buildSchema (function) [LOW]\n   Score: 0.2785\n   func buildSchema(toolProps map[string]schemaProperty, required []string) json.RawMessage\n\n4. /work/llm-semantic-axi/internal/semantic/storage_sqlite.go:30 - NewSQLiteStorage (function) [LOW]\n   Score: 0.2540\n   func NewSQLiteStorage(dbPath string, embeddingDim int) (*SQLiteStorage, error)\n\n5. /work/llm-semantic-axi/internal/semantic/storage_sqlite.go:226 - initChunkRefsSchema (method) [LOW]\n   Score: 0.2506\n   func (s *SQLiteStorage) initChunkRefsSchema() error\n\n6. /work/llm-semantic-axi/internal/semantic/mcpserver/tools.go:53 - mergeProperties (function) [LOW]\n   Score: 0.2447\n   func mergeProperties(toolProps, common map[string]schemaProperty) map[string]schemaProperty\n\n7. /work/llm-semantic-axi/internal/semantic/memory_entry_content_test.go:155 - TestMemoryFileContent_ShortCreatedAt (function) [LOW]\n   Score: 0.2373\n   func TestMemoryFileContent_ShortCreatedAt(t *testing.T)\n\n",
+      "start_line": 1,
+      "end_line": 30,
+      "language": "txt",
+      "domain": "code"
+    },
+    "score": 0.38877642,
+    "relevance": "low",
+    "preview": "10 results for \"where is the sqlite schema created\"  1. /work/llm-semantic-axi/internal/semantic/storage_sqlite.go:22 - SQLiteStorage (struct) [MEDIUM..."
+  },
+  {
+    "chunk": {
+      "id": "b51c19255a96983a",
       "file_path": "/work/llm-semantic-axi/internal/semantic/storage_sqlite.go",
       "type": "struct",
       "name": "SQLiteStorage",
@@ -13,12 +29,12 @@
       "domain": "code"
     },
     "score": 0.33333334,
-    "relevance": "medium",
+    "relevance": "low",
     "preview": "type SQLiteStorage"
   },
   {
     "chunk": {
-      "id": "b95a322c18d040af",
+      "id": "83b51aa8d529ef77",
       "file_path": "/work/llm-semantic-axi/internal/semantic/mcpserver/execute_test.go",
       "type": "function",
       "name": "TestGetToolDefinitions_EverySchemaIsAValidObjectSchema",
@@ -29,13 +45,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.2905884,
+    "score": 0.29077262,
     "relevance": "low",
     "preview": "func TestGetToolDefinitions_EverySchemaIsAValidObjectSchema(t *testing.T)"
   },
   {
     "chunk": {
-      "id": "77e55e8ac78b120a",
+      "id": "22710ae0a23de307",
       "file_path": "/work/llm-semantic-axi/internal/semantic/mcpserver/tools.go",
       "type": "function",
       "name": "buildSchema",
@@ -52,7 +68,39 @@
   },
   {
     "chunk": {
-      "id": "99f0cf72e0b934c4",
+      "id": "db1c72456743e6aa",
+      "file_path": "/work/llm-semantic-axi/benchmarks/outputs/json/q06.json",
+      "type": "file",
+      "name": "q06",
+      "content": "    \"score\": 0.24467726,\n    \"relevance\": \"low\",\n    \"preview\": \"func mergeProperties(toolProps, common map[string]schemaProperty) map[string]schemaProperty\"\n  },\n  {\n    \"chunk\": {\n      \"id\": \"8d19f3c11ed63ce4\",\n      \"file_path\": \"/work/llm-semantic-axi/internal/semantic/memory_entry_content_test.go\",\n      \"type\": \"function\",\n      \"name\": \"TestMemoryFileContent_ShortCreatedAt\",\n      \"signature\": \"func TestMemoryFileContent_ShortCreatedAt(t *testing.T)\",\n      \"content\": \"// TestMemoryFileContent_ShortCreatedAt pins that a CreatedAt shorter than a full date is\\n// passed through verbatim rather than panicking on the [:10] slice.\\nfunc TestMemoryFileContent_ShortCreatedAt(t *testing.T) {\\n\\tentry := \\u0026MemoryEntry{Question: \\\"q\\\", Answer: \\\"a\\\", CreatedAt: \\\"2026\\\"}\\n\\tgot := entry.MemoryFileContent()\\n\\tif !strings.Contains(got, \\\"created: 2026\\\\n\\\") {\\n\\t\\tt.Errorf(\\\"short CreatedAt should pass through unchanged, got:\\\\n%s\\\", got)\\n\\t}\\n}\",\n      \"start_line\": 155,\n      \"end_line\": 163,\n      \"language\": \"go\",\n      \"domain\": \"code\"\n    },\n    \"score\": 0.23732223,\n    \"relevance\": \"low\",\n    \"preview\": \"func TestMemoryFileContent_ShortCreatedAt(t *testing.T)\"\n  },\n  {\n    \"chunk\": {\n      \"id\": \"d80404dc45cac4b0\",\n      \"file_path\": \"/work/llm-semantic-axi/internal/semantic/diff_reindex_test.go\",\n      \"type\": \"function\",\n      \"name\": \"createTestSQLiteStorage\",\n      \"signature\": \"func createTestSQLiteStorage(t *testing.T) (*SQLiteStorage, func())\",\n",
+      "start_line": 100,
+      "end_line": 127,
+      "language": "json",
+      "domain": "code"
+    },
+    "score": 0.27764606,
+    "relevance": "low",
+    "preview": "    \"score\": 0.24467726,     \"relevance\": \"low\",     \"preview\": \"func mergeProperties(toolProps, common map[string]schemaProperty) map[string]schemaPr..."
+  },
+  {
+    "chunk": {
+      "id": "442b5618ada23e32",
+      "file_path": "/work/llm-semantic-axi/benchmarks/outputs/json/q06.json",
+      "type": "file",
+      "name": "q06",
+      "content": "      \"file_path\": \"/work/llm-semantic-axi/internal/semantic/storage_sqlite.go\",\n      \"type\": \"method\",\n      \"name\": \"initChunkRefsSchema\",\n      \"signature\": \"func (s *SQLiteStorage) initChunkRefsSchema() error\",\n      \"content\": \"// initChunkRefsSchema creates the chunk_refs table for dependency/call graph tracking.\\nfunc (s *SQLiteStorage) initChunkRefsSchema() error {\\n\\treturn initChunkRefsTables(s.db)\\n}\",\n      \"start_line\": 226,\n      \"end_line\": 229,\n      \"language\": \"go\",\n      \"domain\": \"code\"\n    },\n    \"score\": 0.2506402,\n    \"relevance\": \"low\",\n    \"preview\": \"func (s *SQLiteStorage) initChunkRefsSchema() error\"\n  },\n  {\n    \"chunk\": {\n      \"id\": \"f3db6ffb27b31dd8\",\n      \"file_path\": \"/work/llm-semantic-axi/internal/semantic/mcpserver/tools.go\",\n      \"type\": \"function\",\n      \"name\": \"mergeProperties\",\n      \"signature\": \"func mergeProperties(toolProps, common map[string]schemaProperty) map[string]schemaProperty\",\n      \"content\": \"// mergeProperties combines tool-specific properties with common properties.\\n// Common properties can be overridden by tool-specific ones.\\nfunc mergeProperties(toolProps, common map[string]schemaProperty) map[string]schemaProperty {\\n\\tresult := make(map[string]schemaProperty)\\n\\tfor k, v := range common {\\n\\t\\tresult[k] = v\\n\\t}\\n\\tfor k, v := range toolProps {\\n\\t\\tresult[k] = v\\n\\t}\\n\\treturn result\\n}\",\n      \"start_line\": 53,\n      \"end_line\": 64,\n      \"language\": \"go\",\n      \"domain\": \"code\"\n    },\n",
+      "start_line": 73,
+      "end_line": 99,
+      "language": "json",
+      "domain": "code"
+    },
+    "score": 0.2701793,
+    "relevance": "low",
+    "preview": "      \"file_path\": \"/work/llm-semantic-axi/internal/semantic/storage_sqlite.go\",       \"type\": \"method\",       \"name\": \"initChunkRefsSchema\",       \"s..."
+  },
+  {
+    "chunk": {
+      "id": "ebc475982cf133f4",
       "file_path": "/work/llm-semantic-axi/internal/semantic/storage_sqlite.go",
       "type": "function",
       "name": "NewSQLiteStorage",
@@ -63,20 +111,20 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.25395846,
+    "score": 0.25370812,
     "relevance": "low",
     "preview": "func NewSQLiteStorage(dbPath string, embeddingDim int) (*SQLiteStorage, error)"
   },
   {
     "chunk": {
-      "id": "3d94fd553975e3fc",
+      "id": "b73278b4ab5fc7c0",
       "file_path": "/work/llm-semantic-axi/internal/semantic/storage_sqlite.go",
       "type": "method",
       "name": "initChunkRefsSchema",
       "signature": "func (s *SQLiteStorage) initChunkRefsSchema() error",
       "content": "// initChunkRefsSchema creates the chunk_refs table for dependency/call graph tracking.\nfunc (s *SQLiteStorage) initChunkRefsSchema() error {\n\treturn initChunkRefsTables(s.db)\n}",
-      "start_line": 226,
-      "end_line": 229,
+      "start_line": 254,
+      "end_line": 257,
       "language": "go",
       "domain": "code"
     },
@@ -86,7 +134,7 @@
   },
   {
     "chunk": {
-      "id": "f3db6ffb27b31dd8",
+      "id": "436cac4f7ba208a6",
       "file_path": "/work/llm-semantic-axi/internal/semantic/mcpserver/tools.go",
       "type": "function",
       "name": "mergeProperties",
@@ -103,7 +151,7 @@
   },
   {
     "chunk": {
-      "id": "8d19f3c11ed63ce4",
+      "id": "fe058c369a8822c9",
       "file_path": "/work/llm-semantic-axi/internal/semantic/memory_entry_content_test.go",
       "type": "function",
       "name": "TestMemoryFileContent_ShortCreatedAt",
@@ -117,56 +165,5 @@
     "score": 0.23732223,
     "relevance": "low",
     "preview": "func TestMemoryFileContent_ShortCreatedAt(t *testing.T)"
-  },
-  {
-    "chunk": {
-      "id": "d80404dc45cac4b0",
-      "file_path": "/work/llm-semantic-axi/internal/semantic/diff_reindex_test.go",
-      "type": "function",
-      "name": "createTestSQLiteStorage",
-      "signature": "func createTestSQLiteStorage(t *testing.T) (*SQLiteStorage, func())",
-      "content": "// createTestSQLiteStorage creates an in-memory SQLite storage for testing.\nfunc createTestSQLiteStorage(t *testing.T) (*SQLiteStorage, func()) {\n\tt.Helper()\n\tstorage, err := NewSQLiteStorage(\":memory:\", 0)\n\tif err != nil {\n\t\tt.Fatalf(\"Failed to create test storage: %v\", err)\n\t}\n\treturn storage, func() { storage.Close() }\n}",
-      "start_line": 334,
-      "end_line": 342,
-      "language": "go",
-      "domain": "code"
-    },
-    "score": 0.2172698,
-    "relevance": "low",
-    "preview": "func createTestSQLiteStorage(t *testing.T) (*SQLiteStorage, func())"
-  },
-  {
-    "chunk": {
-      "id": "a6eb6c3ddd92d8cb",
-      "file_path": "/work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go",
-      "type": "function",
-      "name": "TestServer_EveryAdvertisedSchemaSurvivesTheRoundTrip",
-      "signature": "func TestServer_EveryAdvertisedSchemaSurvivesTheRoundTrip(t *testing.T)",
-      "content": "func TestServer_EveryAdvertisedSchemaSurvivesTheRoundTrip(t *testing.T) {\n\t// main() passes InputSchema through as raw JSON. Anything malformed would be\n\t// rejected or flattened by the SDK on the way out, so this checks what the\n\t// client actually receives rather than what the definitions hold.\n\tfakeCLI(t, \"{}\")\n\tsession := startServer(t).session\n\n\tctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)\n\tdefer cancel()\n\n\tres, err := session.ListTools(ctx, nil)\n\tif err != nil {\n\t\tt.Fatalf(\"ListTools: %v\", err)\n\t}\n\tfor _, tool := range res.Tools {\n\t\tif tool.InputSchema == nil {\n\t\t\tt.Errorf(\"tool %q arrived with no input schema\", tool.Name)\n\t\t\tcontinue\n\t\t}\n\t\traw, err := json.Marshal(tool.InputSchema)\n\t\tif err != nil {\n\t\t\tt.Errorf(\"tool %q schema will not re-marshal: %v\", tool.Name, err)\n\t\t\tcontinue\n\t\t}\n\t\tvar schema struct {\n\t\t\tType       string                     `json:\"type\"`\n\t\t\tProperties map[string]json.RawMessage `json:\"properties\"`\n\t\t}\n\t\tif err := json.Unmarshal(raw, \u0026schema); err != nil {\n\t\t\tt.Errorf(\"tool %q schema is not a JSON object: %v\", tool.Name, err)\n\t\t\tcontinue\n\t\t}\n\t\tif schema.Type != \"object\" {\n\t\t\tt.Errorf(`tool %q schema type = %q, want \"object\"`, tool.Name, schema.Type)\n\t\t}\n\t\tif len(schema.Properties) == 0 {\n\t\t\tt.Errorf(\"tool %q arrived with no properties: %s\", tool.Name, raw)\n\t\t}\n\t\tif strings.TrimSpace(tool.Description) == \"\" {\n\t\t\tt.Errorf(\"tool %q arrived with no description\", tool.Name)\n\t\t}\n\t}\n}",
-      "start_line": 259,
-      "end_line": 301,
-      "language": "go",
-      "domain": "code"
-    },
-    "score": 0.21687838,
-    "relevance": "low",
-    "preview": "func TestServer_EveryAdvertisedSchemaSurvivesTheRoundTrip(t *testing.T)"
-  },
-  {
-    "chunk": {
-      "id": "b2755a7ef2536b31",
-      "file_path": "/work/llm-semantic-axi/internal/semantic/mcpserver/tools.go",
-      "type": "struct",
-      "name": "ToolDefinition",
-      "signature": "type ToolDefinition",
-      "content": "// ToolDefinition defines a tool for the MCP SDK\ntype ToolDefinition struct {\n\tName        string\n\tDescription string\n\tInputSchema json.RawMessage\n}",
-      "start_line": 10,
-      "end_line": 15,
-      "language": "go",
-      "domain": "code"
-    },
-    "score": 0.21535276,
-    "relevance": "low",
-    "preview": "type ToolDefinition"
   }
 ]

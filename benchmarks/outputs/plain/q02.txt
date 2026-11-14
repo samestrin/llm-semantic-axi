@@ -1,42 +1,42 @@
 10 results for "how does the index decide a file needs re-indexing"
 
-1. /work/llm-semantic-axi/internal/semantic/index_manager.go:1314 - fileNeedsUpdate (method) [MEDIUM]
-   Score: 0.4070
+1. /work/llm-semantic-axi/internal/semantic/index_manager.go:1502 - fileNeedsUpdate (method) [LOW]
+   Score: 0.4056
    func (m *IndexManager) fileNeedsUpdate(ctx context.Context, filePath string) (bool, error)
 
-2. /work/llm-semantic-axi/internal/semantic/index_manager.go:263 - indexPerFile (method) [MEDIUM]
-   Score: 0.3383
-   func (m *IndexManager) indexPerFile(ctx context.Context, files []string, opts IndexOptions, result *IndexResult) (*IndexResult, error)
+2. /work/llm-semantic-axi/benchmarks/outputs/plain/q02.txt:1 - q02 (file) [LOW]
+   Score: 0.3912
+   10 results for "how does the index decide a file needs re-indexing"  1. /work/llm-semantic-axi/internal/semantic/index_manager.go:1314 - fileNeedsUpda...
 
-3. /work/llm-semantic-axi/internal/semantic/lockfile.go:13 - IndexLock (struct) [MEDIUM]
-   Score: 0.3326
+3. /work/llm-semantic-axi/benchmarks/outputs/json/q02.json:1 - q02 (file) [LOW]
+   Score: 0.3463
+   [   {     "chunk": {       "id": "d3ab272d634e4393",       "file_path": "/work/llm-semantic-axi/internal/semantic/index_manager.go",       "type": "me...
+
+4. /work/llm-semantic-axi/CHANGELOG.md:41 - CHANGELOG > Changelog > [1.2.0] - 2026-11-12 > Changed (part 2) (file) [LOW]
+   Score: 0.3420
+   - A resumed `index` reports the files it skipped as unchanged that were chunked as text windows, and `index-status` lists them (`files_fallback`, `fal...
+
+5. /work/llm-semantic-axi/internal/semantic/index_manager.go:304 - indexPerFile (method) [LOW]
+   Score: 0.3358
+   func (m *IndexManager) indexPerFile(ctx context.Context, files []string, opts IndexOptions, fellBack map[string]FallbackReason, result *IndexResult) (...
+
+6. /work/llm-semantic-axi/internal/semantic/lockfile.go:13 - IndexLock (struct) [LOW]
+   Score: 0.3341
    type IndexLock
 
-4. /work/llm-semantic-axi/internal/semantic/index_manager_git_batch_test.go:523 - GetFileHash (method) [MEDIUM]
+7. /work/llm-semantic-axi/benchmarks/queries.txt:1 - queries (file) [LOW]
+   Score: 0.3286
+   # Fixed query list for the token benchmark. One query per line; the line # number among non-comment lines is the output file number (q01, q02, ...). #...
+
+8. /work/llm-semantic-axi/CHANGELOG.md:46 - CHANGELOG > Changelog > [1.2.0] - 2026-11-12 > Fixed (file) [LOW]
+   Score: 0.3201
+   ### Fixed  - Removing a file and running `index-update` no longer leaves its record behind in a SQLite index: `index-status` stops listing the deleted...
+
+9. /work/llm-semantic-axi/internal/semantic/index_manager_git_batch_test.go:523 - GetFileHash (method) [LOW]
    Score: 0.3169
    func (s *hashErrStorage) GetFileHash(ctx context.Context, filePath string) (string, error)
 
-5. /work/llm-semantic-axi/internal/semantic/commands/index.go:482 - resolveFTSDataDir (function) [LOW]
-   Score: 0.2869
-   func resolveFTSDataDir(indexPath string) string
-
-6. /work/llm-semantic-axi/internal/semantic/index_manager.go:253 - recordLastIndex (method) [LOW]
-   Score: 0.2834
-   func (m *IndexManager) recordLastIndex(ctx context.Context, last LastIndex) error
-
-7. /work/llm-semantic-axi/internal/semantic/index_manager_git_batch_test.go:615 - TestIndexManager_LastIndexWriteFailureMessage (function) [LOW]
-   Score: 0.2788
-   func TestIndexManager_LastIndexWriteFailureMessage(t *testing.T)
-
-8. /work/llm-semantic-axi/internal/semantic/last_index_test.go:357 - TestIndexManager_FileFailureLeavesLastIndex (function) [LOW]
-   Score: 0.2765
-   func TestIndexManager_FileFailureLeavesLastIndex(t *testing.T)
-
-9. /work/llm-semantic-axi/internal/semantic/commands/search_behaviour_test.go:336 - TestFindIndexPathFallsBackToDotIndex (function) [LOW]
-   Score: 0.2750
-   func TestFindIndexPathFallsBackToDotIndex(t *testing.T)
-
-10. /work/llm-semantic-axi/CHANGELOG.md:49 - CHANGELOG > Changelog > [Unreleased] > Fixed (file) [LOW]
-   Score: 0.2664
-   ### Fixed  - `index-update` (both `--no-git` and git paths) counts a file it could not process as skipped and names it with its error, in the text out...
+10. /work/llm-semantic-axi/internal/semantic/index_manager.go:1230 - processFile (method) [LOW]
+   Score: 0.3123
+   func (m *IndexManager) processFile(ctx context.Context, filePath string, result *IndexResult, batchSize, parallel int, domain string) error
 

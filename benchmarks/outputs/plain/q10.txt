@@ -1,42 +1,42 @@
 10 results for "where are the tree-sitter chunkers registered"
 
-1. /work/llm-semantic-axi/README.md:98 - README > llm-semantic > Languages (file) [MEDIUM]
-   Score: 0.4291
-   ## Languages  Every extension `RegisterAllChunkers` registers, and what indexes it. A test (`TestReadmeLanguageTable_MatchesRegisteredExtensions`) fai...
+1. /work/llm-semantic-axi/docs/languages.md:7 - languages > Languages and call edges > Language table (file) [LOW]
+   Score: 0.4178
+   ## Language table  Every extension `RegisterAllChunkers` registers, and what indexes it. A test (`TestReadmeLanguageTable_MatchesRegisteredExtensions`...
 
-2. /work/llm-semantic-axi/internal/semantic/treesitter/treesitter.go:31 - TreeError (function) [MEDIUM]
+2. /work/llm-semantic-axi/benchmarks/outputs/json/q10.json:1 - q10 (file) [LOW]
+   Score: 0.3950
+   [   {     "chunk": {       "id": "971e6c5389e3b38b",       "file_path": "/work/llm-semantic-axi/README.md",       "type": "file",       "name": "READM...
+
+3. /work/llm-semantic-axi/internal/semantic/treesitter/treesitter.go:30 - TreeError (function) [LOW]
    Score: 0.3551
    func TreeError(tree *gotreesitter.Tree) error
 
-3. /work/llm-semantic-axi/internal/semantic/treesitter/fallback_test.go:54 - TestTreeError_ReportsATreeWithAnErrorNode (function) [LOW]
+4. /work/llm-semantic-axi/benchmarks/outputs/json/q10.json:15 - q10 (file) [LOW]
+   Score: 0.2779
+       "relevance": "medium",     "preview": "## Languages  Every extension `RegisterAllChunkers` registers, and what indexes it. A test (`TestReadmeLang...
+
+5. /work/llm-semantic-axi/internal/semantic/treesitter/fallback_test.go:54 - TestTreeError_ReportsATreeWithAnErrorNode (function) [LOW]
    Score: 0.2386
    func TestTreeError_ReportsATreeWithAnErrorNode(t *testing.T)
 
-4. /work/llm-semantic-axi/internal/semantic/treesitter/treesitter.go:24 - ParseSource (function) [LOW]
+6. /work/llm-semantic-axi/benchmarks/outputs/plain/q10.txt:1 - q10 (file) [LOW]
+   Score: 0.2340
+   10 results for "where are the tree-sitter chunkers registered"  1. /work/llm-semantic-axi/README.md:98 - README > llm-semantic > Languages (file) [MED...
+
+7. /work/llm-semantic-axi/internal/semantic/treesitter/treesitter.go:23 - ParseSource (function) [LOW]
    Score: 0.2241
    func ParseSource(content []byte, lang *gotreesitter.Language) (*gotreesitter.Tree, error)
 
-5. /work/llm-semantic-axi/internal/semantic/treesitter/chunker_csharp.go:32 - Chunk (method) [LOW]
-   Score: 0.1883
+8. /work/llm-semantic-axi/internal/semantic/treesitter/chunker_csharp.go:32 - Chunk (method) [LOW]
+   Score: 0.1893
    func (c *CSharpChunker) Chunk(path string, content []byte) ([]semantic.Chunk, error)
 
-6. /work/llm-semantic-axi/internal/semantic/commands/readme_table_test.go:46 - TestReadmeLanguageTable_MatchesRegisteredExtensions (function) [LOW]
-   Score: 0.1756
-   func TestReadmeLanguageTable_MatchesRegisteredExtensions(t *testing.T)
+9. /work/llm-semantic-axi/benchmarks/queries.txt:1 - queries (file) [LOW]
+   Score: 0.1789
+   # Fixed query list for the token benchmark. One query per line; the line # number among non-comment lines is the output file number (q01, q02, ...). #...
 
-7. /work/llm-semantic-axi/internal/semantic/mcpserver/argbuilders_more_test.go:420 - TestRegisteredCommands_MatchesTheRegistry (function) [LOW]
-   Score: 0.1656
-   func TestRegisteredCommands_MatchesTheRegistry(t *testing.T)
-
-8. /work/llm-semantic-axi/internal/semantic/treesitter/chunker_kotlin_test.go:282 - TestKotlinChunker_NamelessDeclarationIsDropped (function) [LOW]
-   Score: 0.1610
-   func TestKotlinChunker_NamelessDeclarationIsDropped(t *testing.T)
-
-9. /work/llm-semantic-axi/internal/semantic/commands/index_test.go:230 - TestRegisterAllChunkers (function) [LOW]
-   Score: 0.1569
-   func TestRegisterAllChunkers(t *testing.T)
-
-10. /work/llm-semantic-axi/internal/semantic/treesitter/chunker_kotlin.go:35 - Chunk (method) [LOW]
-   Score: 0.1566
-   func (c *KotlinChunker) Chunk(path string, content []byte) ([]semantic.Chunk, error)
+10. /work/llm-semantic-axi/benchmarks/outputs/json/q10.json:41 - q10 (file) [LOW]
+   Score: 0.1743
+         "signature": "func TestTreeError_ReportsATreeWithAnErrorNode(t *testing.T)",       "content": "// Defends AC2 at its source: a tree with an erro...
 

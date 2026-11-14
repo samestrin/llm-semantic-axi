@@ -1,42 +1,42 @@
 10 results for "how does the MCP server run the CLI"
 
-1. /work/llm-semantic-axi/cmd/llm-semantic-mcp/main.go:80 - run (function) [MEDIUM]
-   Score: 0.4275
+1. /work/llm-semantic-axi/cmd/llm-semantic-mcp/main.go:105 - run (function) [LOW]
+   Score: 0.4237
    func run(ctx context.Context, in io.ReadCloser, out io.WriteCloser, stderr io.Writer) int
 
-2. /work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go:65 - server (struct) [MEDIUM]
+2. /work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go:65 - server (struct) [LOW]
    Score: 0.4102
    type server
 
-3. /work/llm-semantic-axi/VISION.md:17 - VISION > Vision > The CLI is the product (file) [MEDIUM]
-   Score: 0.3522
+3. /work/llm-semantic-axi/benchmarks/outputs/plain/q09.txt:1 - q09 (file) [LOW]
+   Score: 0.3832
+   10 results for "how does the MCP server run the CLI"  1. /work/llm-semantic-axi/cmd/llm-semantic-mcp/main.go:80 - run (function) [MEDIUM]    Score: 0....
+
+4. /work/llm-semantic-axi/benchmarks/outputs/json/q09.json:42 - q09 (file) [LOW]
+   Score: 0.3735
+         "content": "## The CLI is the product\n\n`llm-semantic` is the primary surface.\nThe MCP server shells out to the CLI, and it is a fallback for ...
+
+5. /work/llm-semantic-axi/VISION.md:17 - VISION > Vision > The CLI is the product (file) [LOW]
+   Score: 0.3549
    ## The CLI is the product  `llm-semantic` is the primary surface. The MCP server shells out to the CLI, and it is a fallback for hosts that cannot run...
 
-4. /work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go:175 - TestServer_ReportsTheStampedVersion (function) [MEDIUM]
+6. /work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go:175 - TestServer_ReportsTheStampedVersion (function) [LOW]
    Score: 0.3496
    func TestServer_ReportsTheStampedVersion(t *testing.T)
 
-5. /work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go:49 - fakeCLI (function) [MEDIUM]
-   Score: 0.3348
+7. /work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go:49 - fakeCLI (function) [LOW]
+   Score: 0.3339
    func fakeCLI(t *testing.T, payload string)
 
-6. /work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go:117 - startServer (function) [LOW]
+8. /work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go:117 - startServer (function) [LOW]
    Score: 0.3126
    func startServer(t *testing.T) *server
 
-7. /work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go:303 - TestServer_ClientDisconnectIsACleanExit (function) [LOW]
+9. /work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go:303 - TestServer_ClientDisconnectIsACleanExit (function) [LOW]
    Score: 0.3112
    func TestServer_ClientDisconnectIsACleanExit(t *testing.T)
 
-8. /work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go:349 - TestServer_HangUpBeforeTheReplyIsACleanExit (function) [LOW]
-   Score: 0.3046
-   func TestServer_HangUpBeforeTheReplyIsACleanExit(t *testing.T)
-
-9. /work/llm-semantic-axi/cmd/llm-semantic-mcp/main.go:21 - serverInstructions (function) [LOW]
-   Score: 0.3013
-   func serverInstructions(toolCount int) string
-
-10. /work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go:331 - TestServer_ClosedInputIsACleanExit (function) [LOW]
-   Score: 0.2970
-   func TestServer_ClosedInputIsACleanExit(t *testing.T)
+10. /work/llm-semantic-axi/install-release.sh:118 - install-release (file) [LOW]
+   Score: 0.3081
+       die "$ARCHIVE does not hold both llm-semantic and llm-semantic-mcp" for bin in llm-semantic llm-semantic-mcp; do     [ -f "$work/x/$bin" ] || die ...
 

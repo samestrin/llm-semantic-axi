@@ -1,42 +1,42 @@
 10 results for "how does the lock file stop two indexers running at once"
 
-1. /work/llm-semantic-axi/internal/semantic/lockfile.go:20 - NewIndexLock (function) [LOW]
+1. /work/llm-semantic-axi/benchmarks/queries.txt:1 - queries (file) [LOW]
+   Score: 0.3381
+   # Fixed query list for the token benchmark. One query per line; the line # number among non-comment lines is the output file number (q01, q02, ...). #...
+
+2. /work/llm-semantic-axi/benchmarks/outputs/json/q07.json:25 - q07 (file) [LOW]
+   Score: 0.3132
+         "signature": "type IndexLock",       "content": "// IndexLock provides cross-process file locking for index operations.\n// Prevents concurrent ...
+
+3. /work/llm-semantic-axi/internal/semantic/lockfile.go:20 - NewIndexLock (function) [LOW]
    Score: 0.2966
    func NewIndexLock(indexPath, storageType, collectionName string) *IndexLock
 
-2. /work/llm-semantic-axi/internal/semantic/lockfile.go:13 - IndexLock (struct) [LOW]
-   Score: 0.2566
+4. /work/llm-semantic-axi/internal/semantic/lockfile.go:13 - IndexLock (struct) [LOW]
+   Score: 0.2578
    type IndexLock
 
-3. /work/llm-semantic-axi/internal/semantic/lockfile.go:56 - TryLock (method) [LOW]
+5. /work/llm-semantic-axi/benchmarks/outputs/plain/q07.txt:1 - q07 (file) [LOW]
+   Score: 0.2558
+   10 results for "how does the lock file stop two indexers running at once"  1. /work/llm-semantic-axi/internal/semantic/lockfile.go:20 - NewIndexLock (...
+
+6. /work/llm-semantic-axi/benchmarks/outputs/json/q07.json:1 - q07 (file) [LOW]
+   Score: 0.2464
+   [   {     "chunk": {       "id": "b963a5adf151fddf",       "file_path": "/work/llm-semantic-axi/internal/semantic/lockfile.go",       "type": "functio...
+
+7. /work/llm-semantic-axi/benchmarks/outputs/json/q07.json:60 - q07 (file) [LOW]
+   Score: 0.2444
+         "content": "// fileHashID generates a unique ID for file hash storage\nfunc fileHashID(filePath string) string {\n\treturn stringToUUID(\"file_h...
+
+8. /work/llm-semantic-axi/internal/semantic/lockfile.go:56 - TryLock (method) [LOW]
    Score: 0.2435
    func (l *IndexLock) TryLock() (bool, error)
 
-4. /work/llm-semantic-axi/internal/semantic/storage_qdrant.go:1351 - fileHashID (function) [LOW]
+9. /work/llm-semantic-axi/internal/semantic/index_manager.go:1241 - preparedFile (struct) [LOW]
+   Score: 0.2396
+   type preparedFile
+
+10. /work/llm-semantic-axi/internal/semantic/storage_qdrant.go:1401 - fileHashID (function) [LOW]
    Score: 0.2349
    func fileHashID(filePath string) string
-
-5. /work/llm-semantic-axi/internal/semantic/lockfile_test.go:42 - TestIndexLock_TryLock (function) [LOW]
-   Score: 0.2320
-   func TestIndexLock_TryLock(t *testing.T)
-
-6. /work/llm-semantic-axi/internal/semantic/lockfile_test.go:112 - TestIndexLock_ReusableAfterUnlock (function) [LOW]
-   Score: 0.2253
-   func TestIndexLock_ReusableAfterUnlock(t *testing.T)
-
-7. /work/llm-semantic-axi/internal/semantic/lockfile.go:40 - Lock (method) [LOW]
-   Score: 0.2237
-   func (l *IndexLock) Lock(timeout time.Duration) error
-
-8. /work/llm-semantic-axi/internal/semantic/lockfile_test.go:29 - TestIndexLock_LockUnlock (function) [LOW]
-   Score: 0.2193
-   func TestIndexLock_LockUnlock(t *testing.T)
-
-9. /work/llm-semantic-axi/internal/semantic/lockfile.go:63 - Unlock (method) [LOW]
-   Score: 0.2139
-   func (l *IndexLock) Unlock() error
-
-10. /work/llm-semantic-axi/internal/semantic/lockfile_test.go:57 - TestIndexLock_TryLock_Contention (function) [LOW]
-   Score: 0.2095
-   func TestIndexLock_TryLock_Contention(t *testing.T)
 
