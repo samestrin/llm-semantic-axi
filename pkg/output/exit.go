@@ -47,6 +47,9 @@ var usageMarkers = [][]string{
 	{"requires at least ", " arg(s), only received "},
 	// Exact, at-most and between all share this shape.
 	{"accepts ", " arg(s), received "},
+	// Not cobra's: llm-semantic's own refusal of contradictory output flags,
+	// such as `output flags --plain and --json cannot be combined`.
+	{"output flags --", " cannot be combined"},
 }
 
 // ExitCodeFor classifies err into the process status the AXI contract expects.

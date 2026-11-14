@@ -59,6 +59,7 @@ func homeGuard(t *testing.T) func() {
 // TestSetupWritesHookAndSkill defends the core contract: both files exist with
 // the content a Claude Code session will actually load.
 func TestSetupWritesHookAndSkill(t *testing.T) {
+	withPlain(t)
 	dir := t.TempDir()
 	homeOK := homeGuard(t)
 
@@ -89,6 +90,7 @@ func TestSetupWritesHookAndSkill(t *testing.T) {
 // TestSetupSecondRunChangesNothingAndSaysSo defends idempotency: no duplicate
 // hook entry, no byte changed, and the output must not claim a write.
 func TestSetupSecondRunChangesNothingAndSaysSo(t *testing.T) {
+	withPlain(t)
 	dir := t.TempDir()
 	if err := runSetup(&bytes.Buffer{}, dir, false); err != nil {
 		t.Fatal(err)
@@ -147,6 +149,7 @@ func TestSetupPreservesExistingSettings(t *testing.T) {
 // TestSetupDryRunWritesNothing defends --dry-run: no file, no directory, and
 // the output says what would happen.
 func TestSetupDryRunWritesNothing(t *testing.T) {
+	withPlain(t)
 	dir := t.TempDir()
 	homeOK := homeGuard(t)
 
@@ -240,7 +243,8 @@ func TestSetupRewritesStaleSkill(t *testing.T) {
 func TestSetupCmdRegistered(t *testing.T) {
 	dir := newWorkspace(t)
 	root := RootCmd()
-	root.SetArgs([]string{"setup", "--dry-run"})
+	// --plain: since epic 27 the default is TOON.
+	root.SetArgs([]string{"setup", "--dry-run", "--plain"})
 	out := captureStdout(t, func() {
 		if err := root.Execute(); err != nil {
 			t.Fatalf("setup --dry-run: %v", err)
@@ -323,6 +327,7 @@ func TestSetupHonoursJSONAndAXI(t *testing.T) {
 // The expected command is the literal a session will run, not the constant
 // the code wrote, so a wrong constant fails here.
 func TestSetupHookToleratesAMissingIndex(t *testing.T) {
+	withPlain(t)
 	dir := t.TempDir()
 
 	var out bytes.Buffer
@@ -347,6 +352,7 @@ func TestSetupHookToleratesAMissingIndex(t *testing.T) {
 // and a new setup must rewrite that entry to the tolerant hook, not append a
 // second one and not leave the bare command behind.
 func TestSetupMigratesLegacyHookInPlace(t *testing.T) {
+	withPlain(t)
 	dir := t.TempDir()
 	settingsPath := filepath.Join(dir, ".claude", "settings.json")
 	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o755); err != nil {

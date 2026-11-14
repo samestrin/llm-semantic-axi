@@ -17,8 +17,17 @@ import (
 // The restore is registered with t.Cleanup BEFORE the swap, so a panic or
 // t.Fatalf inside fn cannot leave later tests in this package writing to a
 // closed pipe — the same defect a reviewer caught in llm-filesystem's copy.
+//
+// It also clears the output mode when the test ends. Every Execute resolves the
+// mode into package globals, and TOON is now the default, so a test that ran a
+// command would otherwise leave GlobalAXIOutput true for the next test that
+// calls a handler directly and expects the zero mode.
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
+	t.Cleanup(func() {
+		GlobalAXIOutput, GlobalJSONOutput, GlobalMinOutput = false, false, false
+		output.SetDefaultAXI(false)
+	})
 	orig := os.Stdout
 	r, w, err := os.Pipe()
 	if err != nil {
@@ -53,6 +62,15 @@ func withAXI(t *testing.T) {
 	t.Helper()
 	t.Cleanup(func() { GlobalAXIOutput = false })
 	GlobalAXIOutput = true
+}
+
+// withPlain pins the text mode for a test that calls a handler directly and
+// asserts its text. TOON is the default since epic 27, so a command run by an
+// earlier test through a helper with no cleanup can leave TOON on.
+func withPlain(t *testing.T) {
+	t.Helper()
+	t.Cleanup(func() { GlobalAXIOutput, GlobalJSONOutput = false, false })
+	GlobalAXIOutput, GlobalJSONOutput = false, false
 }
 
 // emitStdout is the wrapper 21 of the 23 converted sites call, and coverage
@@ -108,9 +126,15 @@ func TestIndexStatusWithNoIndexFailsInEveryMode(t *testing.T) {
 		flag string
 		want func(t *testing.T, out string)
 	}{
-		{"plain", "", func(t *testing.T, out string) {
+		{"plain", "--plain", func(t *testing.T, out string) {
 			if !strings.Contains(out, "Error: semantic index not found") {
 				t.Errorf("plain output = %q", out)
+			}
+		}},
+		// TOON is the default since epic 27, so no flag fails in TOON.
+		{"default", "", func(t *testing.T, out string) {
+			if !strings.Contains(out, "error: true") || !strings.Contains(out, "semantic index not found") {
+				t.Errorf("default output = %q", out)
 			}
 		}},
 		{"json", "--json", func(t *testing.T, out string) {

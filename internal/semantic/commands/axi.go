@@ -13,22 +13,95 @@ import (
 	"github.com/spf13/pflag"
 )
 
-// GlobalAXIOutput selects TOON output.
-//
-// It is registered as a persistent flag only AFTER every emit site routes
-// through emitJSON. A persistent flag that some commands ignore is worse than
-// no flag: every command accepts it, so one that ignored it would print its
-// ordinary output and exit 0 while a consumer parsed TOON — a failure with no
-// error and no signal.
-//
-// Unlike llm-support, this package needs no reset helper. It builds a fresh
-// command tree per invocation via RootCmd(), and BoolVar writes the default at
-// registration, so the bound variable cannot carry a previous run's value.
-// Verified rather than assumed by analogy: a probe confirmed GlobalJSONOutput
-// and GlobalMinOutput both return to false after a fresh RootCmd().
+// GlobalAXIOutput is true when this invocation prints TOON, which it does
+// unless --json or --plain asks for something else. It is resolved, not bound
+// to a flag: PersistentPreRunE sets it from the parsed flags on every run, and
+// RootCmd() clears it, so a fresh command tree never inherits an earlier
+// invocation's mode.
 var GlobalAXIOutput bool
 
-// emitJSON writes v as JSON, or as TOON when --axi is set.
+// axiAlias is --axi. TOON is already the default, so it changes nothing; it is
+// still accepted so that scripts and agents written against v1 keep working.
+var axiAlias bool
+
+// plainOutput is --plain: the human-readable text v1 printed by default.
+var plainOutput bool
+
+// flagOn reports whether cmd's flag name is set to true. Looked up on cmd, not
+// read from the bound variable, because several subcommands declare their own
+// local --json and --min, which shadow the root's.
+func flagOn(cmd *cobra.Command, name string) bool {
+	f := cmd.Flags().Lookup(name)
+	return f != nil && f.Value.String() == "true"
+}
+
+// resolveOutputMode publishes the output mode the parsed flags ask for.
+func resolveOutputMode(cmd *cobra.Command) {
+	GlobalJSONOutput = flagOn(cmd, "json")
+	GlobalMinOutput = flagOn(cmd, "min")
+	GlobalAXIOutput = !GlobalJSONOutput && !flagOn(cmd, "plain")
+	output.SetDefaultAXI(GlobalAXIOutput)
+}
+
+// FormatFlagConflict returns the output flags that cannot be used together,
+// always in the same order, or nil when the combination is valid. --plain,
+// --json and --axi each pick a format, so any two contradict; --min shapes a
+// TOON or JSON payload and has nothing to shape under --plain.
+//
+// main() calls it too, to pick the error format for an invocation that failed
+// before the flags were resolved, so the two can never disagree.
+func FormatFlagConflict(plain, jsonOut, axi, min bool) []string {
+	var flags []string
+	for _, f := range []struct {
+		on   bool
+		name string
+	}{{plain, "--plain"}, {jsonOut, "--json"}, {axi, "--axi"}} {
+		if f.on {
+			flags = append(flags, f.name)
+		}
+	}
+	if plain && min {
+		flags = append(flags, "--min")
+	}
+	if len(flags) < 2 {
+		return nil
+	}
+	return flags
+}
+
+// formatConflictError rejects a contradictory set of output flags. Its wording
+// is matched by output.ExitCodeFor, which classifies it as exit 2.
+func formatConflictError(cmd *cobra.Command, flags []string) error {
+	list := strings.Join(flags[:len(flags)-1], ", ") + " and " + flags[len(flags)-1]
+	return withHelp(fmt.Errorf("output flags %s cannot be combined: TOON is the default, --json and --plain each replace it, and --min applies only to TOON or JSON; run `%s --help` for usage",
+		list, cmd.CommandPath()), helpPointer(cmd))
+}
+
+// rejectContradictoryFormats makes every command refuse a contradictory set of
+// output flags before anything else looks at the invocation.
+//
+// It wraps each command's argument check rather than living in a hook, because
+// cobra checks arguments before PersistentPreRunE: `search --plain --json` with
+// no query would otherwise be reported as a missing query, and the format
+// conflict only once the query was supplied. Must run after
+// rejectUnknownCommands, which replaces the argument check of command groups.
+func rejectContradictoryFormats(cmd *cobra.Command) {
+	for _, c := range cmd.Commands() {
+		rejectContradictoryFormats(c)
+	}
+	check := cmd.Args
+	cmd.Args = func(cmd *cobra.Command, args []string) error {
+		if flags := FormatFlagConflict(flagOn(cmd, "plain"), flagOn(cmd, "json"), flagOn(cmd, "axi"), flagOn(cmd, "min")); flags != nil {
+			return formatConflictError(cmd, flags)
+		}
+		if check != nil {
+			return check(cmd, args)
+		}
+		return nil
+	}
+}
+
+// emitJSON writes v as JSON, or as TOON when TOON is the resolved mode.
 //
 // This package has no output choke point — 23 sites built their own encoder
 // across 8 files — so this is it. The signature carries both variations those

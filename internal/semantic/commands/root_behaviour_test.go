@@ -424,7 +424,8 @@ func TestBareRunShowsStatusPathAndDescription(t *testing.T) {
 	t.Run("with index", func(t *testing.T) {
 		indexedWorkspace(t)
 		var runErr error
-		out := captureStdout(t, func() { _, runErr = executeCommand(RootCmd()) })
+		// --plain: since epic 27 the default is TOON, covered below.
+		out := captureStdout(t, func() { _, runErr = executeCommand(RootCmd(), "--plain") })
 		if runErr != nil {
 			t.Fatalf("bare run: %v", runErr)
 		}
@@ -487,7 +488,7 @@ func TestBareRunWithNoIndexReportsNotIndexed(t *testing.T) {
 		flag string
 		want func(t *testing.T, out string)
 	}{
-		{"plain", "", func(t *testing.T, out string) {
+		{"plain", "--plain", func(t *testing.T, out string) {
 			for _, want := range []string{rootDescription, "Executable: ~", "Status:  not_indexed", "Indexed: false", "llm-semantic index ."} {
 				if !strings.Contains(out, want) {
 					t.Errorf("plain output missing %q:\n%s", want, out)
@@ -510,6 +511,14 @@ func TestBareRunWithNoIndexReportsNotIndexed(t *testing.T) {
 			for _, want := range []string{"bin: ~", "description: ", "status: not_indexed", "indexed: false", "help[", "llm-semantic index ."} {
 				if !strings.Contains(out, want) {
 					t.Errorf("axi output missing %q:\n%s", want, out)
+				}
+			}
+		}},
+		// TOON is the default since epic 27, so no flag is the --axi case.
+		{"default", "", func(t *testing.T, out string) {
+			for _, want := range []string{"bin: ~", "description: ", "status: not_indexed", "indexed: false", "help[", "llm-semantic index ."} {
+				if !strings.Contains(out, want) {
+					t.Errorf("default output missing %q:\n%s", want, out)
 				}
 			}
 		}},

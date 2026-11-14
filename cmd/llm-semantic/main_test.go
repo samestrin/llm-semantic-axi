@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/samestrin/llm-semantic-axi/internal/semantic/commands"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // main() is thin, but the one thing it does that nothing else does is stamp the
@@ -210,6 +212,12 @@ func TestMain_FlagParseErrorUnderAXIIsTOONOnStdout(t *testing.T) {
 		"unknown flag before --axi": {"search", "--nope", "--axi"},
 		"unknown subcommand":        {"nosuchcmd", "--axi"},
 		"explicit --axi=true":       {"search", "--nope", "--axi=true"},
+		// TOON is the default (epic 27 T1), so an error with no format flag,
+		// or with --axi=false, is TOON too; a --plain after the "--"
+		// terminator is a positional argument, not a format request.
+		"no format flag":        {"search", "--nope"},
+		"--axi=false":           {"search", "--nope", "--axi=false"},
+		"--plain after the end": {"search", "--nope", "--", "--plain"},
 	}
 	for name, args := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -228,13 +236,15 @@ func TestMain_FlagParseErrorUnderAXIIsTOONOnStdout(t *testing.T) {
 	}
 }
 
-func TestMain_FlagParseErrorWithoutAXIIsUnchanged(t *testing.T) {
-	// Defends the other half: without --axi (or with --axi=false, or after a
-	// "--" terminator) the plain "Error:" on stderr and empty stdout must stay.
+func TestMain_FlagParseErrorUnderPlainIsUnchanged(t *testing.T) {
+	// Defends the other half: under --plain, v1's default before epic 27 made
+	// TOON the default, the plain "Error:" on stderr and empty stdout stay.
+	// (Moving it to stdout is epic 27 T2.) An --axi after a "--" terminator
+	// is a positional argument and must not switch it to TOON.
 	cases := map[string][]string{
-		"no --axi":         {"search", "--nope"},
-		"--axi=false":      {"search", "--nope", "--axi=false"},
-		"after terminator": {"search", "--nope", "--", "--axi"},
+		"--plain":             {"search", "--nope", "--plain"},
+		"--plain --axi=false": {"search", "--nope", "--plain", "--axi=false"},
+		"after terminator":    {"search", "--nope", "--plain", "--", "--axi"},
 	}
 	for name, args := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -244,7 +254,7 @@ func TestMain_FlagParseErrorWithoutAXIIsUnchanged(t *testing.T) {
 				t.Errorf("exit code 0 for a flag-parse error; stdout=%q", stdout)
 			}
 			if stdout != "" {
-				t.Errorf("stdout should be empty without --axi: %q", stdout)
+				t.Errorf("stdout should be empty under --plain: %q", stdout)
 			}
 			if !strings.Contains(stderr, "Error:") || !strings.Contains(stderr, "unknown") {
 				t.Errorf("stderr lost the plain error: %q", stderr)
@@ -280,8 +290,8 @@ func TestMain_UnknownFlagListsTheValidFlagsOnTheRightStream(t *testing.T) {
 			}
 		})
 
-		t.Run(sub+" plain", func(t *testing.T) {
-			stdout, stderr, code := runMain(t, sub, "x", "--bogus")
+		t.Run(sub+" --plain", func(t *testing.T) {
+			stdout, stderr, code := runMain(t, sub, "x", "--bogus", "--plain")
 			if code != 2 {
 				t.Errorf("exit code = %d, want 2", code)
 			}
@@ -325,8 +335,8 @@ func TestMain_ArgumentCountErrorsExitTwoOnTheRequestedStream(t *testing.T) {
 		"index, too many": {"index", "a", "b"},
 	}
 	for name, args := range cases {
-		t.Run(name+" plain", func(t *testing.T) {
-			stdout, stderr, code := runMain(t, args...)
+		t.Run(name+" --plain", func(t *testing.T) {
+			stdout, stderr, code := runMain(t, append(args, "--plain")...)
 			if code != 2 {
 				t.Errorf("exit code = %d, want 2; stderr=%q", code, stderr)
 			}
@@ -380,14 +390,61 @@ func TestMain_ArgumentCountErrorsExitTwoOnTheRequestedStream(t *testing.T) {
 func TestMain_FlagParseErrorUnderJSONIsJSONOnStdout(t *testing.T) {
 	// The --json twin of TestMain_FlagParseErrorUnderAXIIsTOONOnStdout: an
 	// unknown flag stops parsing before --json is bound, so it must be read
-	// from the arguments. --json=false and a "--" terminator still mean plain.
+	// from the arguments. --json=false and a "--" terminator do not ask for
+	// JSON, so they get the default, TOON.
 	stdout, _, code := runMain(t, "search", "--nope", "--json")
 	if code != 2 || !strings.Contains(stdout, `"error": true`) {
 		t.Errorf("exit %d, stdout=%q; want 2 and a JSON error", code, stdout)
 	}
 	for _, args := range [][]string{{"search", "--nope", "--json=false"}, {"search", "--nope", "--", "--json"}} {
-		if stdout, _, _ := runMain(t, args...); stdout != "" {
-			t.Errorf("%v: stdout should be empty: %q", args, stdout)
+		if stdout, _, _ := runMain(t, args...); strings.Contains(stdout, `"error"`) || !strings.Contains(stdout, "error: true") {
+			t.Errorf("%v: stdout should be a TOON error, not JSON: %q", args, stdout)
+		}
+	}
+}
+
+// everyCommandPath lists the argument path to every command RootCmd builds,
+// root included, so a command added later is covered without editing a test.
+func everyCommandPath(c *cobra.Command) [][]string {
+	path := strings.Fields(c.CommandPath())[1:]
+	var required []string
+	c.Flags().VisitAll(func(f *pflag.Flag) {
+		if _, ok := f.Annotations[cobra.BashCompOneRequiredFlag]; ok {
+			required = append(required, "--"+f.Name, "x")
+		}
+	})
+	paths := [][]string{append(path, required...)}
+	for _, sub := range c.Commands() {
+		if sub.Name() != "help" && sub.Name() != "completion" {
+			paths = append(paths, everyCommandPath(sub)...)
+		}
+	}
+	return paths
+}
+
+func TestMain_ContradictoryFormatFlagsExitTwoWithTheErrorOnStdout(t *testing.T) {
+	// Defends epic 27 T1 at the process boundary, for every command: a
+	// contradictory set of format flags exits 2 with the error on stdout and
+	// nothing on stderr. The check fails before any format is resolved, so
+	// main() must still pick one from the arguments; it reports in the
+	// default, TOON, whichever flag came first. A process that exited 2 with
+	// an empty stdout would leave an agent only the exit code to go on.
+	rejected := [][]string{{"--plain", "--json"}, {"--plain", "--axi"}, {"--json", "--axi"}, {"--plain", "--min"}}
+	for _, path := range everyCommandPath(commands.RootCmd()) {
+		for _, flags := range rejected {
+			args := append(append([]string{}, path...), flags...)
+			t.Run(strings.Join(args, " "), func(t *testing.T) {
+				stdout, stderr, code := runMain(t, args...)
+				if code != 2 {
+					t.Errorf("exit code = %d, want 2; stdout=%q stderr=%q", code, stdout, stderr)
+				}
+				if !strings.Contains(stdout, "error: true") || !strings.Contains(stdout, "cannot be combined") {
+					t.Errorf("stdout carries no TOON format-conflict error: %q", stdout)
+				}
+				if stderr != "" {
+					t.Errorf("stderr should be empty: %q", stderr)
+				}
+			})
 		}
 	}
 }

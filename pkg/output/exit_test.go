@@ -41,6 +41,8 @@ func TestExitCodeForUsageErrors(t *testing.T) {
 		"maximum args": errors.New("accepts at most 1 arg(s), received 2"),
 		"exact args":   errors.New("accepts 1 arg(s), received 0"),
 		"range args":   errors.New("accepts between 1 and 2 arg(s), received 3"),
+		// llm-semantic's own: contradictory output flags (epic 27 T1).
+		"format conflict": errors.New("output flags --plain and --json cannot be combined: pick one"),
 	} {
 		t.Run(name, func(t *testing.T) {
 			if got := ExitCodeFor(err); got != int(goaxi.ExitUsage) {
