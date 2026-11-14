@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- The token benchmark measures its Plain variant with an explicit `--plain` instead of no flag, and both tables in `benchmarks/results-tokens.md` name that flag. A test fails if any measured mode passes no flag, so no mode is measured as whatever the CLI's default happens to be. The checked-in outputs and every count are unchanged: `make bench-tokens-write` moved only the two flag cells.
+
 ### Fixed
 
 - The `--axi` next step after a search hit says `callers` and `refs` show call sites for Go, JavaScript, TypeScript, Python and Rust. It said Go only.

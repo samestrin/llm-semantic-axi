@@ -165,6 +165,33 @@ func TestCountRefusesAnEmptyQueryList(t *testing.T) {
 	}
 }
 
+// Defends the task's "Done when": a format that passes no flag measures
+// whatever the CLI's default happens to be, so the table would name a mode
+// the run never selected — and the Plain row would keep saying *(none)* after
+// the default became TOON. Every entry must state the flags it passes, they
+// must be the flags named for that mode, and the flag the table shows must be
+// the flag the run passes.
+func TestFormatsPassTheFlagsTheyName(t *testing.T) {
+	want := map[string][]string{"json": {"--json"}, "axi": {"--axi"}, "plain": {"--plain"}}
+	for _, f := range Formats {
+		if len(f.Flags) == 0 {
+			t.Errorf("%s (%s): Flags is empty; the CLI's default is not a measured mode", f.Name, f.Dir)
+			continue
+		}
+		for _, flag := range f.Flags {
+			if strings.TrimSpace(flag) == "" {
+				t.Errorf("%s (%s): Flags holds a blank flag: %q", f.Name, f.Dir, f.Flags)
+			}
+		}
+		if w, ok := want[f.Dir]; ok && !reflect.DeepEqual(f.Flags, w) {
+			t.Errorf("%s (%s): Flags = %q, want %q", f.Name, f.Dir, f.Flags, w)
+		}
+		if w := "`" + strings.Join(f.Flags, " ") + "`"; f.Flag != w {
+			t.Errorf("%s (%s): Flag = %s, want %s: the table must name the flags the run passes", f.Name, f.Dir, f.Flag, w)
+		}
+	}
+}
+
 func TestRenderNumbersAndRatios(t *testing.T) {
 	res := &Result{
 		Queries: []string{"q one", "q|two"},
@@ -178,7 +205,8 @@ func TestRenderNumbersAndRatios(t *testing.T) {
 	for _, want := range []string{
 		"| JSON | `--json` | 400 | 1600 | 200.0 | 100.0% |",
 		"| TOON | `--axi` | 100 | 300 | 50.0 | 25.0% |",
-		"| Plain | *(none)* | 200 | 800 | 100.0 | 50.0% |",
+		"| Plain | `--plain` | 200 | 800 | 100.0 | 50.0% |",
+		"| # | Query | `--json` | `--axi` | `--plain` |",
 		"| 1 | q one | 100 | 50 | 80 |",
 		`| 2 | q\|two | 300 | 50 | 120 |`,
 		"On these 2 queries, `--axi` printed 25.0% of the tokens `--json` printed, and plain output printed 50.0%.",
