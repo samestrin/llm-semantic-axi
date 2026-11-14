@@ -1,0 +1,3 @@
+# codex-cli 0.166.0 runs .codex/hooks.json only with the hooks feature on.
+[features]
+hooks = true

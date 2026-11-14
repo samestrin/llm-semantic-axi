@@ -35,7 +35,7 @@ func readCommittedSkill(t *testing.T) (path string, content []byte) {
 func setupWrittenSkill(t *testing.T) []byte {
 	t.Helper()
 	dir := t.TempDir()
-	if err := runSetup(&bytes.Buffer{}, dir, false); err != nil {
+	if err := runSetup(&bytes.Buffer{}, dir, setupOptions{}); err != nil {
 		t.Fatalf("runSetup: %v", err)
 	}
 	p := filepath.Join(dir, ".claude", "skills", "llm-semantic", "SKILL.md")
