@@ -118,7 +118,9 @@ func TestHashEmbedderServesTheOpenAIShape(t *testing.T) {
 // fakeCLI writes a shell script standing in for llm-semantic. It prints a
 // result naming a file under $FAKE_ROOT in the requested format, or what
 // $FAKE_JSON says for --json, and exits with $FAKE_EXIT. $FAKE_AXI_TAIL and
-// $FAKE_PLAIN_HEAD replace the result count lines of --axi and plain.
+// $FAKE_PLAIN_HEAD replace the result count lines of --axi and plain. An
+// invocation naming no format flag fails: the benchmark must select each mode
+// it measures, not fall through to whatever the CLI's default is.
 func fakeCLI(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "llm-semantic")
@@ -128,7 +130,8 @@ case " $* " in
     if [ -n "$FAKE_JSON" ]; then printf '%s\n' "$FAKE_JSON"
     else printf '[{"chunk":{"file_path":"%s/a.go"}}]\n' "$FAKE_ROOT"; fi ;;
   *" --axi "*) printf 'results[1]{file}:\n  %s/a.go:1\n%s\n' "$FAKE_ROOT" "${FAKE_AXI_TAIL:-total: 1}" ;;
-  *) printf '%s\n\n1. %s/a.go:1\n' "${FAKE_PLAIN_HEAD:-1 results for \"$2\"}" "$FAKE_ROOT" ;;
+  *" --plain "*) printf '%s\n\n1. %s/a.go:1\n' "${FAKE_PLAIN_HEAD:-1 results for \"$2\"}" "$FAKE_ROOT" ;;
+  *) printf 'fake CLI: no output format flag in: %s\n' "$*" >&2; exit 2 ;;
 esac
 exit "${FAKE_EXIT:-0}"
 `
@@ -263,7 +266,7 @@ func TestReadQueriesSkipsBlankAndCommentLines(t *testing.T) {
 // fakeRepoMain stands in for cmd/llm-semantic in a throwaway repository. Its
 // index step calls the embedding endpoint and fails unless it answers, and
 // its search prints the working directory, as the real CLI prints absolute
-// paths.
+// paths. Like fakeCLI it refuses a search that names no output format flag.
 const fakeRepoMain = `package main
 
 import (
@@ -297,8 +300,11 @@ func main() {
 		} else {
 			if strings.Contains(strings.Join(os.Args, " "), "--axi") {
 				fmt.Println(wd + "/a.go:1\ntotal: 1")
-			} else {
+			} else if strings.Contains(strings.Join(os.Args, " "), "--plain") {
 				fmt.Println("1 results for \"q\"\n\n1. " + wd + "/a.go:1")
+			} else {
+				fmt.Fprintln(os.Stderr, "no output format flag")
+				os.Exit(2)
 			}
 		}
 	}
