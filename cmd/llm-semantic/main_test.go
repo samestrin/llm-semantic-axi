@@ -236,11 +236,11 @@ func TestMain_FlagParseErrorUnderAXIIsTOONOnStdout(t *testing.T) {
 	}
 }
 
-func TestMain_FlagParseErrorUnderPlainIsUnchanged(t *testing.T) {
-	// Defends the other half: under --plain, v1's default before epic 27 made
-	// TOON the default, the plain "Error:" on stderr and empty stdout stay.
-	// (Moving it to stdout is epic 27 T2.) An --axi after a "--" terminator
-	// is a positional argument and must not switch it to TOON.
+func TestMain_FlagParseErrorUnderPlainIsPlainOnStdout(t *testing.T) {
+	// Defends the plain half of epic 27 T2: under --plain a flag-parse error is
+	// the plain "Error: ..." on stdout with stderr empty. Until T2 it went to
+	// stderr and left stdout empty. An --axi after a "--" terminator is a
+	// positional argument and must not switch it to TOON.
 	cases := map[string][]string{
 		"--plain":             {"search", "--nope", "--plain"},
 		"--plain --axi=false": {"search", "--nope", "--plain", "--axi=false"},
@@ -253,11 +253,11 @@ func TestMain_FlagParseErrorUnderPlainIsUnchanged(t *testing.T) {
 			if code == 0 {
 				t.Errorf("exit code 0 for a flag-parse error; stdout=%q", stdout)
 			}
-			if stdout != "" {
-				t.Errorf("stdout should be empty under --plain: %q", stdout)
+			if !strings.HasPrefix(stdout, "Error:") || !strings.Contains(stdout, "unknown") {
+				t.Errorf("stdout lacks the plain error: %q", stdout)
 			}
-			if !strings.Contains(stderr, "Error:") || !strings.Contains(stderr, "unknown") {
-				t.Errorf("stderr lost the plain error: %q", stderr)
+			if stderr != "" {
+				t.Errorf("stderr should be empty under --plain: %q", stderr)
 			}
 		})
 	}
@@ -266,8 +266,8 @@ func TestMain_FlagParseErrorUnderPlainIsUnchanged(t *testing.T) {
 func TestMain_UnknownFlagListsTheValidFlagsOnTheRightStream(t *testing.T) {
 	// Defends AXI principle 6 end to end: an unknown flag must be named, the
 	// command's flags listed with a pointer to --help, and the run must exit 2.
-	// Under --axi it is TOON on stdout with help[]; plain mode keeps stderr and
-	// leaves stdout empty, the documented exception.
+	// Under --axi it is TOON on stdout with help[]; under --plain it is plain
+	// text, also on stdout (epic 27 T2), with stderr empty in both.
 	cases := map[string]string{"search": "--top", "index": "--include"}
 	for sub, local := range cases {
 		wants := []string{"--bogus", "--axi", "--json", "--min", local, "llm-semantic " + sub + " --help"}
@@ -296,12 +296,12 @@ func TestMain_UnknownFlagListsTheValidFlagsOnTheRightStream(t *testing.T) {
 				t.Errorf("exit code = %d, want 2", code)
 			}
 			for _, want := range wants {
-				if !strings.Contains(stderr, want) {
-					t.Errorf("stderr lacks %q:\n%s", want, stderr)
+				if !strings.Contains(stdout, want) {
+					t.Errorf("stdout lacks %q:\n%s", want, stdout)
 				}
 			}
-			if stdout != "" {
-				t.Errorf("stdout should be empty in plain mode: %q", stdout)
+			if stderr != "" {
+				t.Errorf("stderr should be empty in plain mode: %q", stderr)
 			}
 		})
 	}
@@ -340,8 +340,8 @@ func TestMain_ArgumentCountErrorsExitTwoOnTheRequestedStream(t *testing.T) {
 			if code != 2 {
 				t.Errorf("exit code = %d, want 2; stderr=%q", code, stderr)
 			}
-			if stdout != "" || !strings.Contains(stderr, "arg(s)") {
-				t.Errorf("plain error should be on stderr only: stdout=%q stderr=%q", stdout, stderr)
+			if stderr != "" || !strings.HasPrefix(stdout, "Error:") || !strings.Contains(stdout, "arg(s)") {
+				t.Errorf("plain error should be on stdout only: stdout=%q stderr=%q", stdout, stderr)
 			}
 		})
 

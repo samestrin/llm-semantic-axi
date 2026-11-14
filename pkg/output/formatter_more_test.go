@@ -437,34 +437,47 @@ func TestPrintError_TextModePrefixesUnlessMinimal(t *testing.T) {
 	}
 }
 
-func TestPrintError_TextModeDivertsStdoutToStderr(t *testing.T) {
-	// In text mode an error belongs on stderr so a caller piping stdout gets
-	// results only. The redirect is keyed on the writer being os.Stdout, which
-	// is what a real CLI passes.
-	r, w, err := os.Pipe()
+func TestPrintError_TextModeWritesToStdoutNotStderr(t *testing.T) {
+	// Defends epic 27 T2 (AXI principle 6): a text-mode error goes to the
+	// formatter's writer like every other mode. It used to be diverted to
+	// stderr whenever the writer was os.Stdout, which is what the real CLI
+	// passes, so a caller reading stdout saw nothing at all.
+	outR, outW, err := os.Pipe()
 	if err != nil {
 		t.Fatalf("Pipe: %v", err)
 	}
-	realStderr := os.Stderr
-	os.Stderr = w
-	t.Cleanup(func() { os.Stderr = realStderr })
-
-	f := New(false, false, os.Stdout)
-	code := f.PrintError(errTest("diverted"))
-	if closeErr := w.Close(); closeErr != nil {
-		t.Fatalf("Close: %v", closeErr)
-	}
-	os.Stderr = realStderr
-
-	captured, err := readAll(r)
+	errR, errW, err := os.Pipe()
 	if err != nil {
-		t.Fatalf("read: %v", err)
+		t.Fatalf("Pipe: %v", err)
+	}
+	realStdout, realStderr := os.Stdout, os.Stderr
+	os.Stdout, os.Stderr = outW, errW
+	t.Cleanup(func() { os.Stdout, os.Stderr = realStdout, realStderr })
+
+	code := New(false, false, os.Stdout).PrintError(errTest("not diverted"))
+	for _, w := range []*os.File{outW, errW} {
+		if closeErr := w.Close(); closeErr != nil {
+			t.Fatalf("Close: %v", closeErr)
+		}
+	}
+	os.Stdout, os.Stderr = realStdout, realStderr
+
+	stdout, err := readAll(outR)
+	if err != nil {
+		t.Fatalf("read stdout: %v", err)
+	}
+	stderr, err := readAll(errR)
+	if err != nil {
+		t.Fatalf("read stderr: %v", err)
 	}
 	if code != 1 {
 		t.Errorf("PrintError = %d, want 1", code)
 	}
-	if captured != "Error: diverted\n" {
-		t.Errorf("stderr got %q, want %q", captured, "Error: diverted\n")
+	if stdout != "Error: not diverted\n" {
+		t.Errorf("stdout got %q, want %q", stdout, "Error: not diverted\n")
+	}
+	if stderr != "" {
+		t.Errorf("stderr got %q, want empty", stderr)
 	}
 }
 
