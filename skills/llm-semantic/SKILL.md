@@ -10,4 +10,4 @@ Run `llm-semantic` with no arguments to see whether this directory has an index.
 - `llm-semantic index .` builds the index; `llm-semantic index-update` refreshes it.
 - `llm-semantic search "<query>"` finds code by meaning.
 - `llm-semantic callers <symbol>` and `llm-semantic refs <symbol>` work for Go, JavaScript, TypeScript, Python and Rust. An empty result for any other language means not indexed, not that none exist.
-- Add `--json` or `--axi` for machine-readable output.
+- Output is TOON by default. `--json` gives JSON output, `--plain` gives plain text, and `--axi` remains an alias for TOON.
