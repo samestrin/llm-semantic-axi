@@ -448,3 +448,73 @@ func TestMain_ContradictoryFormatFlagsExitTwoWithTheErrorOnStdout(t *testing.T) 
 		}
 	}
 }
+
+func TestMain_ErrorsGoToStdoutInTheActiveFormat(t *testing.T) {
+	// Defends epic 27 T2 (AXI principle 6): every error, in every output
+	// format, is printed on stdout in that format, with nothing on stderr and
+	// the exit code unchanged. Plain mode used to divert its "Error: ..." to
+	// stderr, so a caller reading stdout got an empty stream and had only the
+	// exit code to learn that the command failed. An unknown flag stops
+	// parsing before the format flag is bound, so it is tried on both sides
+	// of the format flag; the result must not depend on argument order.
+	formats := []struct {
+		name  string
+		flags []string
+		// isError reports whether stdout is an error in this format.
+		isError func(stdout string) bool
+	}{
+		{"default TOON", nil, isTOONError},
+		{"--axi", []string{"--axi"}, isTOONError},
+		{"--plain", []string{"--plain"}, func(s string) bool { return strings.HasPrefix(s, "Error: ") }},
+		{"--json", []string{"--json"}, func(s string) bool {
+			var got struct {
+				Error   bool   `json:"error"`
+				Message string `json:"message"`
+			}
+			return json.Unmarshal([]byte(s), &got) == nil && got.Error && got.Message != ""
+		}},
+		{"--json --min", []string{"--json", "--min"}, func(s string) bool {
+			var got struct {
+				Err bool   `json:"err"`
+				Msg string `json:"msg"`
+			}
+			return json.Unmarshal([]byte(s), &got) == nil && got.Err && got.Msg != ""
+		}},
+	}
+	cases := []struct {
+		name string
+		args func(format []string) []string
+		code int
+		// names is a fragment the error must carry, so a test cannot pass on
+		// some other error that happens to share the exit code.
+		names string
+	}{
+		{"unknown flag before the format", func(f []string) []string { return append([]string{"search", "x", "--nope"}, f...) }, 2, "--nope"},
+		{"unknown flag after the format", func(f []string) []string { return append(append([]string{"search", "x"}, f...), "--nope") }, 2, "--nope"},
+		{"unknown command", func(f []string) []string { return append([]string{"nosuchcmd"}, f...) }, 2, "nosuchcmd"},
+		{"runtime error", func(f []string) []string {
+			return append([]string{"search", "foo", "--index-dir", "nope"}, f...)
+		}, 1, "index"},
+	}
+	for _, format := range formats {
+		for _, c := range cases {
+			t.Run(format.name+"/"+c.name, func(t *testing.T) {
+				stdout, stderr, code := runMain(t, c.args(format.flags)...)
+				if code != c.code {
+					t.Errorf("exit code = %d, want %d; stdout=%q stderr=%q", code, c.code, stdout, stderr)
+				}
+				if !format.isError(stdout) || !strings.Contains(stdout, c.names) {
+					t.Errorf("stdout does not hold a %s error naming %q: stdout=%q stderr=%q", format.name, c.names, stdout, stderr)
+				}
+				if stderr != "" {
+					t.Errorf("stderr should be empty: %q", stderr)
+				}
+			})
+		}
+	}
+}
+
+// isTOONError reports whether s is a TOON error object.
+func isTOONError(s string) bool {
+	return strings.HasPrefix(s, "error: true\n") && strings.Contains(s, "message:")
+}
