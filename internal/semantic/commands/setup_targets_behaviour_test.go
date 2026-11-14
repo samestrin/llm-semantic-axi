@@ -230,7 +230,7 @@ func TestSetupDefaultRegistersEveryTarget(t *testing.T) {
 // repeatable --target flag: two targets named means exactly those two.
 func TestSetupTargetFlagNarrowsThroughTheCommand(t *testing.T) {
 	dir := newWorkspace(t)
-	stubSetupBinary(t, "", nil)
+	stubSetupBinary(t, "/usr/local/bin/llm-semantic", nil)
 	if err := executeRoot(t, "setup", "--plain", "--target", "codex", "--target", "opencode"); err != nil {
 		t.Fatalf("setup: %v", err)
 	}
@@ -243,7 +243,7 @@ func TestSetupTargetFlagNarrowsThroughTheCommand(t *testing.T) {
 // the valid choices, before anything is written.
 func TestSetupRejectsAnUnknownTarget(t *testing.T) {
 	dir := newWorkspace(t)
-	stubSetupBinary(t, "", nil)
+	stubSetupBinary(t, "/usr/local/bin/llm-semantic", nil)
 	err := executeRoot(t, "setup", "--plain", "--target", "cursor")
 	if err == nil {
 		t.Fatal("expected an error for --target cursor")
