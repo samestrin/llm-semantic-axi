@@ -12,7 +12,7 @@
       "domain": "code"
     },
     "score": 0.41962716,
-    "relevance": "medium",
+    "relevance": "low",
     "preview": "## Language table  Every extension `RegisterAllChunkers` registers, and what indexes it. A test (`TestReadmeLanguageTable_MatchesRegisteredExtensions`..."
   },
   {

@@ -1,6 +1,6 @@
 10 results for "how does the index decide a file needs re-indexing"
 
-1. /work/llm-semantic-axi/internal/semantic/index_manager.go:1502 - fileNeedsUpdate (method) [MEDIUM]
+1. /work/llm-semantic-axi/internal/semantic/index_manager.go:1502 - fileNeedsUpdate (method) [LOW]
    Score: 0.4092
    func (m *IndexManager) fileNeedsUpdate(ctx context.Context, filePath string) (bool, error)
 

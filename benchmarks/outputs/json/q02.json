@@ -13,7 +13,7 @@
       "domain": "code"
     },
     "score": 0.40922263,
-    "relevance": "medium",
+    "relevance": "low",
     "preview": "func (m *IndexManager) fileNeedsUpdate(ctx context.Context, filePath string) (bool, error)"
   },
   {
