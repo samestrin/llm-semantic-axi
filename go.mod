@@ -1,4 +1,4 @@
-module github.com/samestrin/llm-semantic-axi
+module github.com/samestrin/llm-semantic-axi/v2
 
 go 1.24.0
 

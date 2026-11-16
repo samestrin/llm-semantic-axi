@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/samestrin/llm-semantic-axi/internal/semantic/config"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic/config"
 )
 
 // BinaryPath is the path to the llm-semantic binary

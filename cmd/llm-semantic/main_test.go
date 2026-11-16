@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/samestrin/llm-semantic-axi/internal/semantic/commands"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic/commands"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )

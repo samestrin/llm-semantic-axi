@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"testing"
 
-	"github.com/samestrin/llm-semantic-axi/internal/semantic"
-	"github.com/samestrin/llm-semantic-axi/internal/semantic/config"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic/config"
 )
 
 func TestBuildMemoryStoreArgs(t *testing.T) {

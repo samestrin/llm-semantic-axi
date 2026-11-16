@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/samestrin/llm-semantic-axi/internal/semantic"
-	"github.com/samestrin/llm-semantic-axi/internal/semantic/config"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic/config"
 	"github.com/spf13/cobra"
 )
 
@@ -126,8 +126,8 @@ how many candidates are fetched before reranking (default: max(topK*5, 50)).`,
 	cmd.Flags().StringVar(&typeFilter, "type", "", "Filter by chunk type (function, method, struct, interface)")
 	cmd.Flags().StringVarP(&pathFilter, "path", "p", "", "Filter by path prefix")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output results as JSON")
-	cmd.Flags().BoolVar(&minOutput, "min", false, "Output minimal JSON format")
-	cmd.Flags().BoolVar(&full, "full", false, "With --axi, return every field and the whole content of each result")
+	cmd.Flags().BoolVar(&minOutput, "min", false, "Minimal/token-optimized TOON or JSON payload")
+	cmd.Flags().BoolVar(&full, "full", false, "Return every field and the whole content of each result")
 	cmd.Flags().BoolVar(&hybrid, "hybrid", false, "Enable hybrid search (dense + lexical with RRF fusion)")
 	cmd.Flags().IntVar(&fusionK, "fusion-k", 60, "RRF fusion k parameter (higher = smoother ranking)")
 	cmd.Flags().Float64Var(&fusionAlpha, "fusion-alpha", 0.7, "Fusion weight: 1.0 = dense only, 0.0 = lexical only")
@@ -547,7 +547,7 @@ Returns ranked results based on semantic similarity.`, profileName, profileName)
 	cmd.Flags().StringVar(&pathFilter, "path", "", "Filter by file path prefix")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 	cmd.Flags().BoolVar(&minOutput, "min", false, "Minimal output format")
-	cmd.Flags().BoolVar(&full, "full", false, "With --axi, return every field and the whole content of each result")
+	cmd.Flags().BoolVar(&full, "full", false, "Return every field and the whole content of each result")
 	cmd.Flags().BoolVar(&hybrid, "hybrid", false, "Enable hybrid search (dense + lexical with RRF)")
 	cmd.Flags().IntVar(&fusionK, "fusion-k", 60, "RRF smoothing constant (higher = less weight to top ranks)")
 	cmd.Flags().Float64Var(&fusionAlpha, "fusion-alpha", 0.7, "Dense vs lexical weight (0.0=lexical only, 1.0=dense only)")

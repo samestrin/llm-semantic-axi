@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/samestrin/llm-semantic-axi/internal/semantic"
-	"github.com/samestrin/llm-semantic-axi/internal/semantic/config"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic/config"
 	"github.com/spf13/cobra"
 )
 

@@ -6,12 +6,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-### Fixed
-
-- A flag-group usage error, such as `memory stats --prune` without `--older-than`, exits 2 instead of 1 and carries a `help` line pointing at the command's `--help`, like every other malformed invocation. cobra's required-together, one-required and mutually-exclusive group errors are all classified as usage errors.
-- The token benchmark labels the TOON row `(default)` instead of `--axi`, which is a no-op alias, and its summary says "the default TOON output". The counts are unchanged.
-- `docs/axi-catalog-entry.yaml` quotes the current token totals (11,241 TOON vs 43,477 `--json`, 25.9%), and a test fails if they drift from the recount. `docs/axi-conformance.md` and the catalog entry state that no session-end hook is installed, that the truncation limit is 200 characters, below axi.md's 500-1,500, and that there is no `--fields` flag. The README's bare-run row shows the TOON `status: not_indexed`.
-
 ## [2.0.0] - 2026-11-16
 
 ### Added
@@ -20,6 +14,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **Breaking:** the Go module path is `github.com/samestrin/llm-semantic-axi/v2`, because Go ignores a v2 tag on a path without `/v2`. Install with `go install github.com/samestrin/llm-semantic-axi/v2/cmd/llm-semantic@latest` (and `.../v2/cmd/llm-semantic-mcp@latest`); the old path without `/v2` stops at v1.2.0. Code importing `pkg/output` imports `github.com/samestrin/llm-semantic-axi/v2/pkg/output`. A test fails if the module path's major differs from the newest release in this changelog or a README `go install` line names another path.
 - **Breaking:** CLI output is TOON by default instead of plain text. `--axi` remains accepted as a no-op alias for TOON, `--json` selects the existing JSON schema, and `--min` remains a payload modifier. **Migration:** pass `--plain` to preserve the v1 human-readable text output. Contradictory format flags are usage errors: they exit 2 and report the error on stdout in the selected format. The Agent Skill names the new default and the format flags.
 
 - The token benchmark measures its Plain variant with an explicit `--plain` instead of no flag, and both tables in `benchmarks/results-tokens.md` name that flag. A test fails if any measured mode passes no flag, so no mode is measured as whatever the CLI's default happens to be. The checked-in outputs and every count are unchanged: `make bench-tokens-write` moved only the two flag cells.
@@ -33,6 +28,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `index-update` in git mode reads each changed file's fallback reason on its own. It listed every fallen-back file in the index once per changed file, so an update cost grew with the size of the index times the number of changed files.
 - `docs/storage-contract.md` cites the functions that write each point and key instead of line numbers, which had drifted (`SetFileHash` was cited about 100 lines from where it is). A test fails on a line-number citation or a cited symbol that no longer exists.
 - The README Quick start `index` and `callers` output now matches the `v1.2.0` release binary on a clean clone of the tag.
+- A flag-group usage error, such as `memory stats --prune` without `--older-than`, exits 2 instead of 1 and carries a `help` line pointing at the command's `--help`, like every other malformed invocation. cobra's required-together, one-required and mutually-exclusive group errors are all classified as usage errors.
+- The token benchmark labels the TOON row `(default)` instead of `--axi`, which is a no-op alias, and its summary says "the default TOON output". The counts are unchanged.
+- `docs/axi-catalog-entry.yaml` quotes the current token totals (11,241 TOON vs 43,477 `--json`, 25.9%), and a test fails if they drift from the recount. `docs/axi-conformance.md` and the catalog entry state that no session-end hook is installed, that the truncation limit is 200 characters, below axi.md's 500-1,500, and that there is no `--fields` flag. The README's bare-run row shows the TOON `status: not_indexed`.
+- `--full` help on `search`, the profile search aliases, `multisearch` and `memory search` no longer says "With --axi": TOON is the default, so it reads "Return every field and the whole content of each result". The `--min` help on `search`, `multisearch` and `memory search` says it shapes TOON or JSON, as the root `--min` help and the README do; it said "Output minimal JSON format". A test fails if any flag's help other than `--axi` names `--axi`, or a `--min` help names JSON without TOON.
+- The README Output table says a zero-result `--json` search prints `null`, or `[]` when reranking is on. The tests that build a workspace clear the embedder and reranker environment variables, so a developer with `LLM_SEMANTIC_RERANKER_API_URL` set no longer sees six zero-result search tests fail.
+- The demo tape runs `search` and `callers` without the no-op `--axi`. The committed GIF is still the v1.2.0 render that types `--axi`; `docs/demo/README.md` says so until it is re-rendered against a live embedding endpoint. The README Performance section is re-measured on this release with `make bench-perf-write`.
 
 ## [1.2.0] - 2026-11-12
 

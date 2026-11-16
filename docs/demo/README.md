@@ -1,6 +1,6 @@
 # Demo
 
-`llm-semantic.tape` is a [VHS](https://github.com/charmbracelet/vhs) script for a real session of under 30 seconds: `--version`, a `search` with `--axi`, and a `callers` query. Nothing in it is mocked; every command runs against the release binary. `llm-semantic.gif` is its rendered output, committed as a file in this directory rather than linked from `vhs.charm.sh`.
+`llm-semantic.tape` is a [VHS](https://github.com/charmbracelet/vhs) script for a real session of under 30 seconds: `--version`, a `search` and a `callers` query, all in the default TOON output. Nothing in it is mocked; every command runs against the release binary. `llm-semantic.gif` is its rendered output, committed as a file in this directory rather than linked from `vhs.charm.sh`.
 
 ## What the session needs
 
@@ -34,6 +34,8 @@ This writes `docs/demo/llm-semantic.gif`. Check the result is under 30 seconds b
 ## The committed render
 
 `llm-semantic.gif` was rendered on 2026-11-11 from `main` stamped `v1.2.0`, against a Qwen3-Embedding-4B endpoint with its reranker and a fresh index of this repository. It runs **22.6 seconds** (565 frames at 40 ms each), inside the 30-second budget.
+
+That render predates v2.0.0: it types `--axi` after `search` and `callers`, which v1.2.0 needed for TOON. The tape no longer passes it, because TOON is the default and `--axi` is a no-op, so the output is the same format but the typed commands differ. Re-render before tagging v2.0.0 (see [the release checklist](../release-checklist.md)) and replace this paragraph with the new render's date, version and timing.
 
 Two details of the tape come from that render:
 

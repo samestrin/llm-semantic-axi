@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/samestrin/llm-semantic-axi/internal/semantic"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
 )
 
 // rustRefsFixture covers each shape epic 03.2 T1 names: a direct call, a

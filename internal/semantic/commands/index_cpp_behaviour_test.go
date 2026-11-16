@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/samestrin/llm-semantic-axi/internal/semantic"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
 )
 
 // TestRunIndexStoresNamedRowsForCppAndACHeader is task T6's "done when" in the

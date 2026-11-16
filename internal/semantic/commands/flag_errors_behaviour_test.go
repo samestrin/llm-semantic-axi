@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/samestrin/llm-semantic-axi/pkg/output"
+	"github.com/samestrin/llm-semantic-axi/v2/pkg/output"
 )
 
 // executeRoot runs a fresh command tree with args and returns its error.

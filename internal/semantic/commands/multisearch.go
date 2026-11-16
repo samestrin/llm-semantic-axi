@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/samestrin/llm-semantic-axi/internal/semantic"
-	"github.com/samestrin/llm-semantic-axi/internal/semantic/config"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic/config"
 	"github.com/spf13/cobra"
 )
 
@@ -92,8 +92,8 @@ Examples:
 	cmd.Flags().BoolVar(&noDedupe, "no-dedupe", false, "Disable result deduplication")
 	cmd.Flags().StringVar(&outputFormat, "output", "", "Output format: blended (default), by_query, by_collection")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output results as JSON")
-	cmd.Flags().BoolVar(&minOutput, "min", false, "Output minimal JSON format")
-	cmd.Flags().BoolVar(&full, "full", false, "With --axi, return every field and the whole content of each result")
+	cmd.Flags().BoolVar(&minOutput, "min", false, "Minimal/token-optimized TOON or JSON payload")
+	cmd.Flags().BoolVar(&full, "full", false, "Return every field and the whole content of each result")
 
 	return cmd
 }

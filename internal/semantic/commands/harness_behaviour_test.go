@@ -15,7 +15,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/samestrin/llm-semantic-axi/internal/semantic"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
 )
 
 // The cobra runXxx handlers were all untested because every one of them opens
@@ -175,6 +175,12 @@ func bagOfWords(text string) []float64 {
 // unrelated test fail somewhere later in the run.
 func newWorkspace(t *testing.T) string {
 	t.Helper()
+	// A reranker in the developer's environment turns on reranking, which
+	// drops --threshold and changed six zero-result tests' answers (EST-6612).
+	// CI sets none of these; clear them so a local run matches it.
+	for _, name := range []string{"LLM_SEMANTIC_RERANKER_API_URL", "LLM_SEMANTIC_RERANKER_MODEL", "LLM_SEMANTIC_API_URL", "LLM_SEMANTIC_MODEL", "LLM_SEMANTIC_API_KEY"} {
+		t.Setenv(name, "")
+	}
 	dir := t.TempDir()
 	t.Chdir(dir)
 	ResetGlobalsForTesting()

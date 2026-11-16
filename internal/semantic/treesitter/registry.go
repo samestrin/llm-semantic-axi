@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/samestrin/llm-semantic-axi/internal/semantic"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
 )
 
 // Registry collects tree-sitter chunker constructors. Each chunker file adds

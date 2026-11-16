@@ -6,9 +6,9 @@
 
 ## Demo
 
-![A terminal session running --version, a search with --axi, and a callers query](docs/demo/llm-semantic.gif)
+![A terminal session running --version, a search and a callers query](docs/demo/llm-semantic.gif)
 
-The session runs `--version`, a `search` with `--axi` and a `callers` query against a release binary, with nothing mocked. [docs/demo/README.md](docs/demo/README.md) has the tape and the steps to render the GIF again.
+The session runs `--version`, a `search` and a `callers` query against a release binary, with nothing mocked. [docs/demo/README.md](docs/demo/README.md) has the tape and the steps to render the GIF again.
 
 ## Why
 
@@ -53,8 +53,8 @@ On macOS, use `shasum -a 256 -c -` in place of `sha256sum -c -`. Windows has raw
 Requires Go 1.24 or newer:
 
 ```bash
-go install github.com/samestrin/llm-semantic-axi/cmd/llm-semantic@latest
-go install github.com/samestrin/llm-semantic-axi/cmd/llm-semantic-mcp@latest
+go install github.com/samestrin/llm-semantic-axi/v2/cmd/llm-semantic@latest
+go install github.com/samestrin/llm-semantic-axi/v2/cmd/llm-semantic-mcp@latest
 ```
 
 The binaries land in `$(go env GOPATH)/bin`. A `go install` build is not stamped with a version, so `llm-semantic --version` prints `dev`.
@@ -77,7 +77,7 @@ Two ways to tell an agent the tool exists:
 
 ### Upgrade
 
-Re-run the installer, or `go install ...@latest`, or `git pull && make build` in a clone. Then re-run `llm-semantic setup` in each project that used it, so the skill text matches the new binary. When the changelog says a release adds call edges for a language, rebuild the index with `llm-semantic index --force`: `index-update` does not re-chunk files whose content is unchanged.
+Re-run the installer, or the two `go install .../v2/cmd/...@latest` lines above (the old path without `/v2` stops at v1.2.0), or `git pull && make build` in a clone. Then re-run `llm-semantic setup` in each project that used it, so the skill text matches the new binary. When the changelog says a release adds call edges for a language, rebuild the index with `llm-semantic index --force`: `index-update` does not re-chunk files whose content is unchanged.
 
 ### Uninstall
 
@@ -208,7 +208,7 @@ Flags win over environment variables, and environment variables over defaults. S
 |---|---|
 | none | TOON, the token-dense AXI format to give a model: four fields per result, content cut at 200 characters with `--full` for the rest, a `total`, a `status` for empty answers and a `help` list of next steps. |
 | `--plain` | Human-readable text. |
-| `--json` | JSON. Keeps its pre-AXI schema (full fields, no total) so existing scripts keep working. |
+| `--json` | JSON. Keeps its pre-AXI schema (full fields, no total) so existing scripts keep working. A search with no results prints `null`, or `[]` when reranking is on, so treat both as empty. |
 | `--min` | A minimal TOON or JSON payload. Not valid with `--plain`. |
 | `--axi` | Accepted so v1 invocations keep working; TOON is already the default, so it changes nothing. |
 
@@ -226,8 +226,8 @@ Search-family output also says how far the index is behind the working tree (`fr
 
 ## Performance
 
-- **Version:** `v1.1.0-11-gc1ec2a4` (`llm-semantic --version`)
-- **Date:** 2026-11-11
+- **Version:** `v1.2.0-15-g658dd66` (`llm-semantic --version`)
+- **Date:** 2026-11-16
 - **Machine:** Intel(R) Xeon(R) W-2295 CPU @ 3.00GHz, 36 threads, 141.2 GiB RAM, Debian GNU/Linux 13 (trixie) (linux/amd64), kernel 7.0.0-38-generic
 - **Method:** each case runs its warmup runs untimed, then its timed runs: warmup 3 (cold start), 3 (typical command), 1 (large input); runs 20 (cold start), 20 (typical command), 5 (large input). Each timing is the wall clock of one `llm-semantic` process, from start to exit, on the release build. Every `index` and `search` run also gets `--api-url`, `--model`, `--storage sqlite` and `--index-dir` pointing at the fake embedder and a temporary index; each `index` run starts from an empty index.
 - **Embeddings:** a fixed-latency local fake: a loopback OpenAI-compatible server that waits 1.0 ms per request and answers with deterministic 256-dimension hash vectors, so the numbers measure the tool and not a model.
@@ -235,9 +235,9 @@ Search-family output also says how far the index is behind the working tree (`fr
 
 | Case | Command | Warmup | Runs | Min (ms) | Median (ms) | Mean (ms) | Max (ms) |
 |---|---|---:|---:|---:|---:|---:|---:|
-| cold start | `llm-semantic --version` | 3 | 20 | 3.8 | 4.0 | 4.1 | 4.9 |
-| typical command | `llm-semantic search "load the config file and validate it" --json` | 3 | 20 | 85.8 | 88.6 | 88.8 | 93.2 |
-| large input | `llm-semantic index <corpus> --json` | 1 | 5 | 32430.7 | 33200.5 | 33496.6 | 35090.8 |
+| cold start | `llm-semantic --version` | 3 | 20 | 3.7 | 3.9 | 3.9 | 4.3 |
+| typical command | `llm-semantic search "load the config file and validate it" --json` | 3 | 20 | 81.6 | 82.9 | 83.1 | 86.5 |
+| large input | `llm-semantic index <corpus> --json` | 1 | 5 | 32753.6 | 33126.9 | 33289.4 | 34265.3 |
 
 Every timing is in [benchmarks/results-performance.json](benchmarks/results-performance.json). Measured by [`benchmarks/cmd/perf`](benchmarks/cmd/perf/main.go).
 

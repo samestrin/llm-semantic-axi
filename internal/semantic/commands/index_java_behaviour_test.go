@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/samestrin/llm-semantic-axi/internal/semantic"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
 )
 
 const javaFixture = `package demo;
