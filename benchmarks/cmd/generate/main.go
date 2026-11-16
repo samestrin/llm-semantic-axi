@@ -20,7 +20,7 @@ func main() {
 	dir := flag.String("dir", "benchmarks", "benchmark directory")
 	flag.Parse()
 	logf := func(s string) { fmt.Fprintln(os.Stderr, s) }
-	if err := benchmarks.Generate(context.Background(), *repo, *commit, *dir, logf); err != nil {
+	if err := benchmarks.Generate(context.Background(), *repo, *commit, benchmarks.CheckoutDir, *dir, logf); err != nil {
 		fmt.Fprintln(os.Stderr, "generate:", err)
 		os.Exit(1)
 	}
