@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - The README describes `llm-semantic` as a single Go binary for AI agents and people, with [AXI](https://axi.md)-compliant output built for agents to parse.
+- The README title is the repository name, `llm-semantic-axi`; the text still says `llm-semantic` wherever it means the command.
 
 ## [2.0.0] - 2026-11-16
 

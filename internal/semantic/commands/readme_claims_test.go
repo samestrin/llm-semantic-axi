@@ -98,8 +98,10 @@ func TestReadmeFollowsStandardSections(t *testing.T) {
 	readme := readPublicDoc(t, "README.md")
 	prose := readmeProse(readme)
 
-	if prose[0] != "# llm-semantic" {
-		t.Errorf("README.md starts %q, want the title \"# llm-semantic\"", prose[0])
+	// The title is the repository name, not the binary name (owner decision
+	// 2026-11-16): the prose keeps `llm-semantic` wherever it means the command.
+	if prose[0] != "# llm-semantic-axi" {
+		t.Errorf("README.md starts %q, want the title \"# llm-semantic-axi\"", prose[0])
 	}
 	var head []string
 	for _, line := range prose[1:] {

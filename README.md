@@ -1,4 +1,4 @@
-# llm-semantic
+# llm-semantic-axi
 
 `llm-semantic` is a single Go binary that gives an AI agent, or you, commands to search code by meaning and answer "what calls this" from a recorded call graph, with [AXI](https://axi.md)-compliant output built for agents to parse.
 
