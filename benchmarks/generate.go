@@ -200,7 +200,7 @@ func RunQueries(ctx context.Context, cfg RunConfig) error {
 // the repository at repo: it checks the commit out into a temporary worktree,
 // builds the CLI from it, indexes it against a loopback HashEmbedder and runs
 // the query list. Nothing leaves the machine.
-func Generate(ctx context.Context, repo, commit, benchDir string, log func(string)) (err error) {
+func Generate(ctx context.Context, repo, commit, checkout, benchDir string, log func(string)) (err error) {
 	queries, err := ReadQueries(filepath.Join(benchDir, QueriesFile))
 	if err != nil {
 		return err
