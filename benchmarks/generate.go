@@ -152,6 +152,7 @@ type RunConfig struct {
 	Roots   []string // spellings of the checkout path, rewritten to RootAs
 	RootAs  string   // the path the outputs show instead
 	Leak    string   // a path that must not survive the rewrite
+	Env     []string // the CLI's environment; nil inherits this process's
 	// IndexedAt, if set, replaces the time of the index run in --axi's
 	// indexed_at, which would otherwise differ on every run.
 	IndexedAt string
@@ -172,6 +173,7 @@ func RunQueries(ctx context.Context, cfg RunConfig) error {
 			args := append([]string{"search", q, "--api-url", cfg.APIURL, "--model", cfg.Model}, f.Flags...)
 			cmd := exec.CommandContext(ctx, cfg.CLI, args...)
 			cmd.Dir = cfg.Dir
+			cmd.Env = cfg.Env
 			var stdout, stderr bytes.Buffer
 			cmd.Stdout, cmd.Stderr = &stdout, &stderr
 			if err := cmd.Run(); err != nil {
@@ -242,16 +244,24 @@ func Generate(ctx context.Context, repo, commit, checkout, benchDir string, log 
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
 
-	run := func(dir, name string, args ...string) (string, error) {
+	// Index calibration picks its probe chunks with the global math/rand,
+	// and the probes set the thresholds behind every relevance label; the CLI
+	// gets a fixed seed so the labels repeat.
+	seeded := append(os.Environ(), "GODEBUG=randautoseed=0")
+	runEnv := func(env []string, dir, name string, args ...string) (string, error) {
 		log(fmt.Sprintf("$ %s %s", name, strings.Join(args, " ")))
 		cmd := exec.CommandContext(ctx, name, args...)
 		cmd.Dir = dir
+		cmd.Env = env
 		var out, stderr bytes.Buffer
 		cmd.Stdout, cmd.Stderr = &out, &stderr
 		if err := cmd.Run(); err != nil {
 			return "", fmt.Errorf("%s %s: %w\n%s%s", name, strings.Join(args, " "), err, out.String(), stderr.String())
 		}
 		return out.String(), nil
+	}
+	run := func(dir, name string, args ...string) (string, error) {
+		return runEnv(nil, dir, name, args...)
 	}
 
 	committed, err := run(repo, "git", "show", "-s", "--format=%ct", commit)
@@ -285,7 +295,7 @@ func Generate(ctx context.Context, repo, commit, checkout, benchDir string, log 
 	apiURL := "http://" + ln.Addr().String()
 	const model = "hash-4096"
 
-	if _, err := run(src, cli, "index", ".", "--api-url", apiURL, "--model", model); err != nil {
+	if _, err := runEnv(seeded, src, cli, "index", ".", "--api-url", apiURL, "--model", model); err != nil {
 		return err
 	}
 	roots := []string{src}
@@ -296,6 +306,6 @@ func Generate(ctx context.Context, repo, commit, checkout, benchDir string, log 
 	return RunQueries(ctx, RunConfig{
 		CLI: cli, Dir: src, APIURL: apiURL, Model: model, Queries: queries,
 		OutDir: benchDir, Roots: roots, RootAs: "/work/llm-semantic-axi", Leak: src,
-		IndexedAt: time.Unix(unix, 0).UTC().Format(time.RFC3339),
+		Env: seeded, IndexedAt: time.Unix(unix, 0).UTC().Format(time.RFC3339),
 	})
 }
