@@ -439,26 +439,37 @@ func TestGenerateTwiceWritesIdenticalOutputs(t *testing.T) {
 // Defends a path someone else owns: the generator removes its checkout when
 // it finishes, so it must refuse to start in one that already exists (a
 // concurrent run, or a run that died) rather than take it over and delete it.
+// The empty directory is the case that matters: git refuses a non-empty one
+// by itself, but adds a worktree to an empty one, which the generator would
+// then remove.
 func TestGenerateRefusesAnExistingCheckout(t *testing.T) {
-	repo := fakeRepo(t)
-	bench := t.TempDir()
-	if err := os.WriteFile(filepath.Join(bench, QueriesFile), []byte("one\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	checkout := t.TempDir()
-	keep := filepath.Join(checkout, "keep")
-	if err := os.WriteFile(keep, nil, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	err := Generate(context.Background(), repo, "HEAD", checkout, bench, func(string) {})
-	if err == nil || !strings.Contains(err.Error(), "already exists") {
-		t.Fatalf("Generate into an existing checkout: err = %v, want already exists", err)
-	}
-	if _, err := os.Stat(keep); err != nil {
-		t.Errorf("existing checkout was touched: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(bench, OutputsDir)); !os.IsNotExist(err) {
-		t.Errorf("outputs written from an existing checkout: %v", err)
+	for _, name := range []string{"empty", "non-empty"} {
+		t.Run(name, func(t *testing.T) {
+			repo := fakeRepo(t)
+			bench := t.TempDir()
+			if err := os.WriteFile(filepath.Join(bench, QueriesFile), []byte("one\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			checkout := t.TempDir()
+			if name == "non-empty" {
+				if err := os.WriteFile(filepath.Join(checkout, "keep"), nil, 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			err := Generate(context.Background(), repo, "HEAD", checkout, bench, func(string) {})
+			if err == nil || !strings.Contains(err.Error(), "git worktree prune") {
+				t.Fatalf("Generate into an existing checkout: err = %v, want the generator's own refusal", err)
+			}
+			if _, err := os.Stat(checkout); err != nil {
+				t.Errorf("existing checkout was removed: %v", err)
+			}
+			if wt := gitRun(t, repo, "worktree", "list"); strings.Count(wt, "\n") != 1 {
+				t.Errorf("worktree added in an existing checkout:\n%s", wt)
+			}
+			if _, err := os.Stat(filepath.Join(bench, OutputsDir)); !os.IsNotExist(err) {
+				t.Errorf("outputs written from an existing checkout: %v", err)
+			}
+		})
 	}
 }
 
