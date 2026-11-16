@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "llm-semantic index-status || true"
+          }
+        ]
+      }
+    ]
+  }
+}

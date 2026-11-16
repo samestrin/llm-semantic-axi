@@ -3,6 +3,7 @@ module github.com/samestrin/llm-semantic-axi
 go 1.24.0
 
 require (
+	github.com/BurntSushi/toml v1.6.0
 	github.com/bmatcuk/doublestar/v4 v4.9.2
 	github.com/goccy/go-yaml v1.19.1
 	github.com/gofrs/flock v0.13.0

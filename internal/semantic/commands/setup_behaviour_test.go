@@ -64,7 +64,7 @@ func TestSetupWritesHookAndSkill(t *testing.T) {
 	homeOK := homeGuard(t)
 
 	var out bytes.Buffer
-	if err := runSetup(&out, dir, false); err != nil {
+	if err := runSetup(&out, dir, setupOptions{}); err != nil {
 		t.Fatalf("runSetup: %v", err)
 	}
 
@@ -92,7 +92,7 @@ func TestSetupWritesHookAndSkill(t *testing.T) {
 func TestSetupSecondRunChangesNothingAndSaysSo(t *testing.T) {
 	withPlain(t)
 	dir := t.TempDir()
-	if err := runSetup(&bytes.Buffer{}, dir, false); err != nil {
+	if err := runSetup(&bytes.Buffer{}, dir, setupOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	settings := filepath.Join(dir, ".claude", "settings.json")
@@ -101,7 +101,7 @@ func TestSetupSecondRunChangesNothingAndSaysSo(t *testing.T) {
 	before2, _ := os.ReadFile(skill)
 
 	var out bytes.Buffer
-	if err := runSetup(&out, dir, false); err != nil {
+	if err := runSetup(&out, dir, setupOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	after1, _ := os.ReadFile(settings)
@@ -129,7 +129,7 @@ func TestSetupPreservesExistingSettings(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := runSetup(&bytes.Buffer{}, dir, false); err != nil {
+	if err := runSetup(&bytes.Buffer{}, dir, setupOptions{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -154,7 +154,7 @@ func TestSetupDryRunWritesNothing(t *testing.T) {
 	homeOK := homeGuard(t)
 
 	var out bytes.Buffer
-	if err := runSetup(&out, dir, true); err != nil {
+	if err := runSetup(&out, dir, setupOptions{dryRun: true}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".claude")); !os.IsNotExist(err) {
@@ -175,7 +175,7 @@ func TestSetupDryRunWithExistingSettingsLeavesBytes(t *testing.T) {
 	orig := []byte(`{"model":"x"}`)
 	os.WriteFile(p, orig, 0o644)
 
-	if err := runSetup(&bytes.Buffer{}, dir, true); err != nil {
+	if err := runSetup(&bytes.Buffer{}, dir, setupOptions{dryRun: true}); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(p)
@@ -193,7 +193,7 @@ func TestSetupRefusesUnparseableSettings(t *testing.T) {
 	orig := []byte(`{ not json`)
 	os.WriteFile(p, orig, 0o644)
 
-	if err := runSetup(&bytes.Buffer{}, dir, false); err == nil {
+	if err := runSetup(&bytes.Buffer{}, dir, setupOptions{}); err == nil {
 		t.Fatal("expected an error for invalid settings JSON")
 	}
 	got, _ := os.ReadFile(p)
@@ -210,7 +210,7 @@ func TestSetupRefusesWrongShapedHooks(t *testing.T) {
 		p := filepath.Join(dir, ".claude", "settings.json")
 		os.MkdirAll(filepath.Dir(p), 0o755)
 		os.WriteFile(p, []byte(body), 0o644)
-		if err := runSetup(&bytes.Buffer{}, dir, false); err == nil {
+		if err := runSetup(&bytes.Buffer{}, dir, setupOptions{}); err == nil {
 			t.Errorf("%s: expected an error", body)
 		}
 		got, _ := os.ReadFile(p)
@@ -229,7 +229,7 @@ func TestSetupRewritesStaleSkill(t *testing.T) {
 	os.WriteFile(p, []byte("old"), 0o644)
 
 	var out bytes.Buffer
-	if err := runSetup(&out, dir, false); err != nil {
+	if err := runSetup(&out, dir, setupOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(p)
@@ -265,7 +265,7 @@ func TestSetupRefusesNullSettings(t *testing.T) {
 	p := filepath.Join(dir, ".claude", "settings.json")
 	os.MkdirAll(filepath.Dir(p), 0o755)
 	os.WriteFile(p, []byte("null"), 0o644)
-	if err := runSetup(&bytes.Buffer{}, dir, false); err == nil {
+	if err := runSetup(&bytes.Buffer{}, dir, setupOptions{}); err == nil {
 		t.Fatal("expected an error for null settings")
 	}
 	if got, _ := os.ReadFile(p); string(got) != "null" {
@@ -280,7 +280,7 @@ func TestSetupMergeKeepsLargeIntegers(t *testing.T) {
 	p := filepath.Join(dir, ".claude", "settings.json")
 	os.MkdirAll(filepath.Dir(p), 0o755)
 	os.WriteFile(p, []byte(`{"someId": 9007199254740993}`), 0o644)
-	if err := runSetup(&bytes.Buffer{}, dir, false); err != nil {
+	if err := runSetup(&bytes.Buffer{}, dir, setupOptions{}); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(p)
@@ -309,8 +309,9 @@ func TestSetupHonoursJSONAndAXI(t *testing.T) {
 		}
 		if mode == "json" {
 			var v []map[string]string
-			if err := json.Unmarshal([]byte(out), &v); err != nil || len(v) != 2 {
-				t.Errorf("not a 2-element JSON array: %v\n%s", err, out)
+			// Five files: two each for Claude Code and Codex, one for OpenCode.
+			if err := json.Unmarshal([]byte(out), &v); err != nil || len(v) != 5 {
+				t.Errorf("not a 5-element JSON array: %v\n%s", err, out)
 			}
 		}
 		if _, err := os.Stat(filepath.Join(dir, ".claude")); !os.IsNotExist(err) {
@@ -331,7 +332,7 @@ func TestSetupHookToleratesAMissingIndex(t *testing.T) {
 	dir := t.TempDir()
 
 	var out bytes.Buffer
-	if err := runSetup(&out, dir, false); err != nil {
+	if err := runSetup(&out, dir, setupOptions{}); err != nil {
 		t.Fatalf("runSetup: %v", err)
 	}
 
@@ -364,7 +365,7 @@ func TestSetupMigratesLegacyHookInPlace(t *testing.T) {
 	}
 
 	var out bytes.Buffer
-	if err := runSetup(&out, dir, false); err != nil {
+	if err := runSetup(&out, dir, setupOptions{}); err != nil {
 		t.Fatalf("runSetup: %v", err)
 	}
 
@@ -390,7 +391,7 @@ func TestSetupMigratesLegacyHookInPlace(t *testing.T) {
 
 	// A second run must see its own hook and report unchanged.
 	var out2 bytes.Buffer
-	if err := runSetup(&out2, dir, false); err != nil {
+	if err := runSetup(&out2, dir, setupOptions{}); err != nil {
 		t.Fatalf("second runSetup: %v", err)
 	}
 	if !strings.Contains(out2.String(), "unchanged") || strings.Contains(out2.String(), "wrote "+filepath.Join(".claude", "settings.json")) {
