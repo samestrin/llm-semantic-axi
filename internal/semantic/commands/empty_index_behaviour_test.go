@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/samestrin/llm-semantic-axi/internal/semantic"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
 )
 
 // Epic 05.1 F1. A search over an index that exists but holds no chunks used to

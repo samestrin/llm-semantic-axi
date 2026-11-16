@@ -8,7 +8,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/samestrin/llm-semantic-axi/pkg/output"
+	"github.com/samestrin/llm-semantic-axi/v2/pkg/output"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )

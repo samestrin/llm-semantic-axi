@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/samestrin/llm-semantic-axi/internal/semantic"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
 )
 
 // ktChunk is the part of a chunk the line-range tests compare.

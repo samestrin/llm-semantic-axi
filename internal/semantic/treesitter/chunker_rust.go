@@ -5,7 +5,7 @@ import (
 
 	"github.com/odvcencio/gotreesitter"
 	"github.com/odvcencio/gotreesitter/grammars"
-	"github.com/samestrin/llm-semantic-axi/internal/semantic"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
 )
 
 // RustChunker uses tree-sitter to parse Rust source code.

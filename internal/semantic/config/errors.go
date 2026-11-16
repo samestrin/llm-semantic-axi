@@ -8,7 +8,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/samestrin/llm-semantic-axi/internal/semantic"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
 )
 
 // ErrConfigNotFound creates an error for when the config file doesn't exist

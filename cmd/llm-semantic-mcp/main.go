@@ -14,7 +14,7 @@ import (
 
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
-	"github.com/samestrin/llm-semantic-axi/internal/semantic/mcpserver"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic/mcpserver"
 )
 
 const serverName = "llm-semantic-mcp"

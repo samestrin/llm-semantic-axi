@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/samestrin/llm-semantic-axi/internal/semantic"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
 )
 
 // tsChunk is the part of a chunk the index stores and a caller acts on: the

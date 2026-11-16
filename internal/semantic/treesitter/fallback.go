@@ -6,7 +6,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/samestrin/llm-semantic-axi/internal/semantic"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
 )
 
 // fallbackMaxChunkSize is the size a fallen-back file's text windows use: the

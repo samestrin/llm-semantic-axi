@@ -17,7 +17,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/samestrin/llm-semantic-axi/benchmarks"
+	"github.com/samestrin/llm-semantic-axi/v2/benchmarks"
 )
 
 func main() {

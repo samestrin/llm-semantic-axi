@@ -6,9 +6,9 @@
 
 ## Demo
 
-![A terminal session running --version, a search with --axi, and a callers query](docs/demo/llm-semantic.gif)
+![A terminal session running --version, a search and a callers query](docs/demo/llm-semantic.gif)
 
-The session runs `--version`, a `search` with `--axi` and a `callers` query against a release binary, with nothing mocked. [docs/demo/README.md](docs/demo/README.md) has the tape and the steps to render the GIF again.
+The session runs `--version`, a `search` and a `callers` query against a release binary, with nothing mocked. [docs/demo/README.md](docs/demo/README.md) has the tape and the steps to render the GIF again.
 
 ## Why
 
@@ -53,8 +53,8 @@ On macOS, use `shasum -a 256 -c -` in place of `sha256sum -c -`. Windows has raw
 Requires Go 1.24 or newer:
 
 ```bash
-go install github.com/samestrin/llm-semantic-axi/cmd/llm-semantic@latest
-go install github.com/samestrin/llm-semantic-axi/cmd/llm-semantic-mcp@latest
+go install github.com/samestrin/llm-semantic-axi/v2/cmd/llm-semantic@latest
+go install github.com/samestrin/llm-semantic-axi/v2/cmd/llm-semantic-mcp@latest
 ```
 
 The binaries land in `$(go env GOPATH)/bin`. A `go install` build is not stamped with a version, so `llm-semantic --version` prints `dev`.
@@ -77,7 +77,7 @@ Two ways to tell an agent the tool exists:
 
 ### Upgrade
 
-Re-run the installer, or `go install ...@latest`, or `git pull && make build` in a clone. Then re-run `llm-semantic setup` in each project that used it, so the skill text matches the new binary. When the changelog says a release adds call edges for a language, rebuild the index with `llm-semantic index --force`: `index-update` does not re-chunk files whose content is unchanged.
+Re-run the installer, or the two `go install .../v2/cmd/...@latest` lines above (the old path without `/v2` stops at v1.2.0), or `git pull && make build` in a clone. Then re-run `llm-semantic setup` in each project that used it, so the skill text matches the new binary. When the changelog says a release adds call edges for a language, rebuild the index with `llm-semantic index --force`: `index-update` does not re-chunk files whose content is unchanged.
 
 ### Uninstall
 
@@ -208,7 +208,7 @@ Flags win over environment variables, and environment variables over defaults. S
 |---|---|
 | none | TOON, the token-dense AXI format to give a model: four fields per result, content cut at 200 characters with `--full` for the rest, a `total`, a `status` for empty answers and a `help` list of next steps. |
 | `--plain` | Human-readable text. |
-| `--json` | JSON. Keeps its pre-AXI schema (full fields, no total) so existing scripts keep working. |
+| `--json` | JSON. Keeps its pre-AXI schema (full fields, no total) so existing scripts keep working. A search with no results prints `null`, or `[]` when reranking is on, so treat both as empty. |
 | `--min` | A minimal TOON or JSON payload. Not valid with `--plain`. |
 | `--axi` | Accepted so v1 invocations keep working; TOON is already the default, so it changes nothing. |
 

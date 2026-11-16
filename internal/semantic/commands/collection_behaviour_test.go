@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/samestrin/llm-semantic-axi/internal/semantic"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
 )
 
 // chunkCount reports how many chunks survive in the index, which is the only

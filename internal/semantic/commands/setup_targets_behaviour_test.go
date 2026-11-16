@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/BurntSushi/toml"
-	"github.com/samestrin/llm-semantic-axi/pkg/output"
+	"github.com/samestrin/llm-semantic-axi/v2/pkg/output"
 )
 
 // The files each target owns, relative to the project directory.

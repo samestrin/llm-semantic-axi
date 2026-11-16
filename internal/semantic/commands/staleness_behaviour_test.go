@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/samestrin/llm-semantic-axi/internal/semantic"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
 )
 
 // Epic 04 T4. A search over an index built from older code read exactly like a

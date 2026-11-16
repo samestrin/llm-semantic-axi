@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/samestrin/llm-semantic-axi/internal/semantic"
-	"github.com/samestrin/llm-semantic-axi/internal/semantic/treesitter"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic/treesitter"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )

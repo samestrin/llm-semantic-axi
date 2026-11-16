@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/samestrin/llm-semantic-axi/internal/semantic"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
 )
 
 // The line numbers asserted below are positions in this sample, so the sample

@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/odvcencio/gotreesitter"
-	"github.com/samestrin/llm-semantic-axi/internal/semantic"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
 )
 
 // findNamedDescendant returns the first node of the given type reachable from

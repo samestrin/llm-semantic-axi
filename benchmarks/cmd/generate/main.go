@@ -11,7 +11,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/samestrin/llm-semantic-axi/benchmarks"
+	"github.com/samestrin/llm-semantic-axi/v2/benchmarks"
 )
 
 func main() {

@@ -16,12 +16,12 @@ Type "llm-semantic --version"
 Enter
 Sleep 2s
 
-Type 'llm-semantic search "retry embedding requests with backoff" --axi --top 3'
+Type 'llm-semantic search "retry embedding requests with backoff" --top 3'
 Enter
 Sleep 10s
 
 Type "clear"
 Enter
-Type "llm-semantic callers EnrichForEmbedding --axi"
+Type "llm-semantic callers EnrichForEmbedding"
 Enter
 Sleep 6s

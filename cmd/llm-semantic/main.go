@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/samestrin/llm-semantic-axi/internal/semantic/commands"
-	"github.com/samestrin/llm-semantic-axi/pkg/output"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic/commands"
+	"github.com/samestrin/llm-semantic-axi/v2/pkg/output"
 )
 
 // Both are stamped at build time with -X main.version / -X main.commit, so the

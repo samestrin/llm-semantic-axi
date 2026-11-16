@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 
-	_ "github.com/samestrin/llm-semantic-axi/internal/semantic"
+	_ "github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
 	"github.com/spf13/cobra"
 )
 

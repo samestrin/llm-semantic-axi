@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/samestrin/llm-semantic-axi/internal/semantic"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
 )
 
 // rubySampleChunks is every chunk testdata/ruby/sample.rb must produce, with

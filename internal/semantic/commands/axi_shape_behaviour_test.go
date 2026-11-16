@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/samestrin/llm-semantic-axi/internal/semantic"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
 )
 
 // Epic 05.1 T4. --axi search rows carry a small fixed field set and cut long

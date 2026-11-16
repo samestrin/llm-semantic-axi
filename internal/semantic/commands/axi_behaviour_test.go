@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/samestrin/llm-semantic-axi/pkg/output"
+	"github.com/samestrin/llm-semantic-axi/v2/pkg/output"
 )
 
 // captureStdout swaps os.Stdout for a pipe. emitJSON writes there rather than

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/samestrin/llm-semantic-axi/pkg/output"
+	"github.com/samestrin/llm-semantic-axi/v2/pkg/output"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -231,5 +231,22 @@ func TestBareRunPrintsEachModesFormat(t *testing.T) {
 	plain := run("--plain")
 	if !strings.Contains(plain, "Status:  not_indexed") || strings.Contains(plain, "status: not_indexed") {
 		t.Errorf("--plain output is not today's text:\n%s", plain)
+	}
+}
+
+// TestFlagHelpDoesNotPredateTheTOONDefault defends EST-6612: once TOON became
+// the default, `--full` help still said "With --axi" and `--min` help said
+// "minimal JSON", so `search --help` told an agent --full needs a no-op flag
+// and --min only shapes JSON.
+func TestFlagHelpDoesNotPredateTheTOONDefault(t *testing.T) {
+	for _, c := range everyCommand(RootCmd()) {
+		c.LocalFlags().VisitAll(func(f *pflag.Flag) {
+			if f.Name != "axi" && strings.Contains(f.Usage, "--axi") {
+				t.Errorf("%s --%s help names the no-op --axi: %q", c.CommandPath(), f.Name, f.Usage)
+			}
+			if f.Name == "min" && strings.Contains(f.Usage, "JSON") && !strings.Contains(f.Usage, "TOON") {
+				t.Errorf("%s --min help says it shapes JSON only: %q", c.CommandPath(), f.Usage)
+			}
+		})
 	}
 }

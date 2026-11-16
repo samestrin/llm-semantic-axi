@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/samestrin/llm-semantic-axi/internal/semantic"
+	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -252,8 +252,8 @@ Example:
 	cmd.Flags().StringVar(&tags, "tags", "", "Filter by tags (comma-separated)")
 	cmd.Flags().StringVar(&status, "status", "", "Filter by status (pending, promoted)")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output results as JSON")
-	cmd.Flags().BoolVar(&minOutput, "min", false, "Output minimal JSON format")
-	cmd.Flags().BoolVar(&full, "full", false, "With --axi, return every field and the whole text of each memory")
+	cmd.Flags().BoolVar(&minOutput, "min", false, "Minimal/token-optimized TOON or JSON payload")
+	cmd.Flags().BoolVar(&full, "full", false, "Return every field and the whole text of each memory")
 	cmd.Flags().BoolVar(&decay, "decay", false, "Apply temporal decay (recent memories score higher)")
 	cmd.Flags().Float64Var(&decayHalfLife, "decay-half-life", 90.0, "Decay half-life in days (default: 90)")
 	cmd.Flags().BoolVar(&hybrid, "hybrid", false, "Enable hybrid search (dense + lexical BM25 with RRF fusion)")
