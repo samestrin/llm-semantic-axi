@@ -1,42 +1,42 @@
 10 results for "where is the sqlite schema created"
 
-1. /work/llm-semantic-axi/internal/semantic/storage_sqlite.go:22 - SQLiteStorage (struct) [MEDIUM]
+1. /work/llm-semantic-axi/benchmarks/outputs/plain/q06.txt:1 - q06 (file) [LOW]
+   Score: 0.3888
+   10 results for "where is the sqlite schema created"  1. /work/llm-semantic-axi/internal/semantic/storage_sqlite.go:22 - SQLiteStorage (struct) [MEDIUM...
+
+2. /work/llm-semantic-axi/internal/semantic/storage_sqlite.go:22 - SQLiteStorage (struct) [LOW]
    Score: 0.3333
    type SQLiteStorage
 
-2. /work/llm-semantic-axi/internal/semantic/mcpserver/execute_test.go:662 - TestGetToolDefinitions_EverySchemaIsAValidObjectSchema (function) [LOW]
-   Score: 0.2906
+3. /work/llm-semantic-axi/internal/semantic/mcpserver/execute_test.go:662 - TestGetToolDefinitions_EverySchemaIsAValidObjectSchema (function) [LOW]
+   Score: 0.2908
    func TestGetToolDefinitions_EverySchemaIsAValidObjectSchema(t *testing.T)
 
-3. /work/llm-semantic-axi/internal/semantic/mcpserver/tools.go:66 - buildSchema (function) [LOW]
+4. /work/llm-semantic-axi/internal/semantic/mcpserver/tools.go:66 - buildSchema (function) [LOW]
    Score: 0.2785
    func buildSchema(toolProps map[string]schemaProperty, required []string) json.RawMessage
 
-4. /work/llm-semantic-axi/internal/semantic/storage_sqlite.go:30 - NewSQLiteStorage (function) [LOW]
-   Score: 0.2540
+5. /work/llm-semantic-axi/benchmarks/outputs/json/q06.json:100 - q06 (file) [LOW]
+   Score: 0.2776
+       "score": 0.24467726,     "relevance": "low",     "preview": "func mergeProperties(toolProps, common map[string]schemaProperty) map[string]schemaPr...
+
+6. /work/llm-semantic-axi/benchmarks/outputs/json/q06.json:73 - q06 (file) [LOW]
+   Score: 0.2702
+         "file_path": "/work/llm-semantic-axi/internal/semantic/storage_sqlite.go",       "type": "method",       "name": "initChunkRefsSchema",       "s...
+
+7. /work/llm-semantic-axi/internal/semantic/storage_sqlite.go:30 - NewSQLiteStorage (function) [LOW]
+   Score: 0.2537
    func NewSQLiteStorage(dbPath string, embeddingDim int) (*SQLiteStorage, error)
 
-5. /work/llm-semantic-axi/internal/semantic/storage_sqlite.go:226 - initChunkRefsSchema (method) [LOW]
+8. /work/llm-semantic-axi/internal/semantic/storage_sqlite.go:254 - initChunkRefsSchema (method) [LOW]
    Score: 0.2506
    func (s *SQLiteStorage) initChunkRefsSchema() error
 
-6. /work/llm-semantic-axi/internal/semantic/mcpserver/tools.go:53 - mergeProperties (function) [LOW]
+9. /work/llm-semantic-axi/internal/semantic/mcpserver/tools.go:53 - mergeProperties (function) [LOW]
    Score: 0.2447
    func mergeProperties(toolProps, common map[string]schemaProperty) map[string]schemaProperty
 
-7. /work/llm-semantic-axi/internal/semantic/memory_entry_content_test.go:155 - TestMemoryFileContent_ShortCreatedAt (function) [LOW]
+10. /work/llm-semantic-axi/internal/semantic/memory_entry_content_test.go:155 - TestMemoryFileContent_ShortCreatedAt (function) [LOW]
    Score: 0.2373
    func TestMemoryFileContent_ShortCreatedAt(t *testing.T)
-
-8. /work/llm-semantic-axi/internal/semantic/diff_reindex_test.go:334 - createTestSQLiteStorage (function) [LOW]
-   Score: 0.2173
-   func createTestSQLiteStorage(t *testing.T) (*SQLiteStorage, func())
-
-9. /work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go:259 - TestServer_EveryAdvertisedSchemaSurvivesTheRoundTrip (function) [LOW]
-   Score: 0.2169
-   func TestServer_EveryAdvertisedSchemaSurvivesTheRoundTrip(t *testing.T)
-
-10. /work/llm-semantic-axi/internal/semantic/mcpserver/tools.go:10 - ToolDefinition (struct) [LOW]
-   Score: 0.2154
-   type ToolDefinition
 

@@ -1,7 +1,7 @@
 [
   {
     "chunk": {
-      "id": "44f99e60f235cdd7",
+      "id": "78179399c8dcf633",
       "file_path": "/work/llm-semantic-axi/internal/semantic/multisearch.go",
       "type": "function",
       "name": "ValidOutputFormats",
@@ -12,13 +12,29 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.33995336,
-    "relevance": "medium",
+    "score": 0.34595302,
+    "relevance": "low",
     "preview": "func ValidOutputFormats() []string"
   },
   {
     "chunk": {
-      "id": "e836b146d2c41d51",
+      "id": "b80d91f0a7e0113f",
+      "file_path": "/work/llm-semantic-axi/benchmarks/outputs/json/q04.json",
+      "type": "file",
+      "name": "q04",
+      "content": "[\n  {\n    \"chunk\": {\n      \"id\": \"44f99e60f235cdd7\",\n      \"file_path\": \"/work/llm-semantic-axi/internal/semantic/multisearch.go\",\n      \"type\": \"function\",\n      \"name\": \"ValidOutputFormats\",\n      \"signature\": \"func ValidOutputFormats() []string\",\n      \"content\": \"// ValidOutputFormats returns all valid output format values\\nfunc ValidOutputFormats() []string {\\n\\treturn []string{string(OutputBlended), string(OutputByQuery), string(OutputByCollection)}\\n}\",\n      \"start_line\": 28,\n      \"end_line\": 31,\n      \"language\": \"go\",\n      \"domain\": \"code\"\n    },\n    \"score\": 0.33995336,\n    \"relevance\": \"medium\",\n    \"preview\": \"func ValidOutputFormats() []string\"\n  },\n  {\n    \"chunk\": {\n      \"id\": \"e836b146d2c41d51\",\n      \"file_path\": \"/work/llm-semantic-axi/pkg/output/formatter.go\",\n      \"type\": \"struct\",\n      \"name\": \"Formatter\",\n      \"signature\": \"type Formatter\",\n      \"content\": \"// Formatter handles output formatting with support for AXI, JSON and minimal modes.\\ntype Formatter struct {\\n\\tJSON    bool // Output as JSON\\n\\tMinimal bool // Output in minimal/token-optimized mode\\n\\tAXI     bool // Output as TOON (AXI token-dense format)\\n\\tWriter  io.Writer\\n}\",\n      \"start_line\": 26,\n      \"end_line\": 32,\n      \"language\": \"go\",\n      \"domain\": \"code\"\n    },\n    \"score\": 0.31282476,\n    \"relevance\": \"low\",\n    \"preview\": \"type Formatter\"\n  },\n  {\n    \"chunk\": {\n      \"id\": \"7808ff52caef7868\",\n",
+      "start_line": 1,
+      "end_line": 38,
+      "language": "json",
+      "domain": "code"
+    },
+    "score": 0.31722063,
+    "relevance": "low",
+    "preview": "[   {     \"chunk\": {       \"id\": \"44f99e60f235cdd7\",       \"file_path\": \"/work/llm-semantic-axi/internal/semantic/multisearch.go\",       \"type\": \"func..."
+  },
+  {
+    "chunk": {
+      "id": "e3e9b0f5f77f3fdf",
       "file_path": "/work/llm-semantic-axi/pkg/output/formatter.go",
       "type": "struct",
       "name": "Formatter",
@@ -29,13 +45,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.31282476,
+    "score": 0.31426966,
     "relevance": "low",
     "preview": "type Formatter"
   },
   {
     "chunk": {
-      "id": "7808ff52caef7868",
+      "id": "1e0789ede7798afc",
       "file_path": "/work/llm-semantic-axi/internal/semantic/multisearch.go",
       "type": "function",
       "name": "IsValidOutputFormat",
@@ -46,13 +62,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.30599505,
+    "score": 0.31311214,
     "relevance": "low",
     "preview": "func IsValidOutputFormat(format string) bool"
   },
   {
     "chunk": {
-      "id": "f29eb4a0be809008",
+      "id": "7ad572b520e208a3",
       "file_path": "/work/llm-semantic-axi/pkg/output/formatter_test.go",
       "type": "function",
       "name": "TestFormatter_Print_JSON",
@@ -69,24 +85,24 @@
   },
   {
     "chunk": {
-      "id": "89ab5c1f18c550e8",
-      "file_path": "/work/llm-semantic-axi/internal/semantic/commands/refs.go",
+      "id": "c84ed542996883e9",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/commands/output_mode_behaviour_test.go",
       "type": "function",
-      "name": "runRefs",
-      "signature": "func runRefs(ctx context.Context, symbol string, jsonOutput, minOutput bool) error",
-      "content": "func runRefs(ctx context.Context, symbol string, jsonOutput, minOutput bool) error {\n\trs, cleanup, err := openRefStorage(ctx)\n\tif err != nil {\n\t\treturn err\n\t}\n\tdefer cleanup()\n\n\treturn writeRefs(ctx, os.Stdout, rs, symbol, jsonOutput, minOutput)\n}",
-      "start_line": 97,
-      "end_line": 105,
+      "name": "resetOutputGlobals",
+      "signature": "func resetOutputGlobals(t *testing.T)",
+      "content": "// resetOutputGlobals restores the mode globals after a test, since the package\n// shares them across every test that runs after it.\nfunc resetOutputGlobals(t *testing.T) {\n\tt.Helper()\n\tt.Cleanup(func() {\n\t\tGlobalAXIOutput = false\n\t\tGlobalJSONOutput = false\n\t\tGlobalMinOutput = false\n\t\toutput.SetDefaultAXI(false)\n\t})\n}",
+      "start_line": 55,
+      "end_line": 65,
       "language": "go",
       "domain": "code"
     },
-    "score": 0.2749287,
+    "score": 0.2698333,
     "relevance": "low",
-    "preview": "func runRefs(ctx context.Context, symbol string, jsonOutput, minOutput bool) error"
+    "preview": "func resetOutputGlobals(t *testing.T)"
   },
   {
     "chunk": {
-      "id": "dc47c9f2c506f15b",
+      "id": "539ed81bf1096422",
       "file_path": "/work/llm-semantic-axi/internal/semantic/commands/staleness_behaviour_test.go",
       "type": "struct",
       "name": "outputMode",
@@ -103,24 +119,41 @@
   },
   {
     "chunk": {
-      "id": "f8350f45405ec45f",
-      "file_path": "/work/llm-semantic-axi/internal/semantic/commands/multisearch.go",
+      "id": "1f073c1e601a6f26",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/commands/refs.go",
       "type": "function",
-      "name": "multisearchCmd",
-      "signature": "func multisearchCmd() *cobra.Command",
-      "content": "func multisearchCmd() *cobra.Command {\n\tvar (\n\t\ttopK         int\n\t\tthreshold    float64\n\t\tprofiles     []string\n\t\tnoBoost      bool\n\t\tnoDedupe     bool\n\t\toutputFormat string\n\t\tjsonOutput   bool\n\t\tminOutput    bool\n\t\tfull         bool\n\t)\n\n\tcmd := \u0026cobra.Command{\n\t\tUse:   \"multisearch \u003cquery1\u003e [query2] [query3] ...\",\n\t\tShort: \"Execute multiple semantic queries with deduplication and boosting\",\n\t\tLong: `Execute multiple semantic queries in parallel with intelligent deduplication and multi-match boosting.\n\nResults matching multiple queries receive boosted scores (+0.05 per additional match).\nDuplicate chunks are deduplicated, keeping the highest score.\n\nExamples:\n  llm-semantic multisearch \"authentication\" \"JWT tokens\"\n  llm-semantic multisearch \"error handling\" \"logging\" --profiles code,docs\n  llm-semantic multisearch \"api endpoint\" \"REST handler\" --top 20 --json\n  llm-semantic multisearch \"test\" \"spec\" --output by_query`,\n\t\tArgs: cobra.MinimumNArgs(1),\n\t\tRunE: func(cmd *cobra.Command, args []string) error {\n\t\t\tqueries := args\n\n\t\t\t// Validate queries\n\t\t\tif len(queries) \u003e semantic.MaxQueries {\n\t\t\t\treturn fmt.Errorf(\"multisearch supports up to %d queries, got: %d\", semantic.MaxQueries, len(queries))\n\t\t\t}\n\n\t\t\t// Filter empty queries\n\t\t\tvar filteredQueries []string\n\t\t\tfor _, q := range queries {\n\t\t\t\tq = strings.TrimSpace(q)\n\t\t\t\tif q != \"\" {\n\t\t\t\t\tfilteredQueries = append(filteredQueries, q)\n\t\t\t\t}\n\t\t\t}\n\t\t\tif len(filteredQueries) == 0 {\n\t\t\t\treturn fmt.Errorf(\"at least one non-empty query required\")\n\t\t\t}\n\n\t\t\t// Validate output format\n\t\t\tif outputFormat != \"\" \u0026\u0026 !semantic.IsValidOutputFormat(outputFormat) {\n\t\t\t\treturn fmt.Errorf(\"invalid output format: %s (valid: %s)\", outputFormat, strings.Join(semantic.ValidOutputFormats(), \", \"))\n\t\t\t}\n\n\t\t\t// Validate profile names\n\t\t\tfor _, p := range profiles {\n\t\t\t\tif !config.IsValidProfile(p) {\n\t\t\t\t\treturn fmt.Errorf(\"invalid profile: %s (valid: %s)\", p, strings.Join(config.ValidProfiles(), \", \"))\n\t\t\t\t}\n\t\t\t}\n\n\t\t\treturn runMultisearch(cmd.Context(), filteredQueries, multisearchOpts{\n\t\t\t\ttopK:         topK,\n\t\t\t\tthreshold:    float32(threshold),\n\t\t\t\tprofiles:     profiles,\n\t\t\t\tnoBoost:      noBoost,\n\t\t\t\tnoDedupe:     noDedupe,\n\t\t\t\toutputFormat: semantic.OutputFormat(outputFormat),\n\t\t\t\tjsonOutput:   jsonOutput,\n\t\t\t\tminOutput:    minOutput,\n\t\t\t\tfull:         full,\n\t\t\t})\n\t\t},\n\t}\n\n\tcmd.Flags().IntVarP(\u0026topK, \"top\", \"n\", 15, \"Maximum number of results to return (default 15 vs search's 10 to account for multi-query result merging)\")\n\tcmd.Flags().Float64VarP(\u0026threshold, \"threshold\", \"t\", 0.0, \"Minimum similarity score (0.0-1.0)\")\n\tcmd.Flags().StringSliceVar(\u0026profiles, \"profiles\", nil, \"Profiles to search across (comma-separated, e.g., code,docs)\")\n\tcmd.Flags().BoolVar(\u0026noBoost, \"no-boost\", false, \"Disable multi-match score boosting\")\n\tcmd.Flags().BoolVar(\u0026noDedupe, \"no-dedupe\", false, \"Disable result deduplication\")\n\tcmd.Flags().StringVar(\u0026outputFormat, \"output\", \"\", \"Output format: blended (default), by_query, by_collection\")\n\tcmd.Flags().BoolVar(\u0026jsonOutput, \"json\", false, \"Output results as JSON\")\n\tcmd.Flags().BoolVar(\u0026minOutput, \"min\", false, \"Output minimal JSON format\")\n\tcmd.Flags().BoolVar(\u0026full, \"full\", false, \"With --axi, return every field and the whole content of each result\")\n\n\treturn cmd\n}",
-      "start_line": 14,
-      "end_line": 98,
+      "name": "runRefs",
+      "signature": "func runRefs(ctx context.Context, symbol string, jsonOutput, minOutput bool) error",
+      "content": "func runRefs(ctx context.Context, symbol string, jsonOutput, minOutput bool) error {\n\trs, cleanup, err := openRefStorage(ctx)\n\tif err != nil {\n\t\treturn err\n\t}\n\tdefer cleanup()\n\n\treturn writeRefs(ctx, os.Stdout, os.Stderr, rs, symbol, jsonOutput, minOutput)\n}",
+      "start_line": 97,
+      "end_line": 105,
       "language": "go",
       "domain": "code"
     },
-    "score": 0.2565621,
+    "score": 0.26602897,
     "relevance": "low",
-    "preview": "func multisearchCmd() *cobra.Command"
+    "preview": "func runRefs(ctx context.Context, symbol string, jsonOutput, minOutput bool) error"
   },
   {
     "chunk": {
-      "id": "0be4131de68e5346",
+      "id": "6424a53673970ec6",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/commands/axi.go",
+      "type": "function",
+      "name": "resolveOutputMode",
+      "signature": "func resolveOutputMode(cmd *cobra.Command)",
+      "content": "// resolveOutputMode publishes the output mode the parsed flags ask for.\nfunc resolveOutputMode(cmd *cobra.Command) {\n\tGlobalJSONOutput = flagOn(cmd, \"json\")\n\tGlobalMinOutput = flagOn(cmd, \"min\")\n\tGlobalAXIOutput = !GlobalJSONOutput \u0026\u0026 !flagOn(cmd, \"plain\")\n\toutput.SetDefaultAXI(GlobalAXIOutput)\n}",
+      "start_line": 38,
+      "end_line": 44,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.26141977,
+    "relevance": "low",
+    "preview": "func resolveOutputMode(cmd *cobra.Command)"
+  },
+  {
+    "chunk": {
+      "id": "0d757119a9dfe185",
       "file_path": "/work/llm-semantic-axi/internal/semantic/multisearch.go",
       "type": "function",
       "name": "OutputFormat",
@@ -131,42 +164,8 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.2504897,
+    "score": 0.2598279,
     "relevance": "low",
     "preview": "type OutputFormat"
-  },
-  {
-    "chunk": {
-      "id": "818c4fd373c054d2",
-      "file_path": "/work/llm-semantic-axi/internal/semantic/commands/refs.go",
-      "type": "function",
-      "name": "writeCallers",
-      "signature": "func writeCallers(ctx context.Context, w io.Writer, rs semantic.RefStorage, symbol string, jsonOutput, minOutput bool) error",
-      "content": "// writeCallers answers runCallers from an opened call graph view.\nfunc writeCallers(ctx context.Context, w io.Writer, rs semantic.RefStorage, symbol string, jsonOutput, minOutput bool) error {\n\tedges, err := rs.GetCallersByName(ctx, symbol)\n\tif err != nil {\n\t\treturn fmt.Errorf(\"failed to look up callers of %q: %w\", symbol, err)\n\t}\n\n\tzero, err := diagnoseWhenUsed(ctx, rs, symbol, \"callers of\", len(edges), jsonOutput, minOutput)\n\tif err != nil {\n\t\treturn err\n\t}\n\n\tstale := refStaleness(ctx, rs)\n\treturn formatCallers(w, symbol, edges, zero, \u0026stale, jsonOutput, minOutput)\n}",
-      "start_line": 81,
-      "end_line": 95,
-      "language": "go",
-      "domain": "code"
-    },
-    "score": 0.24838813,
-    "relevance": "low",
-    "preview": "func writeCallers(ctx context.Context, w io.Writer, rs semantic.RefStorage, symbol string, jsonOutput, minOutput bool) error"
-  },
-  {
-    "chunk": {
-      "id": "6cddc9806f090d03",
-      "file_path": "/work/llm-semantic-axi/internal/semantic/commands/refs.go",
-      "type": "function",
-      "name": "refsCmd",
-      "signature": "func refsCmd() *cobra.Command",
-      "content": "func refsCmd() *cobra.Command {\n\tvar (\n\t\tjsonOutput bool\n\t\tminOutput  bool\n\t)\n\n\tcmd := \u0026cobra.Command{\n\t\tUse:   \"refs \u003csymbol\u003e\",\n\t\tShort: \"Show what a symbol references\",\n\t\tLong: `List the calls, imports and type references made by a symbol.\n\nReferences to something outside the index, such as a standard library call, are\nlisted and marked external rather than dropped.\n\nExample:\n  llm-semantic refs ResolveRefs`,\n\t\tArgs: cobra.ExactArgs(1),\n\t\tRunE: func(cmd *cobra.Command, args []string) error {\n\t\t\treturn runRefs(cmd.Context(), args[0], jsonOutput, minOutput)\n\t\t},\n\t}\n\n\tcmd.Flags().BoolVar(\u0026jsonOutput, \"json\", false, \"Output as JSON\")\n\tcmd.Flags().BoolVar(\u0026minOutput, \"min\", false, \"Minimal output format\")\n\n\treturn cmd\n}",
-      "start_line": 43,
-      "end_line": 69,
-      "language": "go",
-      "domain": "code"
-    },
-    "score": 0.24507153,
-    "relevance": "low",
-    "preview": "func refsCmd() *cobra.Command"
   }
 ]
