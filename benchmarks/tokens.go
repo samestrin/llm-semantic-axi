@@ -55,6 +55,9 @@ type Format struct {
 	Flag  string   // flag as shown in the results table
 	Says  string   // how a sentence names this mode
 	Flags []string // flags passed to the CLI
+	// Default marks the CLI's default mode. Its run still passes a flag, so
+	// the mode is selected explicitly, but the table labels it (default).
+	Default bool
 }
 
 // Formats lists the measured modes. JSON comes first: it is the baseline the

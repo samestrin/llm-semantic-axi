@@ -171,6 +171,10 @@ func TestCountRefusesAnEmptyQueryList(t *testing.T) {
 // the default became TOON. Every entry must state the flags it passes, they
 // must be the flags named for that mode, and the flag the table shows must be
 // the flag the run passes.
+//
+// The one exception is the CLI's default mode, TOON (AC3 finding 6, EST-6589):
+// its run passes --axi, which since v2.0.0 is a no-op alias, so labelling the
+// row `--axi` told a reader TOON needs a flag. Its row reads (default) instead.
 func TestFormatsPassTheFlagsTheyName(t *testing.T) {
 	want := map[string][]string{"json": {"--json"}, "axi": {"--axi"}, "plain": {"--plain"}}
 	for _, f := range Formats {
@@ -185,6 +189,18 @@ func TestFormatsPassTheFlagsTheyName(t *testing.T) {
 		}
 		if w, ok := want[f.Dir]; ok && !reflect.DeepEqual(f.Flags, w) {
 			t.Errorf("%s (%s): Flags = %q, want %q", f.Name, f.Dir, f.Flags, w)
+		}
+		if f.Default {
+			if f.Dir != "axi" {
+				t.Errorf("%s (%s): marked Default, but TOON is the CLI's default", f.Name, f.Dir)
+			}
+			if f.Flag != "(default)" {
+				t.Errorf("%s (%s): Flag = %s, want (default): the default mode needs no flag", f.Name, f.Dir, f.Flag)
+			}
+			continue
+		}
+		if f.Dir == "axi" {
+			t.Errorf("%s (%s): not marked Default, but TOON is the CLI's default", f.Name, f.Dir)
 		}
 		if w := "`" + strings.Join(f.Flags, " ") + "`"; f.Flag != w {
 			t.Errorf("%s (%s): Flag = %s, want %s: the table must name the flags the run passes", f.Name, f.Dir, f.Flag, w)
@@ -204,12 +220,12 @@ func TestRenderNumbersAndRatios(t *testing.T) {
 	got := Render(res)
 	for _, want := range []string{
 		"| JSON | `--json` | 400 | 1600 | 200.0 | 100.0% |",
-		"| TOON | `--axi` | 100 | 300 | 50.0 | 25.0% |",
+		"| TOON | (default) | 100 | 300 | 50.0 | 25.0% |",
 		"| Plain | `--plain` | 200 | 800 | 100.0 | 50.0% |",
-		"| # | Query | `--json` | `--axi` | `--plain` |",
+		"| # | Query | JSON | TOON | Plain |",
 		"| 1 | q one | 100 | 50 | 80 |",
 		`| 2 | q\|two | 300 | 50 | 120 |`,
-		"On these 2 queries, `--axi` printed 25.0% of the tokens `--json` printed, and plain output printed 50.0%.",
+		"On these 2 queries, the default TOON output printed 25.0% of the tokens `--json` printed, and plain output printed 50.0%.",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("Render missing line %q in:\n%s", want, got)
