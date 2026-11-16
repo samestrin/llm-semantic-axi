@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -171,6 +173,10 @@ func TestCountRefusesAnEmptyQueryList(t *testing.T) {
 // the default became TOON. Every entry must state the flags it passes, they
 // must be the flags named for that mode, and the flag the table shows must be
 // the flag the run passes.
+//
+// The one exception is the CLI's default mode, TOON (AC3 finding 6, EST-6589):
+// its run passes --axi, which since v2.0.0 is a no-op alias, so labelling the
+// row `--axi` told a reader TOON needs a flag. Its row reads (default) instead.
 func TestFormatsPassTheFlagsTheyName(t *testing.T) {
 	want := map[string][]string{"json": {"--json"}, "axi": {"--axi"}, "plain": {"--plain"}}
 	for _, f := range Formats {
@@ -185,6 +191,18 @@ func TestFormatsPassTheFlagsTheyName(t *testing.T) {
 		}
 		if w, ok := want[f.Dir]; ok && !reflect.DeepEqual(f.Flags, w) {
 			t.Errorf("%s (%s): Flags = %q, want %q", f.Name, f.Dir, f.Flags, w)
+		}
+		if f.Default {
+			if f.Dir != "axi" {
+				t.Errorf("%s (%s): marked Default, but TOON is the CLI's default", f.Name, f.Dir)
+			}
+			if f.Flag != "(default)" {
+				t.Errorf("%s (%s): Flag = %s, want (default): the default mode needs no flag", f.Name, f.Dir, f.Flag)
+			}
+			continue
+		}
+		if f.Dir == "axi" {
+			t.Errorf("%s (%s): not marked Default, but TOON is the CLI's default", f.Name, f.Dir)
 		}
 		if w := "`" + strings.Join(f.Flags, " ") + "`"; f.Flag != w {
 			t.Errorf("%s (%s): Flag = %s, want %s: the table must name the flags the run passes", f.Name, f.Dir, f.Flag, w)
@@ -204,12 +222,12 @@ func TestRenderNumbersAndRatios(t *testing.T) {
 	got := Render(res)
 	for _, want := range []string{
 		"| JSON | `--json` | 400 | 1600 | 200.0 | 100.0% |",
-		"| TOON | `--axi` | 100 | 300 | 50.0 | 25.0% |",
+		"| TOON | (default) | 100 | 300 | 50.0 | 25.0% |",
 		"| Plain | `--plain` | 200 | 800 | 100.0 | 50.0% |",
-		"| # | Query | `--json` | `--axi` | `--plain` |",
+		"| # | Query | JSON | TOON | Plain |",
 		"| 1 | q one | 100 | 50 | 80 |",
 		`| 2 | q\|two | 300 | 50 | 120 |`,
-		"On these 2 queries, `--axi` printed 25.0% of the tokens `--json` printed, and plain output printed 50.0%.",
+		"On these 2 queries, the default TOON output printed 25.0% of the tokens `--json` printed, and plain output printed 50.0%.",
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("Render missing line %q in:\n%s", want, got)
@@ -304,5 +322,59 @@ func TestRunCountReportsMatchAndMismatch(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "matches") {
 		t.Errorf("RunCount did not say the file matches:\n%s", out.String())
+	}
+}
+
+// CatalogEntry is the AXI catalog draft, which quotes the token totals.
+const CatalogEntry = "../docs/axi-catalog-entry.yaml"
+
+// Defends AC3 finding 2 (EST-6589): the catalog draft kept quoting 11,291
+// TOON vs 43,941 --json tokens (25.7%) after the outputs were regenerated and
+// results-tokens.md moved to 11,241 vs 43,477 (25.9%). Nothing tied the two
+// together, so the catalog stated numbers no command printed. Every total the
+// catalog quotes must be what the checked-in outputs re-count to.
+func TestCatalogEntryTokenNumbersMatchRecount(t *testing.T) {
+	tok := loadTestTokenizer(t)
+	res, err := Count(tok, ".")
+	if err != nil {
+		t.Fatalf("Count: %v", err)
+	}
+	jsonTokens, toonTokens := res.Total(Formats[0]).Tokens, res.Total(Formats[1]).Tokens
+	data, err := os.ReadFile(CatalogEntry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog := string(data)
+	num := func(s string) int {
+		n, err := strconv.Atoi(strings.ReplaceAll(s, ",", ""))
+		if err != nil {
+			t.Fatalf("%s: %q is not a number: %v", CatalogEntry, s, err)
+		}
+		return n
+	}
+
+	m := regexp.MustCompile(`TOON printed ([\d,]+) cl100k tokens and --json ([\d,]+) \(([\d.]+%)\)`).FindStringSubmatch(catalog)
+	if m == nil {
+		t.Fatalf("%s: no `TOON printed N cl100k tokens and --json M (P%%)` observation; if it was reworded, update this test", CatalogEntry)
+	}
+	if got := num(m[1]); got != toonTokens {
+		t.Errorf("%s observation: TOON %d tokens, recount says %d", CatalogEntry, got, toonTokens)
+	}
+	if got := num(m[2]); got != jsonTokens {
+		t.Errorf("%s observation: --json %d tokens, recount says %d", CatalogEntry, got, jsonTokens)
+	}
+	if want := pct(toonTokens, jsonTokens); m[3] != want {
+		t.Errorf("%s observation: ratio %s, recount says %s", CatalogEntry, m[3], want)
+	}
+
+	c := regexp.MustCompile(`disagrees \(([\d,]+) vs ([\d,]+) tokens\)`).FindStringSubmatch(catalog)
+	if c == nil {
+		t.Fatalf("%s: no `disagrees (M vs N tokens)` in check 10; if it was reworded, update this test", CatalogEntry)
+	}
+	if got := num(c[1]); got != jsonTokens {
+		t.Errorf("%s check 10: --json %d tokens, recount says %d", CatalogEntry, got, jsonTokens)
+	}
+	if got := num(c[2]); got != toonTokens {
+		t.Errorf("%s check 10: TOON %d tokens, recount says %d", CatalogEntry, got, toonTokens)
 	}
 }

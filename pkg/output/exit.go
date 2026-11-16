@@ -22,6 +22,9 @@ import (
 //	accepts at most 1 arg(s), received 2
 //	accepts 1 arg(s), received 0
 //	accepts between 1 and 2 arg(s), received 3
+//	if any flags in the group [prune older-than] are set they must all be set; missing [older-than]
+//	at least one of the flags in the group [a b] is required
+//	if any flags in the group [a b] are set none of the others can be; [a b] were all set
 //
 // This is a string match, and it is fragile by nature: cobra exports no typed
 // error for any of these. TestExitCodeForUsageErrors pins the exact wording so
@@ -47,6 +50,11 @@ var usageMarkers = [][]string{
 	{"requires at least ", " arg(s), only received "},
 	// Exact, at-most and between all share this shape.
 	{"accepts ", " arg(s), received "},
+	// The flag-group validators: required together, one required, and
+	// mutually exclusive, in that order.
+	{"if any flags in the group [", "] are set they must all be set; missing ["},
+	{"at least one of the flags in the group [", "] is required"},
+	{"if any flags in the group [", "] are set none of the others can be; "},
 	// Not cobra's: llm-semantic's own refusal of contradictory output flags,
 	// such as `output flags --plain and --json cannot be combined`.
 	{"output flags --", " cannot be combined"},

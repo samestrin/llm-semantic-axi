@@ -518,3 +518,23 @@ func TestMain_ErrorsGoToStdoutInTheActiveFormat(t *testing.T) {
 func isTOONError(s string) bool {
 	return strings.HasPrefix(s, "error: true\n") && strings.Contains(s, "message:")
 }
+
+func TestMain_FlagGroupErrorExitsTwoWithHelpOnStdout(t *testing.T) {
+	// Defends AC3 finding 1 (EST-6589): `memory stats --prune` without
+	// --older-than broke cobra's MarkFlagsRequiredTogether and exited 1 with
+	// no help line, so an agent read a malformed invocation as a tool failure
+	// worth retrying, and was not told where to look for the right flags.
+	stdout, stderr, code := runMain(t, "memory", "stats", "--prune")
+	if code != 2 {
+		t.Errorf("exit code = %d, want 2; stdout=%q stderr=%q", code, stdout, stderr)
+	}
+	if !isTOONError(stdout) || !strings.Contains(stdout, "missing [older-than]") {
+		t.Errorf("stdout carries no TOON flag-group error: %q", stdout)
+	}
+	if !strings.Contains(stdout, "help[1]:") || !strings.Contains(stdout, "llm-semantic memory stats --help") {
+		t.Errorf("stdout carries no help line pointing at --help: %q", stdout)
+	}
+	if stderr != "" {
+		t.Errorf("stderr should be empty: %q", stderr)
+	}
+}

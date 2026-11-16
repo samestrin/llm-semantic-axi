@@ -69,7 +69,7 @@
 #      treesitter/chunker_rust.go:203 (treesitter/fallback.go:115 only
 #      delegates); `grep -rn "func (.*) ExtractRefs" internal`.
 #  10. Token count: `make bench-tokens` re-counts benchmarks/outputs/ and exits 1
-#      if benchmarks/results-tokens.md disagrees (43941 vs 11291 tokens).
+#      if benchmarks/results-tokens.md disagrees (43477 vs 11241 tokens).
 - name: llm-semantic-axi
   url: https://github.com/samestrin/llm-semantic-axi
   author: samestrin
@@ -108,5 +108,5 @@
       - "A bare `llm-semantic` run shows live data: the executable path and the index status of the current directory; unindexed, it prints status not_indexed with `llm-semantic index .` as the next step and exits 0 (internal/semantic/commands/root.go)."
       - "--json keeps its pre-AXI schema so existing scripts keep working: a bare result array with full, untruncated fields and no total, status or help (search.go, outputJSON). It is printed only when --json is passed."
       - "Only the Go, JavaScript, TypeScript, Python and Rust chunkers implement ExtractRefs (internal/semantic/refs_go.go, treesitter/refs_javascript.go, treesitter/chunker_python.go, treesitter/chunker_rust.go), so callers and refs have call edges for those five languages only."
-      - "benchmarks/results-tokens.md, re-checked by `make bench-tokens`: over 10 searches of this repository, TOON printed 11,291 cl100k tokens and --json 43,941 (25.7%). The embeddings were an offline stand-in, so only the comparison between renderings is meaningful."
-    exception: "--json is an opt-in compatibility mode that keeps its pre-AXI schema (no truncation, total, status or help) so existing scripts keep working; principles 2-5 are met in the default TOON output but not under --json. callers and refs have call edges for Go, JavaScript, TypeScript, Python and Rust only; in other languages they report 'not indexed for edges' rather than an empty answer."
+      - "benchmarks/results-tokens.md, re-checked by `make bench-tokens`: over 10 searches of this repository, TOON printed 11,241 cl100k tokens and --json 43,477 (25.9%). The embeddings were an offline stand-in, so only the comparison between renderings is meaningful."
+    exception: "--json is an opt-in compatibility mode that keeps its pre-AXI schema (no truncation, total, status or help) so existing scripts keep working; principles 2-5 are met in the default TOON output but not under --json. callers and refs have call edges for Go, JavaScript, TypeScript, Python and Rust only; in other languages they report 'not indexed for edges' rather than an empty answer. setup installs a session-start hook only and no session-end hook, so principle 7's lifecycle capture is not done: the tool keeps no session state to capture."

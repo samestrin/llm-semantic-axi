@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- A flag-group usage error, such as `memory stats --prune` without `--older-than`, exits 2 instead of 1 and carries a `help` line pointing at the command's `--help`, like every other malformed invocation. cobra's required-together, one-required and mutually-exclusive group errors are all classified as usage errors.
+- The token benchmark labels the TOON row `(default)` instead of `--axi`, which is a no-op alias, and its summary says "the default TOON output". The counts are unchanged.
+- `docs/axi-catalog-entry.yaml` quotes the current token totals (11,241 TOON vs 43,477 `--json`, 25.9%), and a test fails if they drift from the recount. `docs/axi-conformance.md` and the catalog entry state that no session-end hook is installed, that the truncation limit is 200 characters, below axi.md's 500-1,500, and that there is no `--fields` flag. The README's bare-run row shows the TOON `status: not_indexed`.
+
 ## [2.0.0] - 2026-11-16
 
 ### Added

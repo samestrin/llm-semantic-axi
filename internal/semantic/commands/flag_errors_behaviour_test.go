@@ -187,3 +187,33 @@ func TestUnknownSubcommandSuggestsTheNearestCommand(t *testing.T) {
 		})
 	}
 }
+
+// TestFlagGroupErrorPointsAtHelpAndExitsTwo defends AC3 finding 1 (EST-6589)
+// in the package that owns the guard: `memory stats --prune` without
+// --older-than broke cobra's MarkFlagsRequiredTogether and exited 1 with no
+// help, so an agent read a malformed invocation as a failure worth retrying.
+// The error must keep cobra's wording, classify as exit 2, point at --help,
+// and fail before any index directory is created.
+func TestFlagGroupErrorPointsAtHelpAndExitsTwo(t *testing.T) {
+	newWorkspace(t)
+	err := executeRoot(t, "memory", "stats", "--prune")
+	if err == nil {
+		t.Fatal("no error for --prune without --older-than")
+	}
+	msg := err.Error()
+	for _, want := range []string{"missing [older-than]", "llm-semantic memory stats --help"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("message lacks %q:\n%s", want, msg)
+		}
+	}
+	if code := output.ExitCodeFor(err); code != 2 {
+		t.Errorf("exit code = %d, want 2", code)
+	}
+	help := axiHelpOf(err)
+	if len(help) != 1 || !strings.Contains(help[0], "llm-semantic memory stats --help") {
+		t.Errorf("help = %q, want one pointer at `llm-semantic memory stats --help`", help)
+	}
+	if _, statErr := os.Stat(".index"); !os.IsNotExist(statErr) {
+		t.Errorf("an index directory was created before the flag group was rejected: %v", statErr)
+	}
+}

@@ -170,6 +170,13 @@ Supports any OpenAI-compatible embedding API (TEI, Ollama, vLLM, OpenAI, Azure, 
 			// rejectContradictoryFormats installs runs first.
 			resolveOutputMode(cmd)
 
+			// cobra checks flag groups only after this hook, and with no
+			// pointer to --help. Check them here first, so a malformed
+			// invocation says where to look before any config is loaded.
+			if err := cmd.ValidateFlagGroups(); err != nil {
+				return withHelp(fmt.Errorf("%w; run `%s --help` for usage", err, cmd.CommandPath()), helpPointer(cmd))
+			}
+
 			// Validate config path early (reject whitespace-only paths)
 			// If user explicitly set --config but with only whitespace, report error
 			if configPath != "" && strings.TrimSpace(configPath) == "" {

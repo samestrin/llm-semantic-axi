@@ -41,6 +41,12 @@ func TestExitCodeForUsageErrors(t *testing.T) {
 		"maximum args": errors.New("accepts at most 1 arg(s), received 2"),
 		"exact args":   errors.New("accepts 1 arg(s), received 0"),
 		"range args":   errors.New("accepts between 1 and 2 arg(s), received 3"),
+		// cobra's flag-group validators (flag_groups.go, v1.8.0). These were
+		// exit 1, so `memory stats --prune` without --older-than read as a
+		// tool failure worth retrying instead of a malformed invocation.
+		"flags required together":  errors.New("if any flags in the group [prune older-than] are set they must all be set; missing [older-than]"),
+		"flags one required":       errors.New("at least one of the flags in the group [a b] is required"),
+		"flags mutually exclusive": errors.New("if any flags in the group [a b] are set none of the others can be; [a b] were all set"),
 		// llm-semantic's own: contradictory output flags (epic 27 T1).
 		"format conflict": errors.New("output flags --plain and --json cannot be combined: pick one"),
 	} {
