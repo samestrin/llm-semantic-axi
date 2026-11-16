@@ -18,14 +18,14 @@ Totals over 10 queries:
 | Format | Flag | Tokens (cl100k) | Bytes | Tokens per query | vs `--json` |
 |---|---|---:|---:|---:|---:|
 | JSON | `--json` | 43477 | 144052 | 4347.7 | 100.0% |
-| TOON | `--axi` | 11241 | 37856 | 1124.1 | 25.9% |
+| TOON | (default) | 11241 | 37856 | 1124.1 | 25.9% |
 | Plain | `--plain` | 6740 | 21126 | 674.0 | 15.5% |
 
-On these 10 queries, `--axi` printed 25.9% of the tokens `--json` printed, and plain output printed 15.5%.
+On these 10 queries, the default TOON output printed 25.9% of the tokens `--json` printed, and plain output printed 15.5%.
 
 Tokens per query:
 
-| # | Query | `--json` | `--axi` | `--plain` |
+| # | Query | JSON | TOON | Plain |
 |---:|---|---:|---:|---:|
 | 1 | where is the retry logic for embedding requests | 4373 | 1212 | 654 |
 | 2 | how does the index decide a file needs re-indexing | 4883 | 1124 | 785 |

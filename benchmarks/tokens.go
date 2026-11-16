@@ -63,10 +63,12 @@ type Format struct {
 // Formats lists the measured modes. JSON comes first: it is the baseline the
 // others are compared to, and the generator checks its result count. Every
 // mode passes its flag explicitly — the CLI's default is not a measured mode —
-// and Flag is how the results table names the flags in Flags.
+// and Flag is how the results table names the flags in Flags. TOON is the
+// exception in the table only: --axi is a no-op alias of the default, so its
+// row reads (default) rather than suggest TOON needs a flag.
 var Formats = []Format{
 	{Dir: "json", Ext: "json", Name: "JSON", Flag: "`--json`", Says: "`--json`", Flags: []string{"--json"}},
-	{Dir: "axi", Ext: "toon", Name: "TOON", Flag: "`--axi`", Says: "`--axi`", Flags: []string{"--axi"}},
+	{Dir: "axi", Ext: "toon", Name: "TOON", Flag: "(default)", Says: "the default TOON output", Flags: []string{"--axi"}, Default: true},
 	{Dir: "plain", Ext: "txt", Name: "Plain", Flag: "`--plain`", Says: "plain output", Flags: []string{"--plain"}},
 }
 
@@ -234,7 +236,7 @@ func Render(r *Result) string {
 		Formats[2].Says, pct(r.Total(Formats[2]).Tokens, base))
 	b.WriteString("\nTokens per query:\n\n| # | Query |")
 	for _, f := range Formats {
-		fmt.Fprintf(&b, " %s |", f.Flag)
+		fmt.Fprintf(&b, " %s |", f.Name)
 	}
 	b.WriteString("\n|---:|---|")
 	for range Formats {
