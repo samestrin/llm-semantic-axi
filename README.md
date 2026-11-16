@@ -14,7 +14,7 @@ The session runs `--version`, a `search` with `--axi` and a `callers` query agai
 
 - Grep finds exact text, not intent. `llm-semantic search "where is the retry logic"` finds the code that does it, whatever it is named.
 - Following a call chain by hand costs an agent many reads. `callers` and `refs` answer from call edges recorded at index time, with no language server, for Go, JavaScript, TypeScript, Python and Rust.
-- Tool output is paid for in tokens. `--axi` prints TOON, a token-dense format built to the [AXI](https://axi.md) principles, with four fields per result, long content cut and a stated total.
+- Tool output is paid for in tokens. The default output is TOON, a token-dense format built to the [AXI](https://axi.md) principles, with four fields per result, long content cut and a stated total. `--plain` prints text for a person instead.
 - An empty answer is easy to misread as "none exist". Every command says which kind of empty it is: no match, an empty index, a symbol not indexed, a language with no recorded call edges, or an index that is behind the working tree.
 - Code, docs and stored decisions are different questions. Profiles (`code`, `docs`, `memory`, `sprints`) keep each in its own index when each points at its own `--index-dir` (sqlite) or collection (Qdrant), so a docs question is not answered from source.
 
@@ -72,7 +72,7 @@ sudo ./install.sh   # or: build and install both to /usr/local/bin
 
 Two ways to tell an agent the tool exists:
 
-- `llm-semantic setup`, run in a project, registers the tool with Claude Code: it merges a SessionStart hook into `.claude/settings.json` (other keys are kept) and writes the Agent Skill to `.claude/skills/llm-semantic/SKILL.md`. It prints each path as `wrote`, `unchanged` or, with `--dry-run`, `would write`. It is safe to re-run, never prompts, and never touches your home directory. The hook runs `llm-semantic index-status || true`, so a session in a project with no index starts without a hook error.
+- `llm-semantic setup`, run in a project, registers the tool with three agents, each at session start. Claude Code: a SessionStart hook merged into `.claude/settings.json` (other keys are kept) and the Agent Skill at `.claude/skills/llm-semantic/SKILL.md`. Codex: a SessionStart hook merged into `.codex/hooks.json`, and `[features] hooks = true` merged into `.codex/config.toml` (other keys are kept). OpenCode: a plugin at `.opencode/plugins/llm-semantic.ts` that runs on `session.created`. `--target claude`, `codex` or `opencode` (repeatable) registers only those. Each hook runs `llm-semantic index-status || true`, so a session starts with the index status and a project with no index starts without a hook error; when `llm-semantic` is not on `PATH` the hook names this binary's absolute path, and re-running `setup` after moving the binary repairs it. `setup` prints each path as `wrote`, `unchanged` or, with `--dry-run`, `would write`. It is safe to re-run, never prompts, and writes only under the current directory.
 - `npx skills add samestrin/llm-semantic-axi --skill llm-semantic` installs the same skill, [`skills/llm-semantic/SKILL.md`](skills/llm-semantic/SKILL.md), through the `skills` CLI for any agent it supports. It adds no hook.
 
 ### Upgrade
@@ -87,7 +87,7 @@ rm "$(go env GOPATH)/bin/llm-semantic" "$(go env GOPATH)/bin/llm-semantic-mcp"  
 sudo rm /usr/local/bin/llm-semantic /usr/local/bin/llm-semantic-mcp   # install.sh
 ```
 
-In each indexed project, delete `.index/` (the sqlite index). Where `setup` ran, delete `.claude/skills/llm-semantic/` and remove the `llm-semantic index-status || true` hook from `.claude/settings.json` by hand. Where `npx skills add` ran, `npx skills remove llm-semantic` removes the skill.
+In each indexed project, delete `.index/` (the sqlite index). Where `setup` ran, delete `.claude/skills/llm-semantic/` and `.opencode/plugins/llm-semantic.ts`, and remove the `llm-semantic index-status || true` hook from `.claude/settings.json` and `.codex/hooks.json` by hand. `setup` also set `[features] hooks = true` in `.codex/config.toml`; leave it if other Codex hooks need it. Where `npx skills add` ran, `npx skills remove llm-semantic` removes the skill.
 
 ## Quick start
 
@@ -97,15 +97,15 @@ There is no bundled model, so `index` and `search` need an OpenAI-compatible emb
 curl -fsSL https://github.com/samestrin/llm-semantic-axi/releases/latest/download/install-release.sh | sh
 export LLM_SEMANTIC_API_URL=http://localhost:8080 LLM_SEMANTIC_MODEL=nomic-embed-text   # your endpoint and its model
 git clone https://github.com/samestrin/llm-semantic-axi.git && cd llm-semantic-axi
-llm-semantic index .
+llm-semantic index . --plain
 llm-semantic search "retry embedding requests with backoff" --top 3
-llm-semantic callers EnrichForEmbedding
+llm-semantic callers EnrichForEmbedding --plain
 ```
 
-Output of `index` and `callers` (trimmed, paths shortened). Which results `search` returns depends on the model your endpoint serves, so its output is not shown here.
+Output of `index` and `callers` as text (trimmed, paths shortened); without `--plain` both print TOON. Which results `search` returns depends on the model your endpoint serves, so its output is not shown here.
 
 ```text
-$ llm-semantic index .
+$ llm-semantic index . --plain
 Indexing .../llm-semantic-axi...
   [100/306 files] 881 chunks...
   [200/306 files] 2195 chunks...
@@ -115,7 +115,7 @@ Indexing .../llm-semantic-axi...
 Running initial calibration...
 Indexed 306 files, created 3518 chunks
 
-$ llm-semantic callers EnrichForEmbedding
+$ llm-semantic callers EnrichForEmbedding --plain
 5 caller(s) of EnrichForEmbedding
 
   .../internal/semantic/embed_enrichment_test.go:8  TestEnrichForEmbedding
@@ -139,7 +139,7 @@ $ llm-semantic callers EnrichForEmbedding
 | `refs <symbol>` | Lists what a symbol calls, imports and uses. |
 | `memory <store\|search\|list\|delete\|promote\|stats\|import>` | Stores and searches question and answer pairs (decisions, clarifications). |
 | `collection delete` | Deletes every chunk in one profile. Requires `--force`. |
-| `setup` | Registers the tool with Claude Code in this project (see Install). |
+| `setup` | Registers the tool with Claude Code, Codex and OpenCode in this project (see Install). |
 
 Every command accepts `--help`. A long run of options is in `llm-semantic <command> --help`.
 
@@ -148,8 +148,8 @@ Every command accepts `--help`. A long run of options is in `llm-semantic <comma
 llm-semantic index . --exclude-tests
 llm-semantic index-update .
 
-# search, narrowed to a path and a chunk type, as TOON
-llm-semantic search "where is the retry logic" --path internal/ --type function --top 5 --axi
+# search, narrowed to a path and a chunk type (TOON, the default)
+llm-semantic search "where is the retry logic" --path internal/ --type function --top 5
 
 # hybrid dense and lexical search, then several phrasings at once
 llm-semantic search "parse the config file" --hybrid
@@ -206,18 +206,21 @@ Flags win over environment variables, and environment variables over defaults. S
 
 | Flag | Output |
 |---|---|
-| none | Human-readable text. |
+| none | TOON, the token-dense AXI format to give a model: four fields per result, content cut at 200 characters with `--full` for the rest, a `total`, a `status` for empty answers and a `help` list of next steps. |
+| `--plain` | Human-readable text. |
 | `--json` | JSON. Keeps its pre-AXI schema (full fields, no total) so existing scripts keep working. |
-| `--min` | Minimal, token-optimized form. |
-| `--axi` | TOON, the token-dense AXI format to give a model: four fields per result, content cut at 200 characters with `--full` for the rest, a `total`, a `status` for empty answers and a `help` list of next steps. |
+| `--min` | A minimal TOON or JSON payload. Not valid with `--plain`. |
+| `--axi` | Accepted so v1 invocations keep working; TOON is already the default, so it changes nothing. |
 
-Search-family output also says how far the index is behind the working tree (`fresh`, `stale` or `unknown`). Under `--json` and `--min` that line goes to stderr so stdout keeps its schema.
+`--plain`, `--json` and `--axi` each pick a format, so any two together are a usage error (exit 2), as is `--min` with `--plain`.
+
+Search-family output also says how far the index is behind the working tree (`fresh`, `stale` or `unknown`). Under `--json` that line goes to stderr so stdout keeps its schema.
 
 | Exit code | Meaning |
 |---|---|
 | `0` | Success, including a definitive empty answer: no match, a symbol not indexed, or a bare run with no index. |
-| `1` | The command failed: no index for `index-status`, an unreachable endpoint, or a destructive command refused without `--force` or `--yes`. In plain mode the error goes to stderr; under `--json` and `--axi` it is an `error: true` object on stdout. |
-| `2` | Usage error: an unknown flag or command, or a missing argument. The message names what was wrong and lists the valid choices. |
+| `1` | The command failed: no index for `index-status`, an unreachable endpoint, or a destructive command refused without `--force` or `--yes`. Every error goes to stdout in the active format: a TOON or JSON object with `error: true`, or `Error: ...` under `--plain`. stderr carries only diagnostics. |
+| `2` | Usage error: an unknown flag or command, a missing argument, or contradictory format flags. The message names what was wrong; for an unknown flag or command it lists the valid choices. |
 
 `llm-semantic -v`, `-V` and `--version` print the bare version and exit 0, and so do the same flags on `llm-semantic-mcp`.
 
@@ -251,10 +254,8 @@ The tool was extracted from [samestrin/llm-tools](https://github.com/samestrin/l
 - **`callers` and `refs` record call edges for Go, JavaScript, TypeScript, Python and Rust only.** In any other language, an empty answer means "not indexed for edges", not "no callers"; the output says so. Even in those five languages some call shapes are not recorded, so an empty answer is not proof. [docs/languages.md](docs/languages.md) lists what each language records.
 - An index built before a language gained call edges has none for it until `llm-semantic index --force`.
 - There is no bundled embedding model. `index` and `search` fail without a reachable endpoint, and the quality of `search` is the quality of the model you point it at.
-- TOON is opt-in through `--axi`; the default output is plain text.
-- A usage error exits 2, and plain-mode errors go to stderr, not stdout.
-- `--json` keeps its pre-AXI schema: no truncation, no `total`, no zero-result message. Those are in `--axi` and plain output only.
-- `setup` targets Claude Code only and registers no session-end hook. Other agents get the skill through `npx skills add`, without a hook.
+- `--json` keeps its pre-AXI schema: no truncation, no `total`, no zero-result message. Those are in the default TOON output and `--plain` only.
+- `setup` registers Claude Code, Codex and OpenCode. Other agents get the skill through `npx skills add`, without a hook.
 - The installer supports Linux and macOS on `amd64` and `arm64`. Windows has raw binaries only.
 - The sqlite file (`.index/semantic.db`) is an internal detail. Only the Qdrant store has a published contract.
 
