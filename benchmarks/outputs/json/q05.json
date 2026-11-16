@@ -1,7 +1,7 @@
 [
   {
     "chunk": {
-      "id": "e50b53c5c827a4b6",
+      "id": "042c75045282a11d",
       "file_path": "/work/llm-semantic-axi/internal/semantic/fusion.go",
       "type": "function",
       "name": "FuseRRF",
@@ -12,13 +12,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.556128,
+    "score": 0.56047845,
     "relevance": "medium",
     "preview": "func FuseRRF(denseResults, lexicalResults []SearchResult, k int) []SearchResult"
   },
   {
     "chunk": {
-      "id": "5b1a97548be27568",
+      "id": "ab0e69f43337061a",
       "file_path": "/work/llm-semantic-axi/internal/semantic/search.go",
       "type": "method",
       "name": "HybridSearch",
@@ -29,13 +29,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.5530629,
+    "score": 0.5538641,
     "relevance": "medium",
     "preview": "func (s *Searcher) HybridSearch(ctx context.Context, query string, opts HybridSearchOptions) ([]SearchResult, error)"
   },
   {
     "chunk": {
-      "id": "decd10d6507ce433",
+      "id": "3f6828e80395b08f",
       "file_path": "/work/llm-semantic-axi/internal/semantic/storage.go",
       "type": "interface",
       "name": "LexicalSearcher",
@@ -46,30 +46,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.52613366,
+    "score": 0.5345225,
     "relevance": "medium",
     "preview": "type LexicalSearcher"
   },
   {
     "chunk": {
-      "id": "ec15cedd9dcea9ef",
-      "file_path": "/work/llm-semantic-axi/internal/semantic/hybrid_overlap_extra_test.go",
-      "type": "function",
-      "name": "TestHybridSearch_FusesDenseAndLexical",
-      "signature": "func TestHybridSearch_FusesDenseAndLexical(t *testing.T)",
-      "content": "// TestHybridSearch_FusesDenseAndLexical pins that hybrid search returns the union of the\n// dense and lexical hits: a chunk only the FTS5 stage can find still reaches the caller.\nfunc TestHybridSearch_FusesDenseAndLexical(t *testing.T) {\n\tstorage := prefilterFixture(t)\n\t// Query vector aligns with chunk a only; \"lever\" is lexical-only and hits chunk b.\n\tembedder := \u0026tableEmbedder{fallback: []float32{1, 0, 0, 0}}\n\tsearcher := NewSearcher(storage, embedder)\n\n\tresults, err := searcher.HybridSearch(context.Background(), \"lever\", HybridSearchOptions{\n\t\tSearchOptions: SearchOptions{TopK: 10, Threshold: 0.5},\n\t})\n\tif err != nil {\n\t\tt.Fatalf(\"HybridSearch() error = %v\", err)\n\t}\n\n\tgot := map[string]bool{}\n\tfor _, r := range results {\n\t\tgot[r.Chunk.ID] = true\n\t}\n\tif !got[\"a\"] {\n\t\tt.Error(\"chunk a (the dense hit) is missing from the fused results\")\n\t}\n\tif !got[\"b\"] {\n\t\tt.Error(\"chunk b (the lexical-only hit for \\\"lever\\\") is missing from the fused results\")\n\t}\n\tif len(results) != 2 {\n\t\tt.Errorf(\"fused results = %v, want exactly a and b\", ids(results))\n\t}\n\tif results[0].Preview == \"\" {\n\t\tt.Error(\"hybrid results should carry previews from applyRelevanceLabels\")\n\t}\n}",
-      "start_line": 69,
-      "end_line": 100,
-      "language": "go",
-      "domain": "code"
-    },
-    "score": 0.5220393,
-    "relevance": "medium",
-    "preview": "func TestHybridSearch_FusesDenseAndLexical(t *testing.T)"
-  },
-  {
-    "chunk": {
-      "id": "191a00f885337958",
+      "id": "eb4a5ba5b8eb6e95",
       "file_path": "/work/llm-semantic-axi/internal/semantic/fusion_test.go",
       "type": "function",
       "name": "TestRRFusion_EmptyDense",
@@ -80,13 +63,30 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.52139515,
+    "score": 0.5247458,
     "relevance": "medium",
     "preview": "func TestRRFusion_EmptyDense(t *testing.T)"
   },
   {
     "chunk": {
-      "id": "167d6aa246b4793f",
+      "id": "b697d5f3d082e4ed",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/hybrid_overlap_extra_test.go",
+      "type": "function",
+      "name": "TestHybridSearch_FusesDenseAndLexical",
+      "signature": "func TestHybridSearch_FusesDenseAndLexical(t *testing.T)",
+      "content": "// TestHybridSearch_FusesDenseAndLexical pins that hybrid search returns the union of the\n// dense and lexical hits: a chunk only the FTS5 stage can find still reaches the caller.\nfunc TestHybridSearch_FusesDenseAndLexical(t *testing.T) {\n\tstorage := prefilterFixture(t)\n\t// Query vector aligns with chunk a only; \"lever\" is lexical-only and hits chunk b.\n\tembedder := \u0026tableEmbedder{fallback: []float32{1, 0, 0, 0}}\n\tsearcher := NewSearcher(storage, embedder)\n\n\tresults, err := searcher.HybridSearch(context.Background(), \"lever\", HybridSearchOptions{\n\t\tSearchOptions: SearchOptions{TopK: 10, Threshold: 0.5},\n\t})\n\tif err != nil {\n\t\tt.Fatalf(\"HybridSearch() error = %v\", err)\n\t}\n\n\tgot := map[string]bool{}\n\tfor _, r := range results {\n\t\tgot[r.Chunk.ID] = true\n\t}\n\tif !got[\"a\"] {\n\t\tt.Error(\"chunk a (the dense hit) is missing from the fused results\")\n\t}\n\tif !got[\"b\"] {\n\t\tt.Error(\"chunk b (the lexical-only hit for \\\"lever\\\") is missing from the fused results\")\n\t}\n\tif len(results) != 2 {\n\t\tt.Errorf(\"fused results = %v, want exactly a and b\", ids(results))\n\t}\n\tif results[0].Preview == \"\" {\n\t\tt.Error(\"hybrid results should carry previews from applyRelevanceLabels\")\n\t}\n}",
+      "start_line": 69,
+      "end_line": 100,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.5246722,
+    "relevance": "medium",
+    "preview": "func TestHybridSearch_FusesDenseAndLexical(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "2bad3650fad2ec14",
       "file_path": "/work/llm-semantic-axi/internal/semantic/fusion.go",
       "type": "function",
       "name": "FuseRRFMemoryWithTopK",
@@ -97,13 +97,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.49671578,
+    "score": 0.49961025,
     "relevance": "medium",
     "preview": "func FuseRRFMemoryWithTopK(denseResults, lexicalResults []MemorySearchResult, k int, topK int) []MemorySearchResult"
   },
   {
     "chunk": {
-      "id": "f1eab2a04aa611e0",
+      "id": "b991c495cc59b3bf",
       "file_path": "/work/llm-semantic-axi/internal/semantic/fusion.go",
       "type": "function",
       "name": "FuseRRFWithTopK",
@@ -114,13 +114,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.48989794,
+    "score": 0.49286407,
     "relevance": "medium",
     "preview": "func FuseRRFWithTopK(denseResults, lexicalResults []SearchResult, k int, topK int) []SearchResult"
   },
   {
     "chunk": {
-      "id": "765746312cf2cdba",
+      "id": "34a73aee914a24d3",
       "file_path": "/work/llm-semantic-axi/internal/semantic/fts_sqlite_rebuild_test.go",
       "type": "function",
       "name": "TestSafeLexicalSearch_EscapesOperators",
@@ -131,13 +131,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.48730588,
+    "score": 0.49022487,
     "relevance": "medium",
     "preview": "func TestSafeLexicalSearch_EscapesOperators(t *testing.T)"
   },
   {
     "chunk": {
-      "id": "600d5354acd196bc",
+      "id": "56690f3a31266dbf",
       "file_path": "/work/llm-semantic-axi/internal/semantic/hybrid_overlap_extra_test.go",
       "type": "function",
       "name": "TestHybridSearch_FallsBackOnLexicalError",
@@ -148,13 +148,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.4844814,
+    "score": 0.48831135,
     "relevance": "medium",
     "preview": "func TestHybridSearch_FallsBackOnLexicalError(t *testing.T)"
   },
   {
     "chunk": {
-      "id": "ab59549a4dadc11f",
+      "id": "ba28cde2fb24da32",
       "file_path": "/work/llm-semantic-axi/internal/semantic/memory_search.go",
       "type": "function",
       "name": "HybridSearchMemory",
@@ -165,7 +165,7 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.48296276,
+    "score": 0.4835457,
     "relevance": "medium",
     "preview": "func HybridSearchMemory(ctx context.Context, storage Storage, embedder EmbedderInterface, query string, opts HybridMemorySearchOptions) ([]MemorySearc..."
   }

@@ -267,14 +267,17 @@ func TestReadQueriesSkipsBlankAndCommentLines(t *testing.T) {
 // index step calls the embedding endpoint and fails unless it answers, and
 // its search prints the working directory, as the real CLI prints absolute
 // paths. Like the real CLI it also prints what the generator must make
-// stable: an id hashed from the absolute path (Chunk.GenerateID) and, in
-// --axi, the time of the run as indexed_at. Like fakeCLI it refuses a search
+// stable: an id hashed from the absolute path (Chunk.GenerateID) with a draw
+// from the global math/rand appended (calibration picks its probe chunks
+// with it, which sets the relevance labels) and, in --axi, the time of the
+// run as indexed_at. Like fakeCLI it refuses a search
 // that names no output format flag.
 const fakeRepoMain = `package main
 
 import (
 	"crypto/sha256"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"os"
 	"strings"
@@ -292,7 +295,7 @@ func flag(name string) string {
 
 func main() {
 	wd, _ := os.Getwd()
-	id := fmt.Sprintf("%x", sha256.Sum256([]byte(wd+"/a.go")))[:16]
+	id := fmt.Sprintf("%x", sha256.Sum256([]byte(wd+"/a.go")))[:16] + fmt.Sprint(rand.Intn(1e9))
 	switch os.Args[1] {
 	case "index":
 		resp, err := http.Post(flag("--api-url")+"/v1/embeddings", "application/json", strings.NewReader(` + "`" + `{"input":["x"]}` + "`" + `))
@@ -404,7 +407,8 @@ func readOutputs(t *testing.T, bench string) map[string]string {
 // Defends "the checked-in outputs are what the generator wrote": two runs
 // must write byte-identical files. The checkout path feeds chunk ids and the
 // embedded text, so a checkout at a fresh random path changed every id and
-// moved scores on each run; the run time in --axi's indexed_at did the same.
+// moved scores on each run; the run time in --axi's indexed_at, and the
+// randomly chosen calibration probes behind the relevance labels, did the same.
 func TestGenerateTwiceWritesIdenticalOutputs(t *testing.T) {
 	repo := fakeRepo(t)
 	checkout := filepath.Join(t.TempDir(), "src")

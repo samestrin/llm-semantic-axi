@@ -1,7 +1,7 @@
 [
   {
     "chunk": {
-      "id": "78179399c8dcf633",
+      "id": "470cba7ccab344f7",
       "file_path": "/work/llm-semantic-axi/internal/semantic/multisearch.go",
       "type": "function",
       "name": "ValidOutputFormats",
@@ -12,46 +12,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.34595302,
+    "score": 0.3506672,
     "relevance": "low",
     "preview": "func ValidOutputFormats() []string"
   },
   {
     "chunk": {
-      "id": "b80d91f0a7e0113f",
-      "file_path": "/work/llm-semantic-axi/benchmarks/outputs/json/q04.json",
-      "type": "file",
-      "name": "q04",
-      "content": "[\n  {\n    \"chunk\": {\n      \"id\": \"44f99e60f235cdd7\",\n      \"file_path\": \"/work/llm-semantic-axi/internal/semantic/multisearch.go\",\n      \"type\": \"function\",\n      \"name\": \"ValidOutputFormats\",\n      \"signature\": \"func ValidOutputFormats() []string\",\n      \"content\": \"// ValidOutputFormats returns all valid output format values\\nfunc ValidOutputFormats() []string {\\n\\treturn []string{string(OutputBlended), string(OutputByQuery), string(OutputByCollection)}\\n}\",\n      \"start_line\": 28,\n      \"end_line\": 31,\n      \"language\": \"go\",\n      \"domain\": \"code\"\n    },\n    \"score\": 0.33995336,\n    \"relevance\": \"medium\",\n    \"preview\": \"func ValidOutputFormats() []string\"\n  },\n  {\n    \"chunk\": {\n      \"id\": \"e836b146d2c41d51\",\n      \"file_path\": \"/work/llm-semantic-axi/pkg/output/formatter.go\",\n      \"type\": \"struct\",\n      \"name\": \"Formatter\",\n      \"signature\": \"type Formatter\",\n      \"content\": \"// Formatter handles output formatting with support for AXI, JSON and minimal modes.\\ntype Formatter struct {\\n\\tJSON    bool // Output as JSON\\n\\tMinimal bool // Output in minimal/token-optimized mode\\n\\tAXI     bool // Output as TOON (AXI token-dense format)\\n\\tWriter  io.Writer\\n}\",\n      \"start_line\": 26,\n      \"end_line\": 32,\n      \"language\": \"go\",\n      \"domain\": \"code\"\n    },\n    \"score\": 0.31282476,\n    \"relevance\": \"low\",\n    \"preview\": \"type Formatter\"\n  },\n  {\n    \"chunk\": {\n      \"id\": \"7808ff52caef7868\",\n",
-      "start_line": 1,
-      "end_line": 38,
-      "language": "json",
-      "domain": "code"
-    },
-    "score": 0.31722063,
-    "relevance": "low",
-    "preview": "[   {     \"chunk\": {       \"id\": \"44f99e60f235cdd7\",       \"file_path\": \"/work/llm-semantic-axi/internal/semantic/multisearch.go\",       \"type\": \"func..."
-  },
-  {
-    "chunk": {
-      "id": "e3e9b0f5f77f3fdf",
-      "file_path": "/work/llm-semantic-axi/pkg/output/formatter.go",
-      "type": "struct",
-      "name": "Formatter",
-      "signature": "type Formatter",
-      "content": "// Formatter handles output formatting with support for AXI, JSON and minimal modes.\ntype Formatter struct {\n\tJSON    bool // Output as JSON\n\tMinimal bool // Output in minimal/token-optimized mode\n\tAXI     bool // Output as TOON (AXI token-dense format)\n\tWriter  io.Writer\n}",
-      "start_line": 26,
-      "end_line": 32,
-      "language": "go",
-      "domain": "code"
-    },
-    "score": 0.31426966,
-    "relevance": "low",
-    "preview": "type Formatter"
-  },
-  {
-    "chunk": {
-      "id": "1e0789ede7798afc",
+      "id": "181fb5ed75b4e267",
       "file_path": "/work/llm-semantic-axi/internal/semantic/multisearch.go",
       "type": "function",
       "name": "IsValidOutputFormat",
@@ -62,13 +29,46 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.31311214,
+    "score": 0.3173404,
     "relevance": "low",
     "preview": "func IsValidOutputFormat(format string) bool"
   },
   {
     "chunk": {
-      "id": "7ad572b520e208a3",
+      "id": "e796fe3968df5891",
+      "file_path": "/work/llm-semantic-axi/benchmarks/outputs/json/q04.json",
+      "type": "file",
+      "name": "q04",
+      "content": "[\n  {\n    \"chunk\": {\n      \"id\": \"44f99e60f235cdd7\",\n      \"file_path\": \"/work/llm-semantic-axi/internal/semantic/multisearch.go\",\n      \"type\": \"function\",\n      \"name\": \"ValidOutputFormats\",\n      \"signature\": \"func ValidOutputFormats() []string\",\n      \"content\": \"// ValidOutputFormats returns all valid output format values\\nfunc ValidOutputFormats() []string {\\n\\treturn []string{string(OutputBlended), string(OutputByQuery), string(OutputByCollection)}\\n}\",\n      \"start_line\": 28,\n      \"end_line\": 31,\n      \"language\": \"go\",\n      \"domain\": \"code\"\n    },\n    \"score\": 0.33995336,\n    \"relevance\": \"medium\",\n    \"preview\": \"func ValidOutputFormats() []string\"\n  },\n  {\n    \"chunk\": {\n      \"id\": \"e836b146d2c41d51\",\n      \"file_path\": \"/work/llm-semantic-axi/pkg/output/formatter.go\",\n      \"type\": \"struct\",\n      \"name\": \"Formatter\",\n      \"signature\": \"type Formatter\",\n      \"content\": \"// Formatter handles output formatting with support for AXI, JSON and minimal modes.\\ntype Formatter struct {\\n\\tJSON    bool // Output as JSON\\n\\tMinimal bool // Output in minimal/token-optimized mode\\n\\tAXI     bool // Output as TOON (AXI token-dense format)\\n\\tWriter  io.Writer\\n}\",\n      \"start_line\": 26,\n      \"end_line\": 32,\n      \"language\": \"go\",\n      \"domain\": \"code\"\n    },\n    \"score\": 0.31282476,\n    \"relevance\": \"low\",\n    \"preview\": \"type Formatter\"\n  },\n  {\n    \"chunk\": {\n      \"id\": \"7808ff52caef7868\",\n",
+      "start_line": 1,
+      "end_line": 38,
+      "language": "json",
+      "domain": "code"
+    },
+    "score": 0.316661,
+    "relevance": "low",
+    "preview": "[   {     \"chunk\": {       \"id\": \"44f99e60f235cdd7\",       \"file_path\": \"/work/llm-semantic-axi/internal/semantic/multisearch.go\",       \"type\": \"func..."
+  },
+  {
+    "chunk": {
+      "id": "c2d2f10d85fa7487",
+      "file_path": "/work/llm-semantic-axi/pkg/output/formatter.go",
+      "type": "struct",
+      "name": "Formatter",
+      "signature": "type Formatter",
+      "content": "// Formatter handles output formatting with support for AXI, JSON and minimal modes.\ntype Formatter struct {\n\tJSON    bool // Output as JSON\n\tMinimal bool // Output in minimal/token-optimized mode\n\tAXI     bool // Output as TOON (AXI token-dense format)\n\tWriter  io.Writer\n}",
+      "start_line": 26,
+      "end_line": 32,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.31647512,
+    "relevance": "low",
+    "preview": "type Formatter"
+  },
+  {
+    "chunk": {
+      "id": "15d0eeb9cb64c233",
       "file_path": "/work/llm-semantic-axi/pkg/output/formatter_test.go",
       "type": "function",
       "name": "TestFormatter_Print_JSON",
@@ -79,30 +79,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.28522962,
+    "score": 0.28743032,
     "relevance": "low",
     "preview": "func TestFormatter_Print_JSON(t *testing.T)"
   },
   {
     "chunk": {
-      "id": "c84ed542996883e9",
-      "file_path": "/work/llm-semantic-axi/internal/semantic/commands/output_mode_behaviour_test.go",
-      "type": "function",
-      "name": "resetOutputGlobals",
-      "signature": "func resetOutputGlobals(t *testing.T)",
-      "content": "// resetOutputGlobals restores the mode globals after a test, since the package\n// shares them across every test that runs after it.\nfunc resetOutputGlobals(t *testing.T) {\n\tt.Helper()\n\tt.Cleanup(func() {\n\t\tGlobalAXIOutput = false\n\t\tGlobalJSONOutput = false\n\t\tGlobalMinOutput = false\n\t\toutput.SetDefaultAXI(false)\n\t})\n}",
-      "start_line": 55,
-      "end_line": 65,
-      "language": "go",
-      "domain": "code"
-    },
-    "score": 0.2698333,
-    "relevance": "low",
-    "preview": "func resetOutputGlobals(t *testing.T)"
-  },
-  {
-    "chunk": {
-      "id": "539ed81bf1096422",
+      "id": "549c5379a89b0ba0",
       "file_path": "/work/llm-semantic-axi/internal/semantic/commands/staleness_behaviour_test.go",
       "type": "struct",
       "name": "outputMode",
@@ -113,47 +96,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.26919094,
+    "score": 0.2777778,
     "relevance": "low",
     "preview": "type outputMode"
   },
   {
     "chunk": {
-      "id": "1f073c1e601a6f26",
-      "file_path": "/work/llm-semantic-axi/internal/semantic/commands/refs.go",
-      "type": "function",
-      "name": "runRefs",
-      "signature": "func runRefs(ctx context.Context, symbol string, jsonOutput, minOutput bool) error",
-      "content": "func runRefs(ctx context.Context, symbol string, jsonOutput, minOutput bool) error {\n\trs, cleanup, err := openRefStorage(ctx)\n\tif err != nil {\n\t\treturn err\n\t}\n\tdefer cleanup()\n\n\treturn writeRefs(ctx, os.Stdout, os.Stderr, rs, symbol, jsonOutput, minOutput)\n}",
-      "start_line": 97,
-      "end_line": 105,
-      "language": "go",
-      "domain": "code"
-    },
-    "score": 0.26602897,
-    "relevance": "low",
-    "preview": "func runRefs(ctx context.Context, symbol string, jsonOutput, minOutput bool) error"
-  },
-  {
-    "chunk": {
-      "id": "6424a53673970ec6",
-      "file_path": "/work/llm-semantic-axi/internal/semantic/commands/axi.go",
-      "type": "function",
-      "name": "resolveOutputMode",
-      "signature": "func resolveOutputMode(cmd *cobra.Command)",
-      "content": "// resolveOutputMode publishes the output mode the parsed flags ask for.\nfunc resolveOutputMode(cmd *cobra.Command) {\n\tGlobalJSONOutput = flagOn(cmd, \"json\")\n\tGlobalMinOutput = flagOn(cmd, \"min\")\n\tGlobalAXIOutput = !GlobalJSONOutput \u0026\u0026 !flagOn(cmd, \"plain\")\n\toutput.SetDefaultAXI(GlobalAXIOutput)\n}",
-      "start_line": 38,
-      "end_line": 44,
-      "language": "go",
-      "domain": "code"
-    },
-    "score": 0.26141977,
-    "relevance": "low",
-    "preview": "func resolveOutputMode(cmd *cobra.Command)"
-  },
-  {
-    "chunk": {
-      "id": "0d757119a9dfe185",
+      "id": "d84a43dcf1a47a96",
       "file_path": "/work/llm-semantic-axi/internal/semantic/multisearch.go",
       "type": "function",
       "name": "OutputFormat",
@@ -164,8 +113,59 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.2598279,
+    "score": 0.27602622,
     "relevance": "low",
     "preview": "type OutputFormat"
+  },
+  {
+    "chunk": {
+      "id": "1bd6e457c120b706",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/commands/output_mode_behaviour_test.go",
+      "type": "function",
+      "name": "resetOutputGlobals",
+      "signature": "func resetOutputGlobals(t *testing.T)",
+      "content": "// resetOutputGlobals restores the mode globals after a test, since the package\n// shares them across every test that runs after it.\nfunc resetOutputGlobals(t *testing.T) {\n\tt.Helper()\n\tt.Cleanup(func() {\n\t\tGlobalAXIOutput = false\n\t\tGlobalJSONOutput = false\n\t\tGlobalMinOutput = false\n\t\toutput.SetDefaultAXI(false)\n\t})\n}",
+      "start_line": 55,
+      "end_line": 65,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.27216554,
+    "relevance": "low",
+    "preview": "func resetOutputGlobals(t *testing.T)"
+  },
+  {
+    "chunk": {
+      "id": "191c772c34fa00b2",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/commands/refs.go",
+      "type": "function",
+      "name": "runRefs",
+      "signature": "func runRefs(ctx context.Context, symbol string, jsonOutput, minOutput bool) error",
+      "content": "func runRefs(ctx context.Context, symbol string, jsonOutput, minOutput bool) error {\n\trs, cleanup, err := openRefStorage(ctx)\n\tif err != nil {\n\t\treturn err\n\t}\n\tdefer cleanup()\n\n\treturn writeRefs(ctx, os.Stdout, os.Stderr, rs, symbol, jsonOutput, minOutput)\n}",
+      "start_line": 97,
+      "end_line": 105,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.27036902,
+    "relevance": "low",
+    "preview": "func runRefs(ctx context.Context, symbol string, jsonOutput, minOutput bool) error"
+  },
+  {
+    "chunk": {
+      "id": "c967c24fad766f3a",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/commands/axi.go",
+      "type": "function",
+      "name": "resolveOutputMode",
+      "signature": "func resolveOutputMode(cmd *cobra.Command)",
+      "content": "// resolveOutputMode publishes the output mode the parsed flags ask for.\nfunc resolveOutputMode(cmd *cobra.Command) {\n\tGlobalJSONOutput = flagOn(cmd, \"json\")\n\tGlobalMinOutput = flagOn(cmd, \"min\")\n\tGlobalAXIOutput = !GlobalJSONOutput \u0026\u0026 !flagOn(cmd, \"plain\")\n\toutput.SetDefaultAXI(GlobalAXIOutput)\n}",
+      "start_line": 38,
+      "end_line": 44,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.26419798,
+    "relevance": "low",
+    "preview": "func resolveOutputMode(cmd *cobra.Command)"
   }
 ]

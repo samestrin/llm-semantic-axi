@@ -1,7 +1,7 @@
 [
   {
     "chunk": {
-      "id": "655152aa6a3b11dc",
+      "id": "1e5de94c2d3289ac",
       "file_path": "/work/llm-semantic-axi/cmd/llm-semantic-mcp/main.go",
       "type": "function",
       "name": "run",
@@ -12,13 +12,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.42371285,
-    "relevance": "low",
+    "score": 0.41491047,
+    "relevance": "medium",
     "preview": "func run(ctx context.Context, in io.ReadCloser, out io.WriteCloser, stderr io.Writer) int"
   },
   {
     "chunk": {
-      "id": "743f465e3d7f24be",
+      "id": "9235f1aa0643466e",
       "file_path": "/work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go",
       "type": "struct",
       "name": "server",
@@ -29,13 +29,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.41015157,
+    "score": 0.38794008,
     "relevance": "low",
     "preview": "type server"
   },
   {
     "chunk": {
-      "id": "92b75fc5c0fad690",
+      "id": "ec7d4fb66b4f95be",
       "file_path": "/work/llm-semantic-axi/benchmarks/outputs/plain/q09.txt",
       "type": "file",
       "name": "q09",
@@ -45,13 +45,13 @@
       "language": "txt",
       "domain": "code"
     },
-    "score": 0.38320315,
+    "score": 0.3716912,
     "relevance": "low",
     "preview": "10 results for \"how does the MCP server run the CLI\"  1. /work/llm-semantic-axi/cmd/llm-semantic-mcp/main.go:80 - run (function) [MEDIUM]    Score: 0...."
   },
   {
     "chunk": {
-      "id": "67e38fba1539009f",
+      "id": "a650cae958861db0",
       "file_path": "/work/llm-semantic-axi/benchmarks/outputs/json/q09.json",
       "type": "file",
       "name": "q09",
@@ -61,29 +61,13 @@
       "language": "json",
       "domain": "code"
     },
-    "score": 0.37351787,
+    "score": 0.3612377,
     "relevance": "low",
     "preview": "      \"content\": \"## The CLI is the product\\n\\n`llm-semantic` is the primary surface.\\nThe MCP server shells out to the CLI, and it is a fallback for ..."
   },
   {
     "chunk": {
-      "id": "38fde64c73dabf61",
-      "file_path": "/work/llm-semantic-axi/VISION.md",
-      "type": "file",
-      "name": "VISION \u003e Vision \u003e The CLI is the product",
-      "content": "## The CLI is the product\n\n`llm-semantic` is the primary surface.\nThe MCP server shells out to the CLI, and it is a fallback for hosts that cannot run one.\nOutput follows the AXI principles, and TOON through `go-axi` is the format given to a model.\nJSON and plain text exist for other callers, and they carry the same truth.\nThe MCP server stays thin and holds no logic of its own.",
-      "start_line": 17,
-      "end_line": 24,
-      "language": "markdown",
-      "domain": "code"
-    },
-    "score": 0.3549426,
-    "relevance": "low",
-    "preview": "## The CLI is the product  `llm-semantic` is the primary surface. The MCP server shells out to the CLI, and it is a fallback for hosts that cannot run..."
-  },
-  {
-    "chunk": {
-      "id": "88c3de6d1bf24569",
+      "id": "d7f2e0574f95f237",
       "file_path": "/work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go",
       "type": "function",
       "name": "TestServer_ReportsTheStampedVersion",
@@ -94,13 +78,29 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.3496433,
+    "score": 0.33161068,
     "relevance": "low",
     "preview": "func TestServer_ReportsTheStampedVersion(t *testing.T)"
   },
   {
     "chunk": {
-      "id": "05e0bcd1c339349c",
+      "id": "7f89a1f75fc3719b",
+      "file_path": "/work/llm-semantic-axi/VISION.md",
+      "type": "file",
+      "name": "VISION \u003e Vision \u003e The CLI is the product",
+      "content": "## The CLI is the product\n\n`llm-semantic` is the primary surface.\nThe MCP server shells out to the CLI, and it is a fallback for hosts that cannot run one.\nOutput follows the AXI principles, and TOON through `go-axi` is the format given to a model.\nJSON and plain text exist for other callers, and they carry the same truth.\nThe MCP server stays thin and holds no logic of its own.",
+      "start_line": 17,
+      "end_line": 24,
+      "language": "markdown",
+      "domain": "code"
+    },
+    "score": 0.31950483,
+    "relevance": "low",
+    "preview": "## The CLI is the product  `llm-semantic` is the primary surface. The MCP server shells out to the CLI, and it is a fallback for hosts that cannot run..."
+  },
+  {
+    "chunk": {
+      "id": "46c0e97068df93b6",
       "file_path": "/work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go",
       "type": "function",
       "name": "fakeCLI",
@@ -111,13 +111,29 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.33388257,
+    "score": 0.31448546,
     "relevance": "low",
     "preview": "func fakeCLI(t *testing.T, payload string)"
   },
   {
     "chunk": {
-      "id": "ef23a26c7fba573a",
+      "id": "b00b0ce65c24a05c",
+      "file_path": "/work/llm-semantic-axi/install-release.sh",
+      "type": "file",
+      "name": "install-release",
+      "content": "    die \"$ARCHIVE does not hold both llm-semantic and llm-semantic-mcp\"\nfor bin in llm-semantic llm-semantic-mcp; do\n    [ -f \"$work/x/$bin\" ] || die \"$ARCHIVE does not hold $bin\"\ndone\n\n# Stage both binaries inside the install directory, so the final mv is a\n# rename on one filesystem: each binary is either the old file or the whole\n# new one, never a partial copy. The two renames run with INT and TERM\n# ignored, so a stop cannot land between them and split the pair.\nmkdir -p \"$INSTALL_DIR\"\nstage_cli=\"$INSTALL_DIR/.llm-semantic.install.$$\"\nstage_mcp=\"$INSTALL_DIR/.llm-semantic-mcp.install.$$\"\ncp \"$work/x/llm-semantic\" \"$stage_cli\"\ncp \"$work/x/llm-semantic-mcp\" \"$stage_mcp\"\nchmod 755 \"$stage_cli\" \"$stage_mcp\"\ntrap '' INT TERM\nmv -f \"$stage_cli\" \"$INSTALL_DIR/llm-semantic\"\nstage_cli=\"\"\nmv -f \"$stage_mcp\" \"$INSTALL_DIR/llm-semantic-mcp\"\nstage_mcp=\"\"\ntrap 'exit 130' INT\ntrap 'exit 143' TERM\n\necho \"Installed llm-semantic and llm-semantic-mcp to $INSTALL_DIR\"\n\ncase \":${PATH}:\" in\n    *\":${INSTALL_DIR}:\"*) ;;\n    *)\n        echo \"\"\n        echo \"WARNING: $INSTALL_DIR is not on your PATH.\"\n        echo \"llm-semantic-mcp finds llm-semantic through PATH, so the MCP server cannot run\"\n        echo \"the CLI until it is. Add this line to your shell profile and open a new shell:\"\n        echo \"\"\n        echo \"    export PATH=\\\"$INSTALL_DIR:\\$PATH\\\"\"\n        ;;\nesac",
+      "start_line": 118,
+      "end_line": 154,
+      "language": "sh",
+      "domain": "code"
+    },
+    "score": 0.2965336,
+    "relevance": "low",
+    "preview": "    die \"$ARCHIVE does not hold both llm-semantic and llm-semantic-mcp\" for bin in llm-semantic llm-semantic-mcp; do     [ -f \"$work/x/$bin\" ] || die ..."
+  },
+  {
+    "chunk": {
+      "id": "06b50a059b1e73bd",
       "file_path": "/work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go",
       "type": "function",
       "name": "startServer",
@@ -128,13 +144,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.31258586,
+    "score": 0.29600137,
     "relevance": "low",
     "preview": "func startServer(t *testing.T) *server"
   },
   {
     "chunk": {
-      "id": "35e59cb8de6363f8",
+      "id": "b61979e9a2c0166f",
       "file_path": "/work/llm-semantic-axi/cmd/llm-semantic-mcp/main_test.go",
       "type": "function",
       "name": "TestServer_ClientDisconnectIsACleanExit",
@@ -145,24 +161,8 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.31120712,
+    "score": 0.29548675,
     "relevance": "low",
     "preview": "func TestServer_ClientDisconnectIsACleanExit(t *testing.T)"
-  },
-  {
-    "chunk": {
-      "id": "06c4313d600e3780",
-      "file_path": "/work/llm-semantic-axi/install-release.sh",
-      "type": "file",
-      "name": "install-release",
-      "content": "    die \"$ARCHIVE does not hold both llm-semantic and llm-semantic-mcp\"\nfor bin in llm-semantic llm-semantic-mcp; do\n    [ -f \"$work/x/$bin\" ] || die \"$ARCHIVE does not hold $bin\"\ndone\n\n# Stage both binaries inside the install directory, so the final mv is a\n# rename on one filesystem: each binary is either the old file or the whole\n# new one, never a partial copy. The two renames run with INT and TERM\n# ignored, so a stop cannot land between them and split the pair.\nmkdir -p \"$INSTALL_DIR\"\nstage_cli=\"$INSTALL_DIR/.llm-semantic.install.$$\"\nstage_mcp=\"$INSTALL_DIR/.llm-semantic-mcp.install.$$\"\ncp \"$work/x/llm-semantic\" \"$stage_cli\"\ncp \"$work/x/llm-semantic-mcp\" \"$stage_mcp\"\nchmod 755 \"$stage_cli\" \"$stage_mcp\"\ntrap '' INT TERM\nmv -f \"$stage_cli\" \"$INSTALL_DIR/llm-semantic\"\nstage_cli=\"\"\nmv -f \"$stage_mcp\" \"$INSTALL_DIR/llm-semantic-mcp\"\nstage_mcp=\"\"\ntrap 'exit 130' INT\ntrap 'exit 143' TERM\n\necho \"Installed llm-semantic and llm-semantic-mcp to $INSTALL_DIR\"\n\ncase \":${PATH}:\" in\n    *\":${INSTALL_DIR}:\"*) ;;\n    *)\n        echo \"\"\n        echo \"WARNING: $INSTALL_DIR is not on your PATH.\"\n        echo \"llm-semantic-mcp finds llm-semantic through PATH, so the MCP server cannot run\"\n        echo \"the CLI until it is. Add this line to your shell profile and open a new shell:\"\n        echo \"\"\n        echo \"    export PATH=\\\"$INSTALL_DIR:\\$PATH\\\"\"\n        ;;\nesac",
-      "start_line": 118,
-      "end_line": 154,
-      "language": "sh",
-      "domain": "code"
-    },
-    "score": 0.3080977,
-    "relevance": "low",
-    "preview": "    die \"$ARCHIVE does not hold both llm-semantic and llm-semantic-mcp\" for bin in llm-semantic llm-semantic-mcp; do     [ -f \"$work/x/$bin\" ] || die ..."
   }
 ]

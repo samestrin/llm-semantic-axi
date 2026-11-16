@@ -1,42 +1,42 @@
 10 results for "how is TOON output encoded"
 
 1. /work/llm-semantic-axi/internal/semantic/multisearch.go:28 - ValidOutputFormats (function) [LOW]
-   Score: 0.3460
+   Score: 0.3507
    func ValidOutputFormats() []string
 
-2. /work/llm-semantic-axi/benchmarks/outputs/json/q04.json:1 - q04 (file) [LOW]
-   Score: 0.3172
-   [   {     "chunk": {       "id": "44f99e60f235cdd7",       "file_path": "/work/llm-semantic-axi/internal/semantic/multisearch.go",       "type": "func...
-
-3. /work/llm-semantic-axi/pkg/output/formatter.go:26 - Formatter (struct) [LOW]
-   Score: 0.3143
-   type Formatter
-
-4. /work/llm-semantic-axi/internal/semantic/multisearch.go:33 - IsValidOutputFormat (function) [LOW]
-   Score: 0.3131
+2. /work/llm-semantic-axi/internal/semantic/multisearch.go:33 - IsValidOutputFormat (function) [LOW]
+   Score: 0.3173
    func IsValidOutputFormat(format string) bool
 
+3. /work/llm-semantic-axi/benchmarks/outputs/json/q04.json:1 - q04 (file) [LOW]
+   Score: 0.3167
+   [   {     "chunk": {       "id": "44f99e60f235cdd7",       "file_path": "/work/llm-semantic-axi/internal/semantic/multisearch.go",       "type": "func...
+
+4. /work/llm-semantic-axi/pkg/output/formatter.go:26 - Formatter (struct) [LOW]
+   Score: 0.3165
+   type Formatter
+
 5. /work/llm-semantic-axi/pkg/output/formatter_test.go:56 - TestFormatter_Print_JSON (function) [LOW]
-   Score: 0.2852
+   Score: 0.2874
    func TestFormatter_Print_JSON(t *testing.T)
 
-6. /work/llm-semantic-axi/internal/semantic/commands/output_mode_behaviour_test.go:55 - resetOutputGlobals (function) [LOW]
-   Score: 0.2698
-   func resetOutputGlobals(t *testing.T)
-
-7. /work/llm-semantic-axi/internal/semantic/commands/staleness_behaviour_test.go:78 - outputMode (struct) [LOW]
-   Score: 0.2692
+6. /work/llm-semantic-axi/internal/semantic/commands/staleness_behaviour_test.go:78 - outputMode (struct) [LOW]
+   Score: 0.2778
    type outputMode
 
-8. /work/llm-semantic-axi/internal/semantic/commands/refs.go:97 - runRefs (function) [LOW]
-   Score: 0.2660
+7. /work/llm-semantic-axi/internal/semantic/multisearch.go:16 - OutputFormat (function) [LOW]
+   Score: 0.2760
+   type OutputFormat
+
+8. /work/llm-semantic-axi/internal/semantic/commands/output_mode_behaviour_test.go:55 - resetOutputGlobals (function) [LOW]
+   Score: 0.2722
+   func resetOutputGlobals(t *testing.T)
+
+9. /work/llm-semantic-axi/internal/semantic/commands/refs.go:97 - runRefs (function) [LOW]
+   Score: 0.2704
    func runRefs(ctx context.Context, symbol string, jsonOutput, minOutput bool) error
 
-9. /work/llm-semantic-axi/internal/semantic/commands/axi.go:38 - resolveOutputMode (function) [LOW]
-   Score: 0.2614
+10. /work/llm-semantic-axi/internal/semantic/commands/axi.go:38 - resolveOutputMode (function) [LOW]
+   Score: 0.2642
    func resolveOutputMode(cmd *cobra.Command)
-
-10. /work/llm-semantic-axi/internal/semantic/multisearch.go:16 - OutputFormat (function) [LOW]
-   Score: 0.2598
-   type OutputFormat
 

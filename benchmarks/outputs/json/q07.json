@@ -1,7 +1,7 @@
 [
   {
     "chunk": {
-      "id": "52a687183ea04b8b",
+      "id": "9dc165d1eb8f0e24",
       "file_path": "/work/llm-semantic-axi/benchmarks/queries.txt",
       "type": "file",
       "name": "queries",
@@ -11,13 +11,13 @@
       "language": "txt",
       "domain": "code"
     },
-    "score": 0.3380617,
+    "score": 0.35399616,
     "relevance": "low",
     "preview": "# Fixed query list for the token benchmark. One query per line; the line # number among non-comment lines is the output file number (q01, q02, ...). #..."
   },
   {
     "chunk": {
-      "id": "7b368945a0f2d5c6",
+      "id": "f3a5507a0a75f982",
       "file_path": "/work/llm-semantic-axi/benchmarks/outputs/json/q07.json",
       "type": "file",
       "name": "q07",
@@ -27,13 +27,13 @@
       "language": "json",
       "domain": "code"
     },
-    "score": 0.3131633,
+    "score": 0.31352225,
     "relevance": "low",
     "preview": "      \"signature\": \"type IndexLock\",       \"content\": \"// IndexLock provides cross-process file locking for index operations.\\n// Prevents concurrent ..."
   },
   {
     "chunk": {
-      "id": "963992f556e1bcc9",
+      "id": "8fc76a3f824aa358",
       "file_path": "/work/llm-semantic-axi/internal/semantic/lockfile.go",
       "type": "function",
       "name": "NewIndexLock",
@@ -44,13 +44,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.29656723,
+    "score": 0.2977902,
     "relevance": "low",
     "preview": "func NewIndexLock(indexPath, storageType, collectionName string) *IndexLock"
   },
   {
     "chunk": {
-      "id": "35ed91d5d50d2ab0",
+      "id": "96de756dc16ecb9f",
       "file_path": "/work/llm-semantic-axi/internal/semantic/lockfile.go",
       "type": "struct",
       "name": "IndexLock",
@@ -61,13 +61,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.25776964,
+    "score": 0.26334032,
     "relevance": "low",
     "preview": "type IndexLock"
   },
   {
     "chunk": {
-      "id": "6691738f795ca8f6",
+      "id": "60ac84d212f7632d",
       "file_path": "/work/llm-semantic-axi/benchmarks/outputs/plain/q07.txt",
       "type": "file",
       "name": "q07",
@@ -77,45 +77,13 @@
       "language": "txt",
       "domain": "code"
     },
-    "score": 0.25577444,
+    "score": 0.25525016,
     "relevance": "low",
     "preview": "10 results for \"how does the lock file stop two indexers running at once\"  1. /work/llm-semantic-axi/internal/semantic/lockfile.go:20 - NewIndexLock (..."
   },
   {
     "chunk": {
-      "id": "09a2ece5fc7dd609",
-      "file_path": "/work/llm-semantic-axi/benchmarks/outputs/json/q07.json",
-      "type": "file",
-      "name": "q07",
-      "content": "[\n  {\n    \"chunk\": {\n      \"id\": \"b963a5adf151fddf\",\n      \"file_path\": \"/work/llm-semantic-axi/internal/semantic/lockfile.go\",\n      \"type\": \"function\",\n      \"name\": \"NewIndexLock\",\n      \"signature\": \"func NewIndexLock(indexPath, storageType, collectionName string) *IndexLock\",\n      \"content\": \"// NewIndexLock creates a lock for the given index directory and collection.\\n// For SQLite: lockPath is derived from the index file path (sibling .lock file).\\n// For Qdrant: lockPath is derived from data dir + collection name.\\nfunc NewIndexLock(indexPath, storageType, collectionName string) *IndexLock {\\n\\tvar lockPath string\\n\\tif storageType == \\\"qdrant\\\" {\\n\\t\\t// For Qdrant, use a per-collection lock in a temp-safe location\\n\\t\\tlockDir := os.TempDir()\\n\\t\\tlockPath = filepath.Join(lockDir, fmt.Sprintf(\\\".semantic-%s.lock\\\", collectionName))\\n\\t} else {\\n\\t\\t// For SQLite, lock file sits next to the index DB\\n\\t\\tlockPath = indexPath + \\\".lock\\\"\\n\\t}\\n\\n\\treturn \\u0026IndexLock{\\n\\t\\tflock: flock.New(lockPath),\\n\\t\\tpath:  lockPath,\\n\\t}\\n}\",\n      \"start_line\": 20,\n      \"end_line\": 38,\n      \"language\": \"go\",\n      \"domain\": \"code\"\n    },\n    \"score\": 0.29656723,\n    \"relevance\": \"low\",\n    \"preview\": \"func NewIndexLock(indexPath, storageType, collectionName string) *IndexLock\"\n  },\n  {\n    \"chunk\": {\n      \"id\": \"e7108cd089d598fe\",\n      \"file_path\": \"/work/llm-semantic-axi/internal/semantic/lockfile.go\",\n      \"type\": \"struct\",\n      \"name\": \"IndexLock\",\n",
-      "start_line": 1,
-      "end_line": 24,
-      "language": "json",
-      "domain": "code"
-    },
-    "score": 0.24637261,
-    "relevance": "low",
-    "preview": "[   {     \"chunk\": {       \"id\": \"b963a5adf151fddf\",       \"file_path\": \"/work/llm-semantic-axi/internal/semantic/lockfile.go\",       \"type\": \"functio..."
-  },
-  {
-    "chunk": {
-      "id": "7ed77e54d63dce3f",
-      "file_path": "/work/llm-semantic-axi/benchmarks/outputs/json/q07.json",
-      "type": "file",
-      "name": "q07",
-      "content": "      \"content\": \"// fileHashID generates a unique ID for file hash storage\\nfunc fileHashID(filePath string) string {\\n\\treturn stringToUUID(\\\"file_hash:\\\" + filePath)\\n}\",\n      \"start_line\": 1351,\n      \"end_line\": 1354,\n      \"language\": \"go\",\n      \"domain\": \"code\"\n    },\n    \"score\": 0.2348557,\n    \"relevance\": \"low\",\n    \"preview\": \"func fileHashID(filePath string) string\"\n  },\n  {\n    \"chunk\": {\n      \"id\": \"8a4bfd1e53479945\",\n      \"file_path\": \"/work/llm-semantic-axi/internal/semantic/lockfile_test.go\",\n      \"type\": \"function\",\n      \"name\": \"TestIndexLock_TryLock\",\n      \"signature\": \"func TestIndexLock_TryLock(t *testing.T)\",\n      \"content\": \"func TestIndexLock_TryLock(t *testing.T) {\\n\\ttmpDir := t.TempDir()\\n\\tindexPath := filepath.Join(tmpDir, \\\"semantic.db\\\")\\n\\n\\tlock := NewIndexLock(indexPath, \\\"sqlite\\\", \\\"\\\")\\n\\tlocked, err := lock.TryLock()\\n\\tif err != nil {\\n\\t\\tt.Fatalf(\\\"TryLock failed: %v\\\", err)\\n\\t}\\n\\tif !locked {\\n\\t\\tt.Fatal(\\\"expected TryLock to succeed on fresh lock\\\")\\n\\t}\\n\\tdefer lock.Unlock()\\n}\",\n      \"start_line\": 42,\n      \"end_line\": 55,\n      \"language\": \"go\",\n      \"domain\": \"code\"\n    },\n    \"score\": 0.23204774,\n    \"relevance\": \"low\",\n    \"preview\": \"func TestIndexLock_TryLock(t *testing.T)\"\n  },\n  {\n    \"chunk\": {\n      \"id\": \"5263e1036e100079\",\n      \"file_path\": \"/work/llm-semantic-axi/internal/semantic/lockfile_test.go\",\n      \"type\": \"function\",\n      \"name\": \"TestIndexLock_ReusableAfterUnlock\",\n",
-      "start_line": 60,
-      "end_line": 92,
-      "language": "json",
-      "domain": "code"
-    },
-    "score": 0.24440499,
-    "relevance": "low",
-    "preview": "      \"content\": \"// fileHashID generates a unique ID for file hash storage\\nfunc fileHashID(filePath string) string {\\n\\treturn stringToUUID(\\\"file_h..."
-  },
-  {
-    "chunk": {
-      "id": "2ca3e62f5bdc64d0",
+      "id": "85adeec2fd48c45f",
       "file_path": "/work/llm-semantic-axi/internal/semantic/lockfile.go",
       "type": "method",
       "name": "TryLock",
@@ -126,13 +94,29 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.24346831,
+    "score": 0.24814583,
     "relevance": "low",
     "preview": "func (l *IndexLock) TryLock() (bool, error)"
   },
   {
     "chunk": {
-      "id": "652ec7fe3877d442",
+      "id": "ecf17a03e99203a4",
+      "file_path": "/work/llm-semantic-axi/benchmarks/outputs/json/q07.json",
+      "type": "file",
+      "name": "q07",
+      "content": "[\n  {\n    \"chunk\": {\n      \"id\": \"b963a5adf151fddf\",\n      \"file_path\": \"/work/llm-semantic-axi/internal/semantic/lockfile.go\",\n      \"type\": \"function\",\n      \"name\": \"NewIndexLock\",\n      \"signature\": \"func NewIndexLock(indexPath, storageType, collectionName string) *IndexLock\",\n      \"content\": \"// NewIndexLock creates a lock for the given index directory and collection.\\n// For SQLite: lockPath is derived from the index file path (sibling .lock file).\\n// For Qdrant: lockPath is derived from data dir + collection name.\\nfunc NewIndexLock(indexPath, storageType, collectionName string) *IndexLock {\\n\\tvar lockPath string\\n\\tif storageType == \\\"qdrant\\\" {\\n\\t\\t// For Qdrant, use a per-collection lock in a temp-safe location\\n\\t\\tlockDir := os.TempDir()\\n\\t\\tlockPath = filepath.Join(lockDir, fmt.Sprintf(\\\".semantic-%s.lock\\\", collectionName))\\n\\t} else {\\n\\t\\t// For SQLite, lock file sits next to the index DB\\n\\t\\tlockPath = indexPath + \\\".lock\\\"\\n\\t}\\n\\n\\treturn \\u0026IndexLock{\\n\\t\\tflock: flock.New(lockPath),\\n\\t\\tpath:  lockPath,\\n\\t}\\n}\",\n      \"start_line\": 20,\n      \"end_line\": 38,\n      \"language\": \"go\",\n      \"domain\": \"code\"\n    },\n    \"score\": 0.29656723,\n    \"relevance\": \"low\",\n    \"preview\": \"func NewIndexLock(indexPath, storageType, collectionName string) *IndexLock\"\n  },\n  {\n    \"chunk\": {\n      \"id\": \"e7108cd089d598fe\",\n      \"file_path\": \"/work/llm-semantic-axi/internal/semantic/lockfile.go\",\n      \"type\": \"struct\",\n      \"name\": \"IndexLock\",\n",
+      "start_line": 1,
+      "end_line": 24,
+      "language": "json",
+      "domain": "code"
+    },
+    "score": 0.2466286,
+    "relevance": "low",
+    "preview": "[   {     \"chunk\": {       \"id\": \"b963a5adf151fddf\",       \"file_path\": \"/work/llm-semantic-axi/internal/semantic/lockfile.go\",       \"type\": \"functio..."
+  },
+  {
+    "chunk": {
+      "id": "16facb77129cbfe9",
       "file_path": "/work/llm-semantic-axi/internal/semantic/index_manager.go",
       "type": "struct",
       "name": "preparedFile",
@@ -143,13 +127,29 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.23964061,
+    "score": 0.24498947,
     "relevance": "low",
     "preview": "type preparedFile"
   },
   {
     "chunk": {
-      "id": "c15b0da501d78a0e",
+      "id": "aaa4f1b9a86b4e8b",
+      "file_path": "/work/llm-semantic-axi/benchmarks/outputs/json/q07.json",
+      "type": "file",
+      "name": "q07",
+      "content": "      \"content\": \"// fileHashID generates a unique ID for file hash storage\\nfunc fileHashID(filePath string) string {\\n\\treturn stringToUUID(\\\"file_hash:\\\" + filePath)\\n}\",\n      \"start_line\": 1351,\n      \"end_line\": 1354,\n      \"language\": \"go\",\n      \"domain\": \"code\"\n    },\n    \"score\": 0.2348557,\n    \"relevance\": \"low\",\n    \"preview\": \"func fileHashID(filePath string) string\"\n  },\n  {\n    \"chunk\": {\n      \"id\": \"8a4bfd1e53479945\",\n      \"file_path\": \"/work/llm-semantic-axi/internal/semantic/lockfile_test.go\",\n      \"type\": \"function\",\n      \"name\": \"TestIndexLock_TryLock\",\n      \"signature\": \"func TestIndexLock_TryLock(t *testing.T)\",\n      \"content\": \"func TestIndexLock_TryLock(t *testing.T) {\\n\\ttmpDir := t.TempDir()\\n\\tindexPath := filepath.Join(tmpDir, \\\"semantic.db\\\")\\n\\n\\tlock := NewIndexLock(indexPath, \\\"sqlite\\\", \\\"\\\")\\n\\tlocked, err := lock.TryLock()\\n\\tif err != nil {\\n\\t\\tt.Fatalf(\\\"TryLock failed: %v\\\", err)\\n\\t}\\n\\tif !locked {\\n\\t\\tt.Fatal(\\\"expected TryLock to succeed on fresh lock\\\")\\n\\t}\\n\\tdefer lock.Unlock()\\n}\",\n      \"start_line\": 42,\n      \"end_line\": 55,\n      \"language\": \"go\",\n      \"domain\": \"code\"\n    },\n    \"score\": 0.23204774,\n    \"relevance\": \"low\",\n    \"preview\": \"func TestIndexLock_TryLock(t *testing.T)\"\n  },\n  {\n    \"chunk\": {\n      \"id\": \"5263e1036e100079\",\n      \"file_path\": \"/work/llm-semantic-axi/internal/semantic/lockfile_test.go\",\n      \"type\": \"function\",\n      \"name\": \"TestIndexLock_ReusableAfterUnlock\",\n",
+      "start_line": 60,
+      "end_line": 92,
+      "language": "json",
+      "domain": "code"
+    },
+    "score": 0.24454327,
+    "relevance": "low",
+    "preview": "      \"content\": \"// fileHashID generates a unique ID for file hash storage\\nfunc fileHashID(filePath string) string {\\n\\treturn stringToUUID(\\\"file_h..."
+  },
+  {
+    "chunk": {
+      "id": "b47fe9bce66a0cae",
       "file_path": "/work/llm-semantic-axi/internal/semantic/storage_qdrant.go",
       "type": "function",
       "name": "fileHashID",
@@ -160,7 +160,7 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.2348557,
+    "score": 0.23904572,
     "relevance": "low",
     "preview": "func fileHashID(filePath string) string"
   }

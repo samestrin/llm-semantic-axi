@@ -1,42 +1,42 @@
 10 results for "how are memory entries stored and searched"
 
 1. /work/llm-semantic-axi/internal/semantic/memory_entry.go:178 - MemoryWithEmbedding (struct) [LOW]
-   Score: 0.3769
+   Score: 0.3851
    type MemoryWithEmbedding
 
-2. /work/llm-semantic-axi/internal/semantic/storage_qdrant.go:1113 - StoreMemoryBatch (method) [LOW]
-   Score: 0.3678
-   func (s *QdrantStorage) StoreMemoryBatch(ctx context.Context, entries []MemoryWithEmbedding) error
-
-3. /work/llm-semantic-axi/internal/semantic/memory_entry.go:184 - MemoryListOptions (struct) [LOW]
-   Score: 0.3626
+2. /work/llm-semantic-axi/internal/semantic/memory_entry.go:184 - MemoryListOptions (struct) [LOW]
+   Score: 0.3737
    type MemoryListOptions
 
-4. /work/llm-semantic-axi/internal/semantic/memory.go:217 - MemoryStats (struct) [LOW]
-   Score: 0.3571
-   type MemoryStats
+3. /work/llm-semantic-axi/internal/semantic/storage_qdrant.go:1113 - StoreMemoryBatch (method) [LOW]
+   Score: 0.3703
+   func (s *QdrantStorage) StoreMemoryBatch(ctx context.Context, entries []MemoryWithEmbedding) error
 
-5. /work/llm-semantic-axi/internal/semantic/commands/memory.go:1534 - memoryResultHelp (function) [LOW]
-   Score: 0.3562
+4. /work/llm-semantic-axi/internal/semantic/commands/memory.go:1534 - memoryResultHelp (function) [LOW]
+   Score: 0.3666
    func memoryResultHelp(total int) []string
 
+5. /work/llm-semantic-axi/internal/semantic/memory.go:217 - MemoryStats (struct) [LOW]
+   Score: 0.3656
+   type MemoryStats
+
 6. /work/llm-semantic-axi/internal/semantic/storage_qdrant_grpc_test.go:1063 - TestQdrantStorage_MemoryTagFiltering (function) [LOW]
-   Score: 0.3543
+   Score: 0.3552
    func TestQdrantStorage_MemoryTagFiltering(t *testing.T)
 
 7. /work/llm-semantic-axi/internal/semantic/fts_sqlite.go:547 - backfillMemoryFTS5 (method) [LOW]
-   Score: 0.3508
+   Score: 0.3526
    func (s *SQLiteStorage) backfillMemoryFTS5() error
 
 8. /work/llm-semantic-axi/internal/semantic/storage.go:227 - MemoryStatsTracker (interface) [LOW]
-   Score: 0.3434
+   Score: 0.3442
    type MemoryStatsTracker
 
-9. /work/llm-semantic-axi/benchmarks/outputs/json/q08.json:43 - q08 (file) [LOW]
-   Score: 0.3326
-         "content": "// MemoryListOptions configures how memory entries are listed\ntype MemoryListOptions struct {\n\tLimit  int          // Maximum num...
-
-10. /work/llm-semantic-axi/internal/semantic/storage_sqlite_memory_filters_test.go:365 - entryIDs (function) [LOW]
-   Score: 0.3293
+9. /work/llm-semantic-axi/internal/semantic/storage_sqlite_memory_filters_test.go:365 - entryIDs (function) [LOW]
+   Score: 0.3432
    func entryIDs(entries []MemoryEntry) []string
+
+10. /work/llm-semantic-axi/internal/semantic/memory_entry.go:11 - MemoryStatus (function) [LOW]
+   Score: 0.3384
+   type MemoryStatus
 
