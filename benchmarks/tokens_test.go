@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -320,5 +322,59 @@ func TestRunCountReportsMatchAndMismatch(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "matches") {
 		t.Errorf("RunCount did not say the file matches:\n%s", out.String())
+	}
+}
+
+// CatalogEntry is the AXI catalog draft, which quotes the token totals.
+const CatalogEntry = "../docs/axi-catalog-entry.yaml"
+
+// Defends AC3 finding 2 (EST-6589): the catalog draft kept quoting 11,291
+// TOON vs 43,941 --json tokens (25.7%) after the outputs were regenerated and
+// results-tokens.md moved to 11,241 vs 43,477 (25.9%). Nothing tied the two
+// together, so the catalog stated numbers no command printed. Every total the
+// catalog quotes must be what the checked-in outputs re-count to.
+func TestCatalogEntryTokenNumbersMatchRecount(t *testing.T) {
+	tok := loadTestTokenizer(t)
+	res, err := Count(tok, ".")
+	if err != nil {
+		t.Fatalf("Count: %v", err)
+	}
+	jsonTokens, toonTokens := res.Total(Formats[0]).Tokens, res.Total(Formats[1]).Tokens
+	data, err := os.ReadFile(CatalogEntry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	catalog := string(data)
+	num := func(s string) int {
+		n, err := strconv.Atoi(strings.ReplaceAll(s, ",", ""))
+		if err != nil {
+			t.Fatalf("%s: %q is not a number: %v", CatalogEntry, s, err)
+		}
+		return n
+	}
+
+	m := regexp.MustCompile(`TOON printed ([\d,]+) cl100k tokens and --json ([\d,]+) \(([\d.]+%)\)`).FindStringSubmatch(catalog)
+	if m == nil {
+		t.Fatalf("%s: no `TOON printed N cl100k tokens and --json M (P%%)` observation; if it was reworded, update this test", CatalogEntry)
+	}
+	if got := num(m[1]); got != toonTokens {
+		t.Errorf("%s observation: TOON %d tokens, recount says %d", CatalogEntry, got, toonTokens)
+	}
+	if got := num(m[2]); got != jsonTokens {
+		t.Errorf("%s observation: --json %d tokens, recount says %d", CatalogEntry, got, jsonTokens)
+	}
+	if want := pct(toonTokens, jsonTokens); m[3] != want {
+		t.Errorf("%s observation: ratio %s, recount says %s", CatalogEntry, m[3], want)
+	}
+
+	c := regexp.MustCompile(`disagrees \(([\d,]+) vs ([\d,]+) tokens\)`).FindStringSubmatch(catalog)
+	if c == nil {
+		t.Fatalf("%s: no `disagrees (M vs N tokens)` in check 10; if it was reworded, update this test", CatalogEntry)
+	}
+	if got := num(c[1]); got != jsonTokens {
+		t.Errorf("%s check 10: --json %d tokens, recount says %d", CatalogEntry, got, jsonTokens)
+	}
+	if got := num(c[2]); got != toonTokens {
+		t.Errorf("%s check 10: TOON %d tokens, recount says %d", CatalogEntry, got, toonTokens)
 	}
 }
