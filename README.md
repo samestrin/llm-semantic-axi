@@ -1,6 +1,6 @@
 # llm-semantic
 
-`llm-semantic` is a semantic code search CLI for coding agents and the people who run them: it indexes a codebase into local embeddings, finds code by meaning, and answers "what calls this" from a recorded call graph.
+`llm-semantic` is a single Go binary that gives an AI agent, or you, commands to search code by meaning and answer "what calls this" from a recorded call graph, with [AXI](https://axi.md)-compliant output built for agents to parse.
 
 [![CI](https://github.com/samestrin/llm-semantic-axi/actions/workflows/test.yml/badge.svg)](https://github.com/samestrin/llm-semantic-axi/actions/workflows/test.yml) [![Release](https://img.shields.io/github/v/release/samestrin/llm-semantic-axi)](https://github.com/samestrin/llm-semantic-axi/releases/latest) [![License](https://img.shields.io/github/license/samestrin/llm-semantic-axi)](LICENSE)
 
