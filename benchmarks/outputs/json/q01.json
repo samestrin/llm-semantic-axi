@@ -1,7 +1,7 @@
 [
   {
     "chunk": {
-      "id": "bfeac9d0a44c5d3f",
+      "id": "5e1d49424f7dd272",
       "file_path": "/work/llm-semantic-axi/benchmarks/generate_test.go",
       "type": "function",
       "name": "TestHashEmbedderDropsStopwordsAndSplitsIdentifiers",
@@ -12,13 +12,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.3704793,
+    "score": 0.3752394,
     "relevance": "low",
     "preview": "func TestHashEmbedderDropsStopwordsAndSplitsIdentifiers(t *testing.T)"
   },
   {
     "chunk": {
-      "id": "85ea3c14137b239f",
+      "id": "f07b422b1ad6e481",
       "file_path": "/work/llm-semantic-axi/internal/semantic/memory.go",
       "type": "function",
       "name": "encodeEmbeddingBinary",
@@ -29,13 +29,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.28827834,
+    "score": 0.2919097,
     "relevance": "low",
     "preview": "func encodeEmbeddingBinary(embedding []float32) []byte"
   },
   {
     "chunk": {
-      "id": "749f4bb0c15d129a",
+      "id": "ca24270108cb242b",
       "file_path": "/work/llm-semantic-axi/benchmarks/outputs/json/q01.json",
       "type": "file",
       "name": "q01",
@@ -45,13 +45,13 @@
       "language": "json",
       "domain": "code"
     },
-    "score": 0.24715856,
+    "score": 0.2476887,
     "relevance": "low",
     "preview": "[   {     \"chunk\": {       \"id\": \"c46d234a50e8d4d8\",       \"file_path\": \"/work/llm-semantic-axi/internal/semantic/memory.go\",       \"type\": \"function\"..."
   },
   {
     "chunk": {
-      "id": "63765d0883d27661",
+      "id": "c66b95e539592fa7",
       "file_path": "/work/llm-semantic-axi/benchmarks/outputs/plain/q01.txt",
       "type": "file",
       "name": "q01",
@@ -61,30 +61,13 @@
       "language": "txt",
       "domain": "code"
     },
-    "score": 0.24390304,
+    "score": 0.24336521,
     "relevance": "low",
     "preview": "10 results for \"where is the retry logic for embedding requests\"  1. /work/llm-semantic-axi/internal/semantic/memory.go:73 - encodeEmbeddingBinary (fu..."
   },
   {
     "chunk": {
-      "id": "cd7ab603b373b055",
-      "file_path": "/work/llm-semantic-axi/internal/semantic/storage_sqlite.go",
-      "type": "function",
-      "name": "encodeEmbedding",
-      "signature": "func encodeEmbedding(embedding []float32) ([]byte, error)",
-      "content": "// encodeEmbedding converts a float32 slice to binary for storage (~3x smaller than JSON)\nfunc encodeEmbedding(embedding []float32) ([]byte, error) {\n\tbuf := make([]byte, len(embedding)*4)\n\tfor i, v := range embedding {\n\t\tbits := math.Float32bits(v)\n\t\tbuf[i*4] = byte(bits)\n\t\tbuf[i*4+1] = byte(bits \u003e\u003e 8)\n\t\tbuf[i*4+2] = byte(bits \u003e\u003e 16)\n\t\tbuf[i*4+3] = byte(bits \u003e\u003e 24)\n\t}\n\treturn buf, nil\n}",
-      "start_line": 1481,
-      "end_line": 1492,
-      "language": "go",
-      "domain": "code"
-    },
-    "score": 0.23114948,
-    "relevance": "low",
-    "preview": "func encodeEmbedding(embedding []float32) ([]byte, error)"
-  },
-  {
-    "chunk": {
-      "id": "cc99f87d40c1926c",
+      "id": "a967a4f0183b65f9",
       "file_path": "/work/llm-semantic-axi/internal/semantic/memory.go",
       "type": "struct",
       "name": "CompactEmbedding",
@@ -95,29 +78,30 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.23076923,
+    "score": 0.23717083,
     "relevance": "low",
     "preview": "type CompactEmbedding"
   },
   {
     "chunk": {
-      "id": "533b6644d65e17f2",
-      "file_path": "/work/llm-semantic-axi/benchmarks/outputs/json/q01.json",
-      "type": "file",
-      "name": "q01",
-      "content": "      \"content\": \"// encodeEmbedding converts a float32 slice to binary for storage (~3x smaller than JSON)\\nfunc encodeEmbedding(embedding []float32) ([]byte, error) {\\n\\tbuf := make([]byte, len(embedding)*4)\\n\\tfor i, v := range embedding {\\n\\t\\tbits := math.Float32bits(v)\\n\\t\\tbuf[i*4] = byte(bits)\\n\\t\\tbuf[i*4+1] = byte(bits \\u003e\\u003e 8)\\n\\t\\tbuf[i*4+2] = byte(bits \\u003e\\u003e 16)\\n\\t\\tbuf[i*4+3] = byte(bits \\u003e\\u003e 24)\\n\\t}\\n\\treturn buf, nil\\n}\",\n      \"start_line\": 1378,\n      \"end_line\": 1389,\n      \"language\": \"go\",\n      \"domain\": \"code\"\n    },\n    \"score\": 0.23114948,\n    \"relevance\": \"low\",\n    \"preview\": \"func encodeEmbedding(embedding []float32) ([]byte, error)\"\n  },\n  {\n    \"chunk\": {\n      \"id\": \"e4d94eff5e7d4d55\",\n      \"file_path\": \"/work/llm-semantic-axi/internal/semantic/memory.go\",\n      \"type\": \"struct\",\n      \"name\": \"CompactEmbedding\",\n      \"signature\": \"type CompactEmbedding\",\n      \"content\": \"// CompactEmbedding reduces precision for storage (optional memory savings)\\n// Converts float32 embeddings to int8 quantized values (-127 to 127)\\n// This reduces memory by 75% but loses some precision\\ntype CompactEmbedding struct {\\n\\tData   []int8\\n\\tScale  float32\\n\\tOffset float32\\n}\",\n      \"start_line\": 142,\n      \"end_line\": 149,\n      \"language\": \"go\",\n      \"domain\": \"code\"\n    },\n    \"score\": 0.23076923,\n    \"relevance\": \"low\",\n    \"preview\": \"type CompactEmbedding\"\n  },\n  {\n    \"chunk\": {\n      \"id\": \"751cbd07063aca4c\",\n",
-      "start_line": 26,
-      "end_line": 55,
-      "language": "json",
+      "id": "967df7201a6b80f8",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/storage_sqlite.go",
+      "type": "function",
+      "name": "encodeEmbedding",
+      "signature": "func encodeEmbedding(embedding []float32) ([]byte, error)",
+      "content": "// encodeEmbedding converts a float32 slice to binary for storage (~3x smaller than JSON)\nfunc encodeEmbedding(embedding []float32) ([]byte, error) {\n\tbuf := make([]byte, len(embedding)*4)\n\tfor i, v := range embedding {\n\t\tbits := math.Float32bits(v)\n\t\tbuf[i*4] = byte(bits)\n\t\tbuf[i*4+1] = byte(bits \u003e\u003e 8)\n\t\tbuf[i*4+2] = byte(bits \u003e\u003e 16)\n\t\tbuf[i*4+3] = byte(bits \u003e\u003e 24)\n\t}\n\treturn buf, nil\n}",
+      "start_line": 1481,
+      "end_line": 1492,
+      "language": "go",
       "domain": "code"
     },
-    "score": 0.23017414,
+    "score": 0.23394386,
     "relevance": "low",
-    "preview": "      \"content\": \"// encodeEmbedding converts a float32 slice to binary for storage (~3x smaller than JSON)\\nfunc encodeEmbedding(embedding []float32)..."
+    "preview": "func encodeEmbedding(embedding []float32) ([]byte, error)"
   },
   {
     "chunk": {
-      "id": "944b4c5ccbb81bdc",
+      "id": "8c0fa3e5e83c255f",
       "file_path": "/work/llm-semantic-axi/internal/semantic/storage_sqlite.go",
       "type": "function",
       "name": "decodeEmbedding",
@@ -128,13 +112,29 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.22941573,
+    "score": 0.2309401,
     "relevance": "low",
     "preview": "func decodeEmbedding(data []byte) ([]float32, error)"
   },
   {
     "chunk": {
-      "id": "939497c6ddcfaec4",
+      "id": "2ca9ac94d7af5ef5",
+      "file_path": "/work/llm-semantic-axi/benchmarks/outputs/json/q01.json",
+      "type": "file",
+      "name": "q01",
+      "content": "      \"content\": \"// encodeEmbedding converts a float32 slice to binary for storage (~3x smaller than JSON)\\nfunc encodeEmbedding(embedding []float32) ([]byte, error) {\\n\\tbuf := make([]byte, len(embedding)*4)\\n\\tfor i, v := range embedding {\\n\\t\\tbits := math.Float32bits(v)\\n\\t\\tbuf[i*4] = byte(bits)\\n\\t\\tbuf[i*4+1] = byte(bits \\u003e\\u003e 8)\\n\\t\\tbuf[i*4+2] = byte(bits \\u003e\\u003e 16)\\n\\t\\tbuf[i*4+3] = byte(bits \\u003e\\u003e 24)\\n\\t}\\n\\treturn buf, nil\\n}\",\n      \"start_line\": 1378,\n      \"end_line\": 1389,\n      \"language\": \"go\",\n      \"domain\": \"code\"\n    },\n    \"score\": 0.23114948,\n    \"relevance\": \"low\",\n    \"preview\": \"func encodeEmbedding(embedding []float32) ([]byte, error)\"\n  },\n  {\n    \"chunk\": {\n      \"id\": \"e4d94eff5e7d4d55\",\n      \"file_path\": \"/work/llm-semantic-axi/internal/semantic/memory.go\",\n      \"type\": \"struct\",\n      \"name\": \"CompactEmbedding\",\n      \"signature\": \"type CompactEmbedding\",\n      \"content\": \"// CompactEmbedding reduces precision for storage (optional memory savings)\\n// Converts float32 embeddings to int8 quantized values (-127 to 127)\\n// This reduces memory by 75% but loses some precision\\ntype CompactEmbedding struct {\\n\\tData   []int8\\n\\tScale  float32\\n\\tOffset float32\\n}\",\n      \"start_line\": 142,\n      \"end_line\": 149,\n      \"language\": \"go\",\n      \"domain\": \"code\"\n    },\n    \"score\": 0.23076923,\n    \"relevance\": \"low\",\n    \"preview\": \"type CompactEmbedding\"\n  },\n  {\n    \"chunk\": {\n      \"id\": \"751cbd07063aca4c\",\n",
+      "start_line": 26,
+      "end_line": 55,
+      "language": "json",
+      "domain": "code"
+    },
+    "score": 0.23084395,
+    "relevance": "low",
+    "preview": "      \"content\": \"// encodeEmbedding converts a float32 slice to binary for storage (~3x smaller than JSON)\\nfunc encodeEmbedding(embedding []float32)..."
+  },
+  {
+    "chunk": {
+      "id": "1e69eb3331ca551c",
       "file_path": "/work/llm-semantic-axi/internal/semantic/memory_test.go",
       "type": "function",
       "name": "BenchmarkJSONEncoding",
@@ -145,13 +145,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.22225022,
+    "score": 0.22639617,
     "relevance": "low",
     "preview": "func BenchmarkJSONEncoding(b *testing.B)"
   },
   {
     "chunk": {
-      "id": "25bf7ca63a62a2d1",
+      "id": "a0c10d3b4c1f1b15",
       "file_path": "/work/llm-semantic-axi/internal/semantic/memory.go",
       "type": "function",
       "name": "Quantize",
@@ -162,7 +162,7 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.21643734,
+    "score": 0.21737453,
     "relevance": "low",
     "preview": "func Quantize(embedding []float32) *CompactEmbedding"
   }

@@ -1,7 +1,7 @@
 [
   {
     "chunk": {
-      "id": "bf8785000a45c3a4",
+      "id": "2808695342d97d09",
       "file_path": "/work/llm-semantic-axi/internal/semantic/memory_entry.go",
       "type": "struct",
       "name": "MemoryWithEmbedding",
@@ -12,30 +12,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.3768538,
+    "score": 0.38507703,
     "relevance": "low",
     "preview": "type MemoryWithEmbedding"
   },
   {
     "chunk": {
-      "id": "24e5ee96afd1f630",
-      "file_path": "/work/llm-semantic-axi/internal/semantic/storage_qdrant.go",
-      "type": "method",
-      "name": "StoreMemoryBatch",
-      "signature": "func (s *QdrantStorage) StoreMemoryBatch(ctx context.Context, entries []MemoryWithEmbedding) error",
-      "content": "// StoreMemoryBatch stores multiple memory entries with their embeddings\nfunc (s *QdrantStorage) StoreMemoryBatch(ctx context.Context, entries []MemoryWithEmbedding) error {\n\tif len(entries) == 0 {\n\t\treturn nil\n\t}\n\n\ts.mu.Lock()\n\tdefer s.mu.Unlock()\n\n\tif s.closed {\n\t\treturn ErrStorageClosed\n\t}\n\n\tpoints := make([]*qdrant.PointStruct, len(entries))\n\tfor i, mwe := range entries {\n\t\tpoints[i] = s.memoryToPoint(mwe.Entry, mwe.Embedding)\n\t}\n\n\t_, err := s.client.Upsert(ctx, \u0026qdrant.UpsertPoints{\n\t\tCollectionName: s.collectionName,\n\t\tPoints:         points,\n\t})\n\tif err != nil {\n\t\treturn fmt.Errorf(\"failed to batch store memories: %w\", err)\n\t}\n\n\treturn nil\n}",
-      "start_line": 1113,
-      "end_line": 1140,
-      "language": "go",
-      "domain": "code"
-    },
-    "score": 0.36784148,
-    "relevance": "low",
-    "preview": "func (s *QdrantStorage) StoreMemoryBatch(ctx context.Context, entries []MemoryWithEmbedding) error"
-  },
-  {
-    "chunk": {
-      "id": "d8176e42849b3fba",
+      "id": "c6aaf45b54f1d0c6",
       "file_path": "/work/llm-semantic-axi/internal/semantic/memory_entry.go",
       "type": "struct",
       "name": "MemoryListOptions",
@@ -46,30 +29,30 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.36262032,
+    "score": 0.37370464,
     "relevance": "low",
     "preview": "type MemoryListOptions"
   },
   {
     "chunk": {
-      "id": "c3e4d4a6831dfbd3",
-      "file_path": "/work/llm-semantic-axi/internal/semantic/memory.go",
-      "type": "struct",
-      "name": "MemoryStats",
-      "signature": "type MemoryStats",
-      "content": "// MemoryStats holds memory usage statistics\ntype MemoryStats struct {\n\tChunksInMemory   int\n\tEmbeddingBytes   int64\n\tEstimatedTotalMB float64\n}",
-      "start_line": 217,
-      "end_line": 222,
+      "id": "6abd2aaf640e4b27",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/storage_qdrant.go",
+      "type": "method",
+      "name": "StoreMemoryBatch",
+      "signature": "func (s *QdrantStorage) StoreMemoryBatch(ctx context.Context, entries []MemoryWithEmbedding) error",
+      "content": "// StoreMemoryBatch stores multiple memory entries with their embeddings\nfunc (s *QdrantStorage) StoreMemoryBatch(ctx context.Context, entries []MemoryWithEmbedding) error {\n\tif len(entries) == 0 {\n\t\treturn nil\n\t}\n\n\ts.mu.Lock()\n\tdefer s.mu.Unlock()\n\n\tif s.closed {\n\t\treturn ErrStorageClosed\n\t}\n\n\tpoints := make([]*qdrant.PointStruct, len(entries))\n\tfor i, mwe := range entries {\n\t\tpoints[i] = s.memoryToPoint(mwe.Entry, mwe.Embedding)\n\t}\n\n\t_, err := s.client.Upsert(ctx, \u0026qdrant.UpsertPoints{\n\t\tCollectionName: s.collectionName,\n\t\tPoints:         points,\n\t})\n\tif err != nil {\n\t\treturn fmt.Errorf(\"failed to batch store memories: %w\", err)\n\t}\n\n\treturn nil\n}",
+      "start_line": 1113,
+      "end_line": 1140,
       "language": "go",
       "domain": "code"
     },
-    "score": 0.35714287,
+    "score": 0.37034854,
     "relevance": "low",
-    "preview": "type MemoryStats"
+    "preview": "func (s *QdrantStorage) StoreMemoryBatch(ctx context.Context, entries []MemoryWithEmbedding) error"
   },
   {
     "chunk": {
-      "id": "238d7bbbee95bcc9",
+      "id": "eb8e8d343187acc9",
       "file_path": "/work/llm-semantic-axi/internal/semantic/commands/memory.go",
       "type": "function",
       "name": "memoryResultHelp",
@@ -80,13 +63,30 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.35623524,
+    "score": 0.3666178,
     "relevance": "low",
     "preview": "func memoryResultHelp(total int) []string"
   },
   {
     "chunk": {
-      "id": "f42ed8c19b33efcb",
+      "id": "7cf5e47cc31bda0f",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/memory.go",
+      "type": "struct",
+      "name": "MemoryStats",
+      "signature": "type MemoryStats",
+      "content": "// MemoryStats holds memory usage statistics\ntype MemoryStats struct {\n\tChunksInMemory   int\n\tEmbeddingBytes   int64\n\tEstimatedTotalMB float64\n}",
+      "start_line": 217,
+      "end_line": 222,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.3656362,
+    "relevance": "low",
+    "preview": "type MemoryStats"
+  },
+  {
+    "chunk": {
+      "id": "bac28b6f3d45c707",
       "file_path": "/work/llm-semantic-axi/internal/semantic/storage_qdrant_grpc_test.go",
       "type": "function",
       "name": "TestQdrantStorage_MemoryTagFiltering",
@@ -97,13 +97,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.35429138,
+    "score": 0.35524705,
     "relevance": "low",
     "preview": "func TestQdrantStorage_MemoryTagFiltering(t *testing.T)"
   },
   {
     "chunk": {
-      "id": "1a1d000923d6919e",
+      "id": "a22a88a812593896",
       "file_path": "/work/llm-semantic-axi/internal/semantic/fts_sqlite.go",
       "type": "method",
       "name": "backfillMemoryFTS5",
@@ -114,13 +114,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.35078037,
+    "score": 0.35255548,
     "relevance": "low",
     "preview": "func (s *SQLiteStorage) backfillMemoryFTS5() error"
   },
   {
     "chunk": {
-      "id": "5019564f722e74e4",
+      "id": "313314ef63319d1b",
       "file_path": "/work/llm-semantic-axi/internal/semantic/storage.go",
       "type": "interface",
       "name": "MemoryStatsTracker",
@@ -131,29 +131,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.34342837,
+    "score": 0.34418958,
     "relevance": "low",
     "preview": "type MemoryStatsTracker"
   },
   {
     "chunk": {
-      "id": "6eca239ef3a8ca66",
-      "file_path": "/work/llm-semantic-axi/benchmarks/outputs/json/q08.json",
-      "type": "file",
-      "name": "q08",
-      "content": "      \"content\": \"// MemoryListOptions configures how memory entries are listed\\ntype MemoryListOptions struct {\\n\\tLimit  int          // Maximum number of entries to return (0 = no limit)\\n\\tOffset int          // Number of entries to skip\\n\\tTags   []string     // Filter by tags (any match)\\n\\tSource string       // Filter by source\\n\\tStatus MemoryStatus // Filter by status\\n}\",\n      \"start_line\": 184,\n      \"end_line\": 191,\n      \"language\": \"go\",\n      \"domain\": \"code\"\n    },\n    \"score\": 0.36262032,\n    \"relevance\": \"medium\",\n    \"preview\": \"type MemoryListOptions\"\n  },\n  {\n    \"chunk\": {\n      \"id\": \"acb212ce03ed38d1\",\n      \"file_path\": \"/work/llm-semantic-axi/internal/semantic/memory.go\",\n      \"type\": \"struct\",\n      \"name\": \"MemoryStats\",\n      \"signature\": \"type MemoryStats\",\n      \"content\": \"// MemoryStats holds memory usage statistics\\ntype MemoryStats struct {\\n\\tChunksInMemory   int\\n\\tEmbeddingBytes   int64\\n\\tEstimatedTotalMB float64\\n}\",\n      \"start_line\": 217,\n      \"end_line\": 222,\n      \"language\": \"go\",\n      \"domain\": \"code\"\n    },\n    \"score\": 0.35714287,\n    \"relevance\": \"medium\",\n    \"preview\": \"type MemoryStats\"\n  },\n  {\n    \"chunk\": {\n      \"id\": \"f3791fd3b4e576fd\",\n      \"file_path\": \"/work/llm-semantic-axi/internal/semantic/commands/memory.go\",\n      \"type\": \"function\",\n      \"name\": \"memoryResultHelp\",\n      \"signature\": \"func memoryResultHelp(total int) []string\",\n",
-      "start_line": 43,
-      "end_line": 76,
-      "language": "json",
-      "domain": "code"
-    },
-    "score": 0.3325653,
-    "relevance": "low",
-    "preview": "      \"content\": \"// MemoryListOptions configures how memory entries are listed\\ntype MemoryListOptions struct {\\n\\tLimit  int          // Maximum num..."
-  },
-  {
-    "chunk": {
-      "id": "d6e6e56f0b8f205f",
+      "id": "a7764ec6e6833852",
       "file_path": "/work/llm-semantic-axi/internal/semantic/storage_sqlite_memory_filters_test.go",
       "type": "function",
       "name": "entryIDs",
@@ -164,8 +148,25 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.3292523,
+    "score": 0.34320325,
     "relevance": "low",
     "preview": "func entryIDs(entries []MemoryEntry) []string"
+  },
+  {
+    "chunk": {
+      "id": "8c051f426ef84ad7",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/memory_entry.go",
+      "type": "function",
+      "name": "MemoryStatus",
+      "signature": "type MemoryStatus",
+      "content": "// MemoryStatus represents the status of a memory entry\ntype MemoryStatus string",
+      "start_line": 11,
+      "end_line": 12,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.33835778,
+    "relevance": "low",
+    "preview": "type MemoryStatus"
   }
 ]

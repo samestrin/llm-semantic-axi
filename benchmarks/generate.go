@@ -16,12 +16,19 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 	"unicode"
 )
 
 // PinnedCommit is the commit of this repository the outputs were generated
 // from: both the indexed source and the CLI that rendered the results.
 const PinnedCommit = "9ff21f649235f6cccc26ee86a6f8d7c84aecd853"
+
+// CheckoutDir is where Generate checks the pinned commit out. It is fixed
+// because the CLI hashes each chunk's absolute path into its id and embeds
+// the path with the chunk, so a checkout at a fresh random path changed every
+// id and moved scores on every run. The outputs show it as /work/llm-semantic-axi.
+const CheckoutDir = "/tmp/llm-semantic-axi-bench"
 
 // HashEmbedder is the stand-in embedding endpoint used to generate the
 // outputs. Text is split into words (identifiers at camelCase and _
@@ -130,6 +137,10 @@ var countLine = map[string]*regexp.Regexp{
 	"plain": regexp.MustCompile(`(?m)^(\d+) results for "`),
 }
 
+// indexedAt finds the time of the index run that --axi reports with its
+// staleness.
+var indexedAt = regexp.MustCompile(`(?m)^(\s*indexed_at: )"[^"]*"$`)
+
 // RunConfig drives RunQueries.
 type RunConfig struct {
 	CLI     string   // llm-semantic binary
@@ -141,6 +152,10 @@ type RunConfig struct {
 	Roots   []string // spellings of the checkout path, rewritten to RootAs
 	RootAs  string   // the path the outputs show instead
 	Leak    string   // a path that must not survive the rewrite
+	Env     []string // the CLI's environment; nil inherits this process's
+	// IndexedAt, if set, replaces the time of the index run in --axi's
+	// indexed_at, which would otherwise differ on every run.
+	IndexedAt string
 }
 
 // RunQueries runs every query in every format and writes the stdout of each.
@@ -158,6 +173,7 @@ func RunQueries(ctx context.Context, cfg RunConfig) error {
 			args := append([]string{"search", q, "--api-url", cfg.APIURL, "--model", cfg.Model}, f.Flags...)
 			cmd := exec.CommandContext(ctx, cfg.CLI, args...)
 			cmd.Dir = cfg.Dir
+			cmd.Env = cfg.Env
 			var stdout, stderr bytes.Buffer
 			cmd.Stdout, cmd.Stderr = &stdout, &stderr
 			if err := cmd.Run(); err != nil {
@@ -185,6 +201,9 @@ func RunQueries(ctx context.Context, cfg RunConfig) error {
 			for _, root := range cfg.Roots {
 				out = strings.ReplaceAll(out, root, cfg.RootAs)
 			}
+			if cfg.IndexedAt != "" {
+				out = indexedAt.ReplaceAllString(out, `${1}"`+cfg.IndexedAt+`"`)
+			}
 			if cfg.Leak != "" && strings.Contains(out, cfg.Leak) {
 				return fmt.Errorf("query %d %q %s: output still holds the temporary path %s", i+1, q, f.Dir, cfg.Leak)
 			}
@@ -197,10 +216,12 @@ func RunQueries(ctx context.Context, cfg RunConfig) error {
 }
 
 // Generate regenerates the outputs under benchDir from the pinned commit of
-// the repository at repo: it checks the commit out into a temporary worktree,
-// builds the CLI from it, indexes it against a loopback HashEmbedder and runs
-// the query list. Nothing leaves the machine.
-func Generate(ctx context.Context, repo, commit, benchDir string, log func(string)) (err error) {
+// the repository at repo: it checks the commit out into a worktree at
+// checkout (normally CheckoutDir), builds the CLI from it, indexes it against
+// a loopback HashEmbedder and runs the query list. Two runs at the same
+// checkout write the same bytes: the index time --axi reports is rewritten to
+// the commit's time. Nothing leaves the machine.
+func Generate(ctx context.Context, repo, commit, checkout, benchDir string, log func(string)) (err error) {
 	queries, err := ReadQueries(filepath.Join(benchDir, QueriesFile))
 	if err != nil {
 		return err
@@ -208,35 +229,59 @@ func Generate(ctx context.Context, repo, commit, benchDir string, log func(strin
 	if len(queries) == 0 {
 		return errors.New("no queries")
 	}
+	src, err := filepath.Abs(checkout)
+	if err != nil {
+		return err
+	}
+	// The worktree is removed when the run ends, so never take over a path
+	// that is already there.
+	if _, err := os.Lstat(src); !os.IsNotExist(err) {
+		return fmt.Errorf("checkout %s already exists: another run is using it, or one died; remove it and run `git worktree prune`", src)
+	}
 	tmp, err := os.MkdirTemp("", "llm-semantic-bench-")
 	if err != nil {
 		return err
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
-	src := filepath.Join(tmp, "src")
 
-	run := func(dir, name string, args ...string) error {
+	// Index calibration picks its probe chunks with the global math/rand,
+	// and the probes set the thresholds behind every relevance label; the CLI
+	// gets a fixed seed so the labels repeat.
+	seeded := append(os.Environ(), "GODEBUG=randautoseed=0")
+	runEnv := func(env []string, dir, name string, args ...string) (string, error) {
 		log(fmt.Sprintf("$ %s %s", name, strings.Join(args, " ")))
 		cmd := exec.CommandContext(ctx, name, args...)
 		cmd.Dir = dir
-		var out bytes.Buffer
-		cmd.Stdout, cmd.Stderr = &out, &out
+		cmd.Env = env
+		var out, stderr bytes.Buffer
+		cmd.Stdout, cmd.Stderr = &out, &stderr
 		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("%s %s: %w\n%s", name, strings.Join(args, " "), err, out.String())
+			return "", fmt.Errorf("%s %s: %w\n%s%s", name, strings.Join(args, " "), err, out.String(), stderr.String())
 		}
-		return nil
+		return out.String(), nil
+	}
+	run := func(dir, name string, args ...string) (string, error) {
+		return runEnv(nil, dir, name, args...)
 	}
 
-	if err := run(repo, "git", "worktree", "add", "--detach", src, commit); err != nil {
+	committed, err := run(repo, "git", "show", "-s", "--format=%ct", commit)
+	if err != nil {
+		return err
+	}
+	unix, err := strconv.ParseInt(strings.TrimSpace(committed), 10, 64)
+	if err != nil {
+		return fmt.Errorf("commit time of %s: %w", commit, err)
+	}
+	if _, err := run(repo, "git", "worktree", "add", "--detach", src, commit); err != nil {
 		return err
 	}
 	defer func() {
-		if rmErr := run(repo, "git", "worktree", "remove", "--force", src); rmErr != nil && err == nil {
+		if _, rmErr := run(repo, "git", "worktree", "remove", "--force", src); rmErr != nil && err == nil {
 			err = rmErr
 		}
 	}()
 	cli := filepath.Join(tmp, "llm-semantic")
-	if err := run(src, "go", "build", "-o", cli, "./cmd/llm-semantic"); err != nil {
+	if _, err := run(src, "go", "build", "-o", cli, "./cmd/llm-semantic"); err != nil {
 		return err
 	}
 
@@ -250,7 +295,7 @@ func Generate(ctx context.Context, repo, commit, benchDir string, log func(strin
 	apiURL := "http://" + ln.Addr().String()
 	const model = "hash-4096"
 
-	if err := run(src, cli, "index", ".", "--api-url", apiURL, "--model", model); err != nil {
+	if _, err := runEnv(seeded, src, cli, "index", ".", "--api-url", apiURL, "--model", model); err != nil {
 		return err
 	}
 	roots := []string{src}
@@ -260,6 +305,7 @@ func Generate(ctx context.Context, repo, commit, benchDir string, log func(strin
 	log(fmt.Sprintf("running %d queries in %d formats", len(queries), len(Formats)))
 	return RunQueries(ctx, RunConfig{
 		CLI: cli, Dir: src, APIURL: apiURL, Model: model, Queries: queries,
-		OutDir: benchDir, Roots: roots, RootAs: "/work/llm-semantic-axi", Leak: tmp,
+		OutDir: benchDir, Roots: roots, RootAs: "/work/llm-semantic-axi", Leak: src,
+		Env: seeded, IndexedAt: time.Unix(unix, 0).UTC().Format(time.RFC3339),
 	})
 }

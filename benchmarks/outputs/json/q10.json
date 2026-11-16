@@ -1,7 +1,7 @@
 [
   {
     "chunk": {
-      "id": "4274a560bf120d60",
+      "id": "34f7720ba592f633",
       "file_path": "/work/llm-semantic-axi/docs/languages.md",
       "type": "file",
       "name": "languages \u003e Languages and call edges \u003e Language table",
@@ -11,13 +11,13 @@
       "language": "markdown",
       "domain": "code"
     },
-    "score": 0.41781452,
+    "score": 0.41962716,
     "relevance": "low",
     "preview": "## Language table  Every extension `RegisterAllChunkers` registers, and what indexes it. A test (`TestReadmeLanguageTable_MatchesRegisteredExtensions`..."
   },
   {
     "chunk": {
-      "id": "00659cbc4303b8ed",
+      "id": "d665cefdba818f45",
       "file_path": "/work/llm-semantic-axi/benchmarks/outputs/json/q10.json",
       "type": "file",
       "name": "q10",
@@ -27,13 +27,13 @@
       "language": "json",
       "domain": "code"
     },
-    "score": 0.39501387,
+    "score": 0.3962029,
     "relevance": "low",
     "preview": "[   {     \"chunk\": {       \"id\": \"971e6c5389e3b38b\",       \"file_path\": \"/work/llm-semantic-axi/README.md\",       \"type\": \"file\",       \"name\": \"READM..."
   },
   {
     "chunk": {
-      "id": "02d572fbbb15a80a",
+      "id": "d16b46e537f13595",
       "file_path": "/work/llm-semantic-axi/internal/semantic/treesitter/treesitter.go",
       "type": "function",
       "name": "TreeError",
@@ -44,13 +44,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.35509259,
+    "score": 0.35791457,
     "relevance": "low",
     "preview": "func TreeError(tree *gotreesitter.Tree) error"
   },
   {
     "chunk": {
-      "id": "13f9b88f248f1005",
+      "id": "a37fd7b94f93d828",
       "file_path": "/work/llm-semantic-axi/benchmarks/outputs/json/q10.json",
       "type": "file",
       "name": "q10",
@@ -60,13 +60,13 @@
       "language": "json",
       "domain": "code"
     },
-    "score": 0.27794957,
+    "score": 0.27814695,
     "relevance": "low",
     "preview": "    \"relevance\": \"medium\",     \"preview\": \"## Languages  Every extension `RegisterAllChunkers` registers, and what indexes it. A test (`TestReadmeLang..."
   },
   {
     "chunk": {
-      "id": "4f1e169c96dfda09",
+      "id": "0f08bdf3062634ea",
       "file_path": "/work/llm-semantic-axi/internal/semantic/treesitter/fallback_test.go",
       "type": "function",
       "name": "TestTreeError_ReportsATreeWithAnErrorNode",
@@ -77,13 +77,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.23860678,
+    "score": 0.23970103,
     "relevance": "low",
     "preview": "func TestTreeError_ReportsATreeWithAnErrorNode(t *testing.T)"
   },
   {
     "chunk": {
-      "id": "bcdeca003da5bc22",
+      "id": "72af0424aa7b58f1",
       "file_path": "/work/llm-semantic-axi/benchmarks/outputs/plain/q10.txt",
       "type": "file",
       "name": "q10",
@@ -93,13 +93,13 @@
       "language": "txt",
       "domain": "code"
     },
-    "score": 0.2339548,
+    "score": 0.23351295,
     "relevance": "low",
     "preview": "10 results for \"where are the tree-sitter chunkers registered\"  1. /work/llm-semantic-axi/README.md:98 - README \u003e llm-semantic \u003e Languages (file) [MED..."
   },
   {
     "chunk": {
-      "id": "c3a8a2308c4d9ffd",
+      "id": "b1260e3cda61d14e",
       "file_path": "/work/llm-semantic-axi/internal/semantic/treesitter/treesitter.go",
       "type": "function",
       "name": "ParseSource",
@@ -110,13 +110,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.22406454,
+    "score": 0.22831483,
     "relevance": "low",
     "preview": "func ParseSource(content []byte, lang *gotreesitter.Language) (*gotreesitter.Tree, error)"
   },
   {
     "chunk": {
-      "id": "882f101a7d30f1ca",
+      "id": "d5e3e69e24e4ed6f",
       "file_path": "/work/llm-semantic-axi/internal/semantic/treesitter/chunker_csharp.go",
       "type": "method",
       "name": "Chunk",
@@ -127,13 +127,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.18931642,
+    "score": 0.19084251,
     "relevance": "low",
     "preview": "func (c *CSharpChunker) Chunk(path string, content []byte) ([]semantic.Chunk, error)"
   },
   {
     "chunk": {
-      "id": "52a687183ea04b8b",
+      "id": "9dc165d1eb8f0e24",
       "file_path": "/work/llm-semantic-axi/benchmarks/queries.txt",
       "type": "file",
       "name": "queries",
@@ -143,13 +143,13 @@
       "language": "txt",
       "domain": "code"
     },
-    "score": 0.17888544,
+    "score": 0.18731716,
     "relevance": "low",
     "preview": "# Fixed query list for the token benchmark. One query per line; the line # number among non-comment lines is the output file number (q01, q02, ...). #..."
   },
   {
     "chunk": {
-      "id": "d9568925744d88ff",
+      "id": "cef61c268cc70752",
       "file_path": "/work/llm-semantic-axi/benchmarks/outputs/json/q10.json",
       "type": "file",
       "name": "q10",
@@ -159,7 +159,7 @@
       "language": "json",
       "domain": "code"
     },
-    "score": 0.17434293,
+    "score": 0.17452659,
     "relevance": "low",
     "preview": "      \"signature\": \"func TestTreeError_ReportsATreeWithAnErrorNode(t *testing.T)\",       \"content\": \"// Defends AC2 at its source: a tree with an erro..."
   }

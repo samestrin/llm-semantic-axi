@@ -1,7 +1,7 @@
 [
   {
     "chunk": {
-      "id": "b5d7f8e6e8a3c6ca",
+      "id": "1fc984dd6628a91e",
       "file_path": "/work/llm-semantic-axi/benchmarks/outputs/plain/q06.txt",
       "type": "file",
       "name": "q06",
@@ -11,13 +11,13 @@
       "language": "txt",
       "domain": "code"
     },
-    "score": 0.38877642,
+    "score": 0.38799182,
     "relevance": "low",
     "preview": "10 results for \"where is the sqlite schema created\"  1. /work/llm-semantic-axi/internal/semantic/storage_sqlite.go:22 - SQLiteStorage (struct) [MEDIUM..."
   },
   {
     "chunk": {
-      "id": "b51c19255a96983a",
+      "id": "3e5cec12f2f05f79",
       "file_path": "/work/llm-semantic-axi/internal/semantic/storage_sqlite.go",
       "type": "struct",
       "name": "SQLiteStorage",
@@ -28,13 +28,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.33333334,
+    "score": 0.33968312,
     "relevance": "low",
     "preview": "type SQLiteStorage"
   },
   {
     "chunk": {
-      "id": "83b51aa8d529ef77",
+      "id": "347f8ff5214d5eab",
       "file_path": "/work/llm-semantic-axi/internal/semantic/mcpserver/execute_test.go",
       "type": "function",
       "name": "TestGetToolDefinitions_EverySchemaIsAValidObjectSchema",
@@ -45,13 +45,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.29077262,
+    "score": 0.29179206,
     "relevance": "low",
     "preview": "func TestGetToolDefinitions_EverySchemaIsAValidObjectSchema(t *testing.T)"
   },
   {
     "chunk": {
-      "id": "22710ae0a23de307",
+      "id": "598cd35ca3b105f2",
       "file_path": "/work/llm-semantic-axi/internal/semantic/mcpserver/tools.go",
       "type": "function",
       "name": "buildSchema",
@@ -62,13 +62,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.278543,
+    "score": 0.28221625,
     "relevance": "low",
     "preview": "func buildSchema(toolProps map[string]schemaProperty, required []string) json.RawMessage"
   },
   {
     "chunk": {
-      "id": "db1c72456743e6aa",
+      "id": "755eb546537dd87b",
       "file_path": "/work/llm-semantic-axi/benchmarks/outputs/json/q06.json",
       "type": "file",
       "name": "q06",
@@ -78,13 +78,13 @@
       "language": "json",
       "domain": "code"
     },
-    "score": 0.27764606,
+    "score": 0.2780918,
     "relevance": "low",
     "preview": "    \"score\": 0.24467726,     \"relevance\": \"low\",     \"preview\": \"func mergeProperties(toolProps, common map[string]schemaProperty) map[string]schemaPr..."
   },
   {
     "chunk": {
-      "id": "442b5618ada23e32",
+      "id": "1e133a8ae8684bb2",
       "file_path": "/work/llm-semantic-axi/benchmarks/outputs/json/q06.json",
       "type": "file",
       "name": "q06",
@@ -94,30 +94,13 @@
       "language": "json",
       "domain": "code"
     },
-    "score": 0.2701793,
+    "score": 0.270759,
     "relevance": "low",
     "preview": "      \"file_path\": \"/work/llm-semantic-axi/internal/semantic/storage_sqlite.go\",       \"type\": \"method\",       \"name\": \"initChunkRefsSchema\",       \"s..."
   },
   {
     "chunk": {
-      "id": "ebc475982cf133f4",
-      "file_path": "/work/llm-semantic-axi/internal/semantic/storage_sqlite.go",
-      "type": "function",
-      "name": "NewSQLiteStorage",
-      "signature": "func NewSQLiteStorage(dbPath string, embeddingDim int) (*SQLiteStorage, error)",
-      "content": "// NewSQLiteStorage creates a new SQLite-based storage\nfunc NewSQLiteStorage(dbPath string, embeddingDim int) (*SQLiteStorage, error) {\n\tif dbPath == \"\" {\n\t\tdbPath = \":memory:\"\n\t}\n\n\t// Ensure parent directory exists for file-based databases\n\tif dbPath != \":memory:\" {\n\t\tdir := filepath.Dir(dbPath)\n\t\tif err := os.MkdirAll(dir, 0755); err != nil {\n\t\t\treturn nil, fmt.Errorf(\"failed to create database directory: %w\", err)\n\t\t}\n\t}\n\n\tdb, err := sql.Open(\"sqlite\", dbPath)\n\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"failed to open database: %w\", err)\n\t}\n\n\t// Enable WAL mode for better concurrent access\n\tif _, err := db.Exec(\"PRAGMA journal_mode=WAL\"); err != nil {\n\t\tdb.Close()\n\t\treturn nil, fmt.Errorf(\"failed to enable WAL mode: %w\", err)\n\t}\n\n\tstorage := \u0026SQLiteStorage{\n\t\tdb:           db,\n\t\tembeddingDim: embeddingDim,\n\t}\n\n\tif err := storage.initSchema(); err != nil {\n\t\tdb.Close()\n\t\treturn nil, fmt.Errorf(\"failed to initialize schema: %w\", err)\n\t}\n\n\treturn storage, nil\n}",
-      "start_line": 30,
-      "end_line": 66,
-      "language": "go",
-      "domain": "code"
-    },
-    "score": 0.25370812,
-    "relevance": "low",
-    "preview": "func NewSQLiteStorage(dbPath string, embeddingDim int) (*SQLiteStorage, error)"
-  },
-  {
-    "chunk": {
-      "id": "b73278b4ab5fc7c0",
+      "id": "1f5d1d60cd12c114",
       "file_path": "/work/llm-semantic-axi/internal/semantic/storage_sqlite.go",
       "type": "method",
       "name": "initChunkRefsSchema",
@@ -128,13 +111,30 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.2506402,
+    "score": 0.25509417,
     "relevance": "low",
     "preview": "func (s *SQLiteStorage) initChunkRefsSchema() error"
   },
   {
     "chunk": {
-      "id": "436cac4f7ba208a6",
+      "id": "310db97a1994b634",
+      "file_path": "/work/llm-semantic-axi/internal/semantic/storage_sqlite.go",
+      "type": "function",
+      "name": "NewSQLiteStorage",
+      "signature": "func NewSQLiteStorage(dbPath string, embeddingDim int) (*SQLiteStorage, error)",
+      "content": "// NewSQLiteStorage creates a new SQLite-based storage\nfunc NewSQLiteStorage(dbPath string, embeddingDim int) (*SQLiteStorage, error) {\n\tif dbPath == \"\" {\n\t\tdbPath = \":memory:\"\n\t}\n\n\t// Ensure parent directory exists for file-based databases\n\tif dbPath != \":memory:\" {\n\t\tdir := filepath.Dir(dbPath)\n\t\tif err := os.MkdirAll(dir, 0755); err != nil {\n\t\t\treturn nil, fmt.Errorf(\"failed to create database directory: %w\", err)\n\t\t}\n\t}\n\n\tdb, err := sql.Open(\"sqlite\", dbPath)\n\tif err != nil {\n\t\treturn nil, fmt.Errorf(\"failed to open database: %w\", err)\n\t}\n\n\t// Enable WAL mode for better concurrent access\n\tif _, err := db.Exec(\"PRAGMA journal_mode=WAL\"); err != nil {\n\t\tdb.Close()\n\t\treturn nil, fmt.Errorf(\"failed to enable WAL mode: %w\", err)\n\t}\n\n\tstorage := \u0026SQLiteStorage{\n\t\tdb:           db,\n\t\tembeddingDim: embeddingDim,\n\t}\n\n\tif err := storage.initSchema(); err != nil {\n\t\tdb.Close()\n\t\treturn nil, fmt.Errorf(\"failed to initialize schema: %w\", err)\n\t}\n\n\treturn storage, nil\n}",
+      "start_line": 30,
+      "end_line": 66,
+      "language": "go",
+      "domain": "code"
+    },
+    "score": 0.25509417,
+    "relevance": "low",
+    "preview": "func NewSQLiteStorage(dbPath string, embeddingDim int) (*SQLiteStorage, error)"
+  },
+  {
+    "chunk": {
+      "id": "ab8c5763be85b0aa",
       "file_path": "/work/llm-semantic-axi/internal/semantic/mcpserver/tools.go",
       "type": "function",
       "name": "mergeProperties",
@@ -145,13 +145,13 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.24467726,
+    "score": 0.24715577,
     "relevance": "low",
     "preview": "func mergeProperties(toolProps, common map[string]schemaProperty) map[string]schemaProperty"
   },
   {
     "chunk": {
-      "id": "fe058c369a8822c9",
+      "id": "bd122e40da95e7af",
       "file_path": "/work/llm-semantic-axi/internal/semantic/memory_entry_content_test.go",
       "type": "function",
       "name": "TestMemoryFileContent_ShortCreatedAt",
@@ -162,7 +162,7 @@
       "language": "go",
       "domain": "code"
     },
-    "score": 0.23732223,
+    "score": 0.2410928,
     "relevance": "low",
     "preview": "func TestMemoryFileContent_ShortCreatedAt(t *testing.T)"
   }

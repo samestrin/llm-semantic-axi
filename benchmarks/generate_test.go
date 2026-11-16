@@ -266,14 +266,22 @@ func TestReadQueriesSkipsBlankAndCommentLines(t *testing.T) {
 // fakeRepoMain stands in for cmd/llm-semantic in a throwaway repository. Its
 // index step calls the embedding endpoint and fails unless it answers, and
 // its search prints the working directory, as the real CLI prints absolute
-// paths. Like fakeCLI it refuses a search that names no output format flag.
+// paths. Like the real CLI it also prints what the generator must make
+// stable: an id hashed from the absolute path (Chunk.GenerateID) with a draw
+// from the global math/rand appended (calibration picks its probe chunks
+// with it, which sets the relevance labels) and, in --axi, the time of the
+// run as indexed_at. Like fakeCLI it refuses a search
+// that names no output format flag.
 const fakeRepoMain = `package main
 
 import (
+	"crypto/sha256"
 	"fmt"
+	"math/rand"
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 func flag(name string) string {
@@ -287,6 +295,7 @@ func flag(name string) string {
 
 func main() {
 	wd, _ := os.Getwd()
+	id := fmt.Sprintf("%x", sha256.Sum256([]byte(wd+"/a.go")))[:16] + fmt.Sprint(rand.Intn(1e9))
 	switch os.Args[1] {
 	case "index":
 		resp, err := http.Post(flag("--api-url")+"/v1/embeddings", "application/json", strings.NewReader(` + "`" + `{"input":["x"]}` + "`" + `))
@@ -296,12 +305,12 @@ func main() {
 		}
 	case "search":
 		if strings.Contains(strings.Join(os.Args, " "), "--json") {
-			fmt.Printf("[{\"file_path\":%q}]\n", wd+"/a.go")
+			fmt.Printf("[{\"id\":%q,\"file_path\":%q}]\n", id, wd+"/a.go")
 		} else {
 			if strings.Contains(strings.Join(os.Args, " "), "--axi") {
-				fmt.Println(wd + "/a.go:1\ntotal: 1")
+				fmt.Printf("%s %s/a.go:1\nstale:\n  indexed_at: %q\ntotal: 1\n", id, wd, time.Now().UTC().Format(time.RFC3339Nano))
 			} else if strings.Contains(strings.Join(os.Args, " "), "--plain") {
-				fmt.Println("1 results for \"q\"\n\n1. " + wd + "/a.go:1")
+				fmt.Println("1 results for \"q\"\n\n1. " + wd + "/a.go:1 " + id)
 			} else {
 				fmt.Fprintln(os.Stderr, "no output format flag")
 				os.Exit(2)
@@ -354,7 +363,8 @@ func TestGenerateBuildsIndexesAndCleansUp(t *testing.T) {
 		t.Fatal(err)
 	}
 	var log []string
-	if err := Generate(context.Background(), repo, "HEAD", bench, func(s string) { log = append(log, s) }); err != nil {
+	checkout := filepath.Join(t.TempDir(), "src")
+	if err := Generate(context.Background(), repo, "HEAD", checkout, bench, func(s string) { log = append(log, s) }); err != nil {
 		t.Fatalf("Generate: %v\n%s", err, strings.Join(log, "\n"))
 	}
 	for _, f := range Formats {
@@ -371,6 +381,96 @@ func TestGenerateBuildsIndexesAndCleansUp(t *testing.T) {
 	if wt := gitRun(t, repo, "worktree", "list"); strings.Count(wt, "\n") != 1 {
 		t.Errorf("worktree left behind:\n%s", wt)
 	}
+	if _, err := os.Stat(checkout); !os.IsNotExist(err) {
+		t.Errorf("checkout %s left behind: %v", checkout, err)
+	}
+}
+
+// readOutputs returns every output file under bench, keyed by its path.
+func readOutputs(t *testing.T, bench string) map[string]string {
+	t.Helper()
+	got := map[string]string{}
+	err := filepath.WalkDir(filepath.Join(bench, OutputsDir), func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		data, err := os.ReadFile(path)
+		got[strings.TrimPrefix(path, bench)] = string(data)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return got
+}
+
+// Defends "the checked-in outputs are what the generator wrote": two runs
+// must write byte-identical files. The checkout path feeds chunk ids and the
+// embedded text, so a checkout at a fresh random path changed every id and
+// moved scores on each run; the run time in --axi's indexed_at, and the
+// randomly chosen calibration probes behind the relevance labels, did the same.
+func TestGenerateTwiceWritesIdenticalOutputs(t *testing.T) {
+	repo := fakeRepo(t)
+	checkout := filepath.Join(t.TempDir(), "src")
+	var runs []map[string]string
+	for range 2 {
+		bench := t.TempDir()
+		if err := os.WriteFile(filepath.Join(bench, QueriesFile), []byte("one\ntwo\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := Generate(context.Background(), repo, "HEAD", checkout, bench, func(string) {}); err != nil {
+			t.Fatalf("Generate: %v", err)
+		}
+		runs = append(runs, readOutputs(t, bench))
+	}
+	if len(runs[0]) != 2*len(Formats) {
+		t.Fatalf("first run wrote %d outputs, want %d", len(runs[0]), 2*len(Formats))
+	}
+	for path, first := range runs[0] {
+		if second := runs[1][path]; second != first {
+			t.Errorf("%s differs between runs:\nfirst:  %q\nsecond: %q", path, first, second)
+		}
+	}
+	if !strings.Contains(runs[0]["/"+OutputsDir+"/axi/q01.toon"], `indexed_at: "`) {
+		t.Errorf("--axi output lost its indexed_at line: %q", runs[0]["/"+OutputsDir+"/axi/q01.toon"])
+	}
+}
+
+// Defends a path someone else owns: the generator removes its checkout when
+// it finishes, so it must refuse to start in one that already exists (a
+// concurrent run, or a run that died) rather than take it over and delete it.
+// The empty directory is the case that matters: git refuses a non-empty one
+// by itself, but adds a worktree to an empty one, which the generator would
+// then remove.
+func TestGenerateRefusesAnExistingCheckout(t *testing.T) {
+	for _, name := range []string{"empty", "non-empty"} {
+		t.Run(name, func(t *testing.T) {
+			repo := fakeRepo(t)
+			bench := t.TempDir()
+			if err := os.WriteFile(filepath.Join(bench, QueriesFile), []byte("one\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			checkout := t.TempDir()
+			if name == "non-empty" {
+				if err := os.WriteFile(filepath.Join(checkout, "keep"), nil, 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			err := Generate(context.Background(), repo, "HEAD", checkout, bench, func(string) {})
+			if err == nil || !strings.Contains(err.Error(), "git worktree prune") {
+				t.Fatalf("Generate into an existing checkout: err = %v, want the generator's own refusal", err)
+			}
+			if _, err := os.Stat(checkout); err != nil {
+				t.Errorf("existing checkout was removed: %v", err)
+			}
+			if wt := gitRun(t, repo, "worktree", "list"); strings.Count(wt, "\n") != 1 {
+				t.Errorf("worktree added in an existing checkout:\n%s", wt)
+			}
+			if _, err := os.Stat(filepath.Join(bench, OutputsDir)); !os.IsNotExist(err) {
+				t.Errorf("outputs written from an existing checkout: %v", err)
+			}
+		})
+	}
 }
 
 // Defends against a bad commit producing outputs from something else: it
@@ -381,13 +481,14 @@ func TestGenerateFailsOnAnUnknownCommit(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(bench, QueriesFile), []byte("one\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := Generate(context.Background(), repo, "0000000000000000000000000000000000000000", bench, func(string) {}); err == nil {
+	checkout := filepath.Join(t.TempDir(), "src")
+	if err := Generate(context.Background(), repo, "0000000000000000000000000000000000000000", checkout, bench, func(string) {}); err == nil {
 		t.Fatal("Generate with an unknown commit returned no error")
 	}
 	if _, err := os.Stat(filepath.Join(bench, OutputsDir)); !os.IsNotExist(err) {
 		t.Errorf("outputs written for an unknown commit: %v", err)
 	}
-	if err := Generate(context.Background(), repo, "HEAD", t.TempDir(), func(string) {}); err == nil {
+	if err := Generate(context.Background(), repo, "HEAD", checkout, t.TempDir(), func(string) {}); err == nil {
 		t.Fatal("Generate with no query list returned no error")
 	}
 }
