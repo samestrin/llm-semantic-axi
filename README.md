@@ -129,7 +129,7 @@ $ llm-semantic callers EnrichForEmbedding --plain
 
 | Command | What it does |
 |---|---|
-| `llm-semantic` | With no arguments, shows the index status for this directory. With no index it prints `Status: not_indexed` and the next step, and exits 0. |
+| `llm-semantic` | With no arguments, shows the index status for this directory. With no index it prints `status: not_indexed` and the next step, and exits 0. |
 | `index [path]` | Builds the index for a directory. `--force` re-indexes every file. |
 | `index-update [path]` | Re-indexes the files changed since a git ref (`--since`, default `HEAD~1`), or every changed file with `--no-git`. |
 | `index-status` | Shows files, chunks, calibration and text-window files. Exits 1 when there is no index. |
