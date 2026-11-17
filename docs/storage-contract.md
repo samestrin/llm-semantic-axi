@@ -8,9 +8,9 @@ This document is the external contract for the data `llm-semantic` writes into a
 
 Chunk, `file_hash`, `calibration_metadata`, `last_index`, `storage_contract`, and memory point IDs are deterministic UUIDs derived from a string by SHA-256: `stringToUUID(s)` hashes `s` with SHA-256 and formats bytes `0:4-4:6-6:8-8:10-10:16` as a UUID. The exception is `retrieval_log` points, whose IDs are time-based and not stable: `retrievalLogID` (in `storage_qdrant_stats.go`) hashes `"log:<unix-nanos>"`.
 
-## The six point kinds
+## The seven point kinds
 
-One Qdrant collection holds six kinds of points. They are distinguished by payload, not by collection or by ID namespace alone.
+One Qdrant collection holds seven kinds of points. They are distinguished by payload, not by collection or by ID namespace alone.
 
 ### 1. Chunk points (code chunks)
 
@@ -147,9 +147,9 @@ Records the `contract_version` of this document that wrote the collection. Writt
 
 ## Filter rule: how to select chunks
 
-**Chunks are exactly the points that carry a `chunk_id` payload key.** Only `chunkToPoint` writes `chunk_id`; none of the other five kinds do. The read path relies on the same key: `payloadToChunk` prefers `chunk_id` from the payload over the point UUID.
+**Chunks are exactly the points that carry a `chunk_id` payload key.** Only `chunkToPoint` writes `chunk_id`; none of the other six kinds do. The read path relies on the same key: `payloadToChunk` prefers `chunk_id` from the payload over the point UUID.
 
-**`type` is not chunk-exclusive.** `file_hash` points, the `calibration_metadata` point and the `last_index` point also carry a `type` key, while memory points carry none at all. Filtering on the presence of `type`, or treating every `type`-bearing point as a chunk, will misclassify points. To select:
+**`type` is not chunk-exclusive.** `file_hash` points, the `calibration_metadata` point, the `last_index` point and the `storage_contract` point also carry a `type` key, while memory points carry none at all. Filtering on the presence of `type`, or treating every `type`-bearing point as a chunk, will misclassify points. To select:
 
 - chunks → points having `chunk_id` (this is how `Stats` counts them for `chunks_total` and counts their distinct `file_path` for `files_indexed`; `chunk_id` carries a keyword payload index, created by `ensureCollection` on every open);
 - file-hash bookkeeping → `type == "file_hash"` (this is how `ListIndexedFiles` selects them);
@@ -159,7 +159,7 @@ Records the `contract_version` of this document that wrote the collection. Writt
 - memory entries → `entry_type == "memory"` (this is how `SearchMemory` and `ListMemory` filter; also the decode guard in `payloadToMemory`);
 - retrieval logs → `entry_type == "retrieval_log"` (written by `TrackMemoryRetrieval`).
 
-Consumers doing vector search over chunk points should also be aware that zero-vector points (`file_hash`, `calibration_metadata`, `last_index`, `retrieval_log`) exist in the same collection; the `chunk_id` presence rule is the reliable way to exclude them.
+Consumers doing vector search over chunk points should also be aware that zero-vector points (`file_hash`, `calibration_metadata`, `last_index`, `storage_contract`, `retrieval_log`) exist in the same collection; the `chunk_id` presence rule is the reliable way to exclude them.
 
 ## Bumping this contract
 
