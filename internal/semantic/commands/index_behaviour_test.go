@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
+	"github.com/samestrin/llm-semantic-axi/v2/pkg/output"
 )
 
 // ===== runIndex =====
@@ -143,16 +145,47 @@ func TestRunIndexReportsUnchangedFilesOnASecondRun(t *testing.T) {
 	}
 }
 
-// TestRunIndexReportsPerFileEmbedderFailures: a dead embedder is not fatal —
-// the run continues and reports the files it could not embed. What it must
-// never do is print the ordinary success summary with a silent zero, because
-// the caller then believes the index is current.
-func TestRunIndexReportsPerFileEmbedderFailures(t *testing.T) {
+// runIndexFailing drives the index handler over a run that must fail, and
+// returns what it printed and the error it returned.
+func runIndexFailing(t *testing.T, opts indexOpts) (string, error) {
+	t.Helper()
+	var err error
+	out := captureStdout(t, func() {
+		err = runIndex(context.Background(), ".", opts)
+	})
+	if err == nil {
+		t.Fatalf("runIndex returned nil for a run where files failed, so the process exits 0:\n%s", out)
+	}
+	return out, err
+}
+
+// indexedFiles lists the file paths the index holds chunks for.
+func indexedFiles(t *testing.T) map[string]bool {
+	t.Helper()
+	storage, err := semantic.NewSQLiteStorage(filepath.Join(".index", "semantic.db"), 0)
+	if err != nil {
+		t.Fatalf("reopen index: %v", err)
+	}
+	defer storage.Close()
+	files, err := storage.ListIndexedFiles(context.Background())
+	if err != nil {
+		t.Fatalf("ListIndexedFiles: %v", err)
+	}
+	return files
+}
+
+// TestRunIndexFailsWhenEveryFileFails defends EST-7026 finding 1: with an
+// unreachable embedder every file failed, the run printed chunks_created: 0 and
+// an errors list, and exited 0 in every format, so a caller checking the exit
+// status believed the index was built. The plain summary must still count the
+// failure and pass the embedder's own message through, and the run must fail.
+func TestRunIndexFailsWhenEveryFileFails(t *testing.T) {
 	dir := newWorkspace(t)
+	withPlain(t)
 	useEmbedder(t, newBrokenEmbedder(t))
 	writeFile(t, filepath.Join(dir, "sample.go"), sampleGoSource)
 
-	out := runIndexIn(t, ".", indexOpts{skipCalibration: true})
+	out, err := runIndexFailing(t, indexOpts{skipCalibration: true})
 
 	if !strings.Contains(out, "Skipped 1 files with errors") {
 		t.Errorf("the failed file was not counted:\n%s", out)
@@ -162,6 +195,103 @@ func TestRunIndexReportsPerFileEmbedderFailures(t *testing.T) {
 	}
 	if !strings.Contains(out, "Indexed 0 files") {
 		t.Errorf("a failed run reported files as indexed:\n%s", out)
+	}
+	// --plain prints the summary itself and leaves the error to main, which
+	// prints it as "Error: ..." after the summary and exits 1.
+	var reported *output.ReportedError
+	if errors.As(err, &reported) {
+		t.Errorf("--plain returned an already-reported error, so main prints no Error: line: %v", err)
+	}
+	if !strings.Contains(err.Error(), "no file was indexed") {
+		t.Errorf("error = %q, want it to say no file was indexed", err)
+	}
+	if output.ExitCodeFor(err) != 1 {
+		t.Errorf("exit code %d, want 1", output.ExitCodeFor(err))
+	}
+}
+
+// TestRunIndexFailureIsOneStructuredDocument: under TOON and --json the result
+// is the error report. It must say error: true with a message, as every other
+// failure does, keep the counts and the errors list, and come back as an
+// already-reported error so main exits 1 without printing a second document.
+func TestRunIndexFailureIsOneStructuredDocument(t *testing.T) {
+	for _, mode := range []string{"toon", "json"} {
+		t.Run(mode, func(t *testing.T) {
+			dir := newWorkspace(t)
+			opts := indexOpts{skipCalibration: true}
+			if mode == "toon" {
+				withAXI(t)
+			} else {
+				withPlain(t)
+				opts.jsonOutput = true
+			}
+			useEmbedder(t, newBrokenEmbedder(t))
+			writeFile(t, filepath.Join(dir, "sample.go"), sampleGoSource)
+
+			out, err := runIndexFailing(t, opts)
+
+			var reported *output.ReportedError
+			if !errors.As(err, &reported) {
+				t.Errorf("error %v is not marked as already reported, so main prints a second document", err)
+			}
+			if output.ExitCodeFor(err) != 1 {
+				t.Errorf("exit code %d, want 1", output.ExitCodeFor(err))
+			}
+			if mode == "json" {
+				var payload map[string]any
+				decodeJSON(t, out, &payload)
+				if payload["error"] != true {
+					t.Errorf("error = %v, want true:\n%s", payload["error"], out)
+				}
+				if msg, _ := payload["message"].(string); !strings.Contains(msg, "no file was indexed") {
+					t.Errorf("message = %q, want it to say no file was indexed", msg)
+				}
+				if payload["files_skipped"] != float64(1) || payload["chunks_created"] != float64(0) {
+					t.Errorf("the counts are missing or wrong:\n%s", out)
+				}
+				return
+			}
+			for _, want := range []string{"error: true", "message: ", "no file was indexed", "files_skipped: 1", "embedder unavailable"} {
+				if !strings.Contains(out, want) {
+					t.Errorf("TOON output lacks %q:\n%s", want, out)
+				}
+			}
+		})
+	}
+}
+
+// TestRunIndexFailsWhenSomeFilesFail settles the partial case EST-7026 left
+// open: a run where one file failed and another was indexed exits 1 and names
+// what failed, as AXI partial results do. The file that succeeded must really
+// be in the index, and the one that failed must not.
+func TestRunIndexFailsWhenSomeFilesFail(t *testing.T) {
+	dir := newWorkspace(t)
+	withAXI(t)
+	useEmbedder(t, newPoisonedEmbedder(t, "Unembeddable"))
+	writeFile(t, filepath.Join(dir, "sample.go"), sampleGoSource)
+	writeFile(t, filepath.Join(dir, "bad.go"), "package sample\n\n// Unembeddable is refused by the embedder.\nfunc Unembeddable() {}\n")
+
+	out, err := runIndexFailing(t, indexOpts{skipCalibration: true})
+
+	if output.ExitCodeFor(err) != 1 {
+		t.Errorf("exit code %d, want 1", output.ExitCodeFor(err))
+	}
+	for _, want := range []string{"error: true", "files_processed: 1", "files_skipped: 1", "bad.go", "1 of 2 files failed"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("TOON output lacks %q:\n%s", want, out)
+		}
+	}
+	files := indexedFiles(t)
+	var good, bad bool
+	for f := range files {
+		good = good || strings.HasSuffix(f, "sample.go")
+		bad = bad || strings.HasSuffix(f, "bad.go")
+	}
+	if !good {
+		t.Errorf("the file that embedded is not in the index: %v", files)
+	}
+	if bad {
+		t.Errorf("the file that failed is in the index: %v", files)
 	}
 }
 

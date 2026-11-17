@@ -4,8 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -155,8 +159,14 @@ func TestMain_Helper(t *testing.T) {
 // index or config file from this checkout is discovered.
 func runMain(t *testing.T, args ...string) (stdout, stderr string, exitCode int) {
 	t.Helper()
+	return runMainIn(t, t.TempDir(), args...)
+}
+
+// runMainIn is runMain in a directory the test has prepared.
+func runMainIn(t *testing.T, dir string, args ...string) (stdout, stderr string, exitCode int) {
+	t.Helper()
 	cmd := exec.Command(os.Args[0], append([]string{"-test.run=^TestMain_Helper$", "--"}, args...)...)
-	cmd.Dir = t.TempDir()
+	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), mainHelperEnv+"=1")
 	var out, errOut bytes.Buffer
 	cmd.Stdout = &out
@@ -536,5 +546,68 @@ func TestMain_FlagGroupErrorExitsTwoWithHelpOnStdout(t *testing.T) {
 	}
 	if stderr != "" {
 		t.Errorf("stderr should be empty: %q", stderr)
+	}
+}
+
+// TestMain_IndexWithEveryFileFailingExitsOneWithOneDocument defends EST-7026
+// finding 1 end to end: `index` against an embedder that refuses every request
+// printed its counts and errors and exited 0, in TOON, --plain and --json. It
+// must exit 1, print a single document that says so, and under --plain end the
+// summary with the "Error: " line every other failure prints.
+func TestMain_IndexWithEveryFileFailingExitsOneWithOneDocument(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = io.WriteString(w, `{"error":{"message":"embedder unavailable"}}`)
+	}))
+	t.Cleanup(srv.Close)
+
+	for _, format := range []string{"toon", "--plain", "--json"} {
+		t.Run(format, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "sample.go"), []byte("package sample\n\nfunc Sample() {}\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			args := []string{"index", ".", "--api-url", srv.URL, "--model", "m", "--skip-calibration"}
+			if format != "toon" {
+				args = append(args, format)
+			}
+
+			stdout, stderr, code := runMainIn(t, dir, args...)
+
+			if code != 1 {
+				t.Errorf("exit code = %d, want 1; stdout=%q stderr=%q", code, stdout, stderr)
+			}
+			switch format {
+			case "toon":
+				if n := strings.Count(stdout, "error: true"); n != 1 {
+					t.Errorf("stdout holds %d `error: true` lines, want exactly 1: %q", n, stdout)
+				}
+				if !strings.Contains(stdout, "files_skipped: 1") || !strings.Contains(stdout, "no file was indexed") {
+					t.Errorf("stdout does not report the failed file: %q", stdout)
+				}
+			case "--plain":
+				if !strings.Contains(stdout, "Skipped 1 files with errors") {
+					t.Errorf("the summary is missing: %q", stdout)
+				}
+				lines := strings.Split(strings.TrimSpace(stdout), "\n")
+				if last := lines[len(lines)-1]; !strings.HasPrefix(last, "Error: ") {
+					t.Errorf("last line = %q, want the Error: line", last)
+				}
+			case "--json":
+				var got struct {
+					Error        bool     `json:"error"`
+					Message      string   `json:"message"`
+					FilesSkipped int      `json:"files_skipped"`
+					Errors       []string `json:"errors"`
+				}
+				// Unmarshal rejects trailing data, so a second document fails here.
+				if err := json.Unmarshal([]byte(stdout), &got); err != nil {
+					t.Fatalf("stdout is not one JSON document: %v\n%s", err, stdout)
+				}
+				if !got.Error || got.Message == "" || got.FilesSkipped != 1 || len(got.Errors) != 1 {
+					t.Errorf("the JSON payload does not report the failure: %+v", got)
+				}
+			}
+		})
 	}
 }

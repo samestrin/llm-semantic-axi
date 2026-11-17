@@ -26,6 +26,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- `index` and `index-update` exit 1 when any file fails, instead of 0. Against an unreachable endpoint `index` printed `chunks_created: 0` and the error and exited 0, so a caller checking the status believed the index was built. A partial failure exits 1 too: the output still counts what was indexed and lists each failed file, and under TOON and `--json` the same document carries `error: true` and a `message` (both absent on success, so a clean run's JSON is unchanged); `--plain` prints the summary followed by `Error: ...`.
+- `memory store` cuts the answer it echoes back at 200 characters in the default TOON output, with the size hint and a new `--full` flag for the whole text, as every other default output does. The stored answer is never cut, and `--json` still echoes it whole.
+- `docs/storage-contract.md` is one line per paragraph instead of hard-wrapped prose.
 - Errors now print on stdout in the active output format, including `--plain`, on the same stream as successful output. Stderr is reserved for diagnostics.
 - The `--axi` next step after a search hit says `callers` and `refs` show call sites for Go, JavaScript, TypeScript, Python and Rust. It said Go only.
 - `index-update` in git mode reads each changed file's fallback reason on its own. It listed every fallen-back file in the index once per changed file, so an update cost grew with the size of the index times the number of changed files.

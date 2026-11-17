@@ -198,8 +198,17 @@ func runIndexUpdate(ctx context.Context, path string, opts updateOpts) error {
 }
 
 func reportUpdateResult(result *semantic.UpdateResult, jsonOutput bool) error {
+	// A file that failed means the changes were not all applied, so the run fails.
+	var failed error
+	if result.FilesSkipped > 0 {
+		failed = incompleteError("updated", result.FilesUpdated, result.FilesSkipped)
+	}
+
 	if jsonOutput || GlobalAXIOutput {
-		return emitStdout(result)
+		return reportResult(struct {
+			*semantic.UpdateResult
+			failurePayload
+		}{result, newFailurePayload(failed)}, failed)
 	}
 
 	fmt.Printf("Updated %d files, removed %d files (%s mode)\n", result.FilesUpdated, result.FilesRemoved, result.Mode)
@@ -214,5 +223,6 @@ func reportUpdateResult(result *semantic.UpdateResult, jsonOutput bool) error {
 			fmt.Printf("  - %s\n", e)
 		}
 	}
-	return nil
+	// main prints it after the summary as "Error: ..." and exits 1.
+	return failed
 }

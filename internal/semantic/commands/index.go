@@ -10,6 +10,7 @@ import (
 
 	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
 	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic/treesitter"
+	"github.com/samestrin/llm-semantic-axi/v2/pkg/output"
 	"github.com/spf13/cobra"
 	"golang.org/x/term"
 )
@@ -378,17 +379,25 @@ func runIndex(ctx context.Context, path string, opts indexOpts) error {
 		calibrationMeta, calibrationErr = runCalibration(ctx, storage, embedder, opts.recalibrate, opts.jsonOutput)
 	}
 
+	// A file that failed leaves the index incomplete, so the run fails.
+	var failed error
+	if result.FilesSkipped > 0 {
+		failed = incompleteError("indexed", result.FilesProcessed, result.FilesSkipped)
+	}
+
 	// Output results
 	if opts.jsonOutput || GlobalAXIOutput {
 		type jsonResult struct {
 			*semantic.IndexResult
 			Calibration *semantic.CalibrationMetadata `json:"calibration,omitempty"`
+			failurePayload
 		}
 		out := jsonResult{
-			IndexResult: result,
-			Calibration: calibrationMeta,
+			IndexResult:    result,
+			Calibration:    calibrationMeta,
+			failurePayload: newFailurePayload(failed),
 		}
-		return emitStdout(out)
+		return reportResult(out, failed)
 	}
 
 	fmt.Printf("Indexed %d files, created %d chunks\n", result.FilesProcessed, result.ChunksCreated)
@@ -419,6 +428,45 @@ func runIndex(ctx context.Context, path string, opts indexOpts) error {
 		fmt.Println("\nCalibration: skipped (--skip-calibration)")
 	}
 
+	// main prints it after the summary as "Error: ..." and exits 1.
+	return failed
+}
+
+// incompleteError is the failure of an index or index-update run in which a
+// file could not be processed. A partial result exits 1, as AXI asks, and the
+// payload still lists what was done and what failed.
+func incompleteError(verb string, done, failed int) error {
+	if done == 0 {
+		return fmt.Errorf("no file was %s: %d of %d files failed; see errors", verb, failed, failed)
+	}
+	return fmt.Errorf("the index is incomplete: %d of %d files failed and the rest were %s; see errors", failed, done+failed, verb)
+}
+
+// failurePayload adds the error: true and message every failure carries under
+// TOON and --json to a result that is itself the failure report. Both are
+// omitted on success, so a clean run's payload is unchanged.
+type failurePayload struct {
+	Error   bool   `json:"error,omitempty"`
+	Message string `json:"message,omitempty"`
+}
+
+func newFailurePayload(err error) failurePayload {
+	if err == nil {
+		return failurePayload{}
+	}
+	return failurePayload{Error: true, Message: err.Error()}
+}
+
+// reportResult prints a TOON or JSON result and, when the run failed, returns
+// the failure marked as already reported, so main exits 1 without printing a
+// second document.
+func reportResult(v any, failed error) error {
+	if err := emitStdout(v); err != nil {
+		return err
+	}
+	if failed != nil {
+		return &output.ReportedError{Err: failed}
+	}
 	return nil
 }
 

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strconv"
@@ -31,6 +32,12 @@ func main() {
 	rootCmd := commands.RootCmd()
 
 	if err := rootCmd.Execute(); err != nil {
+		// The command printed its own failure report; a second document on
+		// stdout would leave it unparseable.
+		var reported *output.ReportedError
+		if errors.As(err, &reported) {
+			os.Exit(output.ExitCodeFor(err))
+		}
 		// A flag-parse, argument-count or format-conflict error never reaches
 		// PersistentPreRunE, so the output mode was not published and a
 		// subcommand's local --json and --min were not copied to the globals;

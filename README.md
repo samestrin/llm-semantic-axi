@@ -130,8 +130,8 @@ $ llm-semantic callers EnrichForEmbedding --plain
 | Command | What it does |
 |---|---|
 | `llm-semantic` | With no arguments, shows the index status for this directory. With no index it prints `status: not_indexed` and the next step, and exits 0. |
-| `index [path]` | Builds the index for a directory. `--force` re-indexes every file. |
-| `index-update [path]` | Re-indexes the files changed since a git ref (`--since`, default `HEAD~1`), or every changed file with `--no-git`. |
+| `index [path]` | Builds the index for a directory. `--force` re-indexes every file. Exits 1 if any file failed, listing what was indexed and what failed. |
+| `index-update [path]` | Re-indexes the files changed since a git ref (`--since`, default `HEAD~1`), or every changed file with `--no-git`. Exits 1 if any file failed, as `index` does. |
 | `index-status` | Shows files, chunks, calibration and text-window files. Exits 1 when there is no index. |
 | `search <query>` | Finds code by meaning. `code-search`, `docs-search` and `memory-search` are the same search on one profile. |
 | `multisearch <q1> [q2] ...` | Runs several queries, removes duplicates and boosts results more than one query found. |
@@ -219,7 +219,7 @@ Search-family output also says how far the index is behind the working tree (`fr
 | Exit code | Meaning |
 |---|---|
 | `0` | Success, including a definitive empty answer: no match, a symbol not indexed, or a bare run with no index. |
-| `1` | The command failed: no index for `index-status`, an unreachable endpoint, or a destructive command refused without `--force` or `--yes`. Every error goes to stdout in the active format: a TOON or JSON object with `error: true`, or `Error: ...` under `--plain`. stderr carries only diagnostics. |
+| `1` | The command failed: no index for `index-status`, an unreachable endpoint, an `index` or `index-update` run in which any file failed (even if others were indexed), or a destructive command refused without `--force` or `--yes`. Every error goes to stdout in the active format: a TOON or JSON object with `error: true`, or `Error: ...` under `--plain`. A failed `index` or `index-update` prints its usual counts and `errors` list with `error: true` and a `message` in the same TOON or JSON document; `--plain` prints the summary followed by the `Error: ...` line. stderr carries only diagnostics. |
 | `2` | Usage error: an unknown flag or command, a missing argument, or contradictory format flags. The message names what was wrong; for an unknown flag or command it lists the valid choices. |
 
 `llm-semantic -v`, `-V` and `--version` print the bare version and exit 0, and so do the same flags on `llm-semantic-mcp`.
