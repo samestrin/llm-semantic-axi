@@ -22,12 +22,12 @@
 # at (`git rev-parse <tag>^{commit}`), not a branch head. Repo PRs are
 # squash-merged, so a branch commit can vanish; a tag cannot. Every observation
 # below was re-checked against the source this release ships: main d2da5e1 plus
-# the EST-6829 fixes (callers/refs default TOON rows shaped to the AXI minimum
-# with a stated total and --full, README zero-result wording, this file's line
-# references). The c7645ab SHA below is stale and stays only until the owner
-# replaces it with the v2.0.0 tag commit, as step 1 says. If any file listed
-# under reviewed_components changes before the tag, re-run the checks listed
-# here.
+# the final pre-tag fixes (callers/refs default TOON rows shaped to the AXI
+# minimum with a stated total and --full, README zero-result wording, this
+# file's line references). The c7645ab SHA below is stale and stays only until
+# the owner replaces it with the v2.0.0 tag commit, as step 1 says. If any file
+# listed under reviewed_components changes before the tag, re-run the checks
+# listed here.
 #
 # How each source observation was checked (paths are relative to the repo
 # root; `$B` is `go build -o $B ./cmd/llm-semantic`, run in an empty
