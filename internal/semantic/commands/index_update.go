@@ -98,7 +98,7 @@ func runIndexUpdate(ctx context.Context, path string, opts updateOpts) error {
 	if storageType != "qdrant" {
 		indexPath = findIndexPath()
 		if indexPath == "" {
-			return fmt.Errorf("semantic index not found. Run 'llm-semantic index' first")
+			return withHelp(fmt.Errorf("semantic index not found. Run 'llm-semantic index' first"), indexMissingHelp...)
 		}
 	}
 

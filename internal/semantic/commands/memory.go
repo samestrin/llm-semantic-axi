@@ -281,7 +281,7 @@ func runMemorySearch(ctx context.Context, opts memorySearchOpts) error {
 	if storageType == "" || storageType == "sqlite" {
 		indexPath = findIndexPath()
 		if indexPath == "" {
-			return fmt.Errorf("semantic index not found. Run 'llm-semantic memory store' first")
+			return withHelp(fmt.Errorf("semantic index not found. Run 'llm-semantic memory store' first"), memoryMissingHelp...)
 		}
 	}
 
@@ -574,7 +574,7 @@ func runMemoryPromote(ctx context.Context, opts memoryPromoteOpts) error {
 	if storageType == "" || storageType == "sqlite" {
 		indexPath = findIndexPath()
 		if indexPath == "" {
-			return fmt.Errorf("semantic index not found. Run 'llm-semantic memory store' first")
+			return withHelp(fmt.Errorf("semantic index not found. Run 'llm-semantic memory store' first"), memoryMissingHelp...)
 		}
 	}
 
@@ -909,7 +909,7 @@ func runMemoryList(ctx context.Context, opts memoryListOpts) error {
 	if storageType == "" || storageType == "sqlite" {
 		indexPath = findIndexPath()
 		if indexPath == "" {
-			return fmt.Errorf("semantic index not found. Run 'llm-semantic memory store' first")
+			return withHelp(fmt.Errorf("semantic index not found. Run 'llm-semantic memory store' first"), memoryMissingHelp...)
 		}
 	}
 
@@ -942,16 +942,33 @@ func runMemoryList(ctx context.Context, opts memoryListOpts) error {
 
 	// Output results
 	if opts.jsonOutput || opts.minOutput || GlobalAXIOutput {
-		if opts.minOutput {
-			minResults := make([]map[string]interface{}, len(entries))
-			for i, e := range entries {
-				minResults[i] = map[string]interface{}{
-					"id":     e.ID,
-					"q":      truncate(e.Question, 50),
-					"status": e.Status,
-				}
+		if GlobalAXIOutput {
+			var rows any
+			switch {
+			case opts.full:
+				rows = entries
+			case opts.minOutput:
+				rows = memoryListMinRows(entries)
+			default:
+				rows = axiMemoryListRows(entries)
 			}
-			return emitStdout(minResults)
+			payload := map[string]any{
+				"total":   len(entries),
+				"results": rows,
+				"help":    memoryListHelp(len(entries)),
+				"stale":   axiStalenessNotApplicable(),
+			}
+			if len(entries) == 0 {
+				storeEmpty, err := zeroResultsMemoryStoreEmpty(ctx, storage, 0)
+				if err != nil {
+					return err
+				}
+				markMemoryListZeroResults(payload, storeEmpty)
+			}
+			return emitStdout(payload)
+		}
+		if opts.minOutput {
+			return emitStdout(memoryListMinRows(entries))
 		}
 		return emitStdout(entries)
 	}
@@ -972,6 +989,65 @@ func runMemoryList(ctx context.Context, opts memoryListOpts) error {
 	}
 
 	return nil
+}
+
+// emptyMemoryListMessage is the sentence memory list prints over a store
+// with no entries.
+const emptyMemoryListMessage = "The memory store is empty, so nothing was listed. Run `llm-semantic memory store` to add an entry."
+
+// markMemoryListZeroResults gives an empty TOON memory list a status an agent
+// can branch on: store_empty when there is nothing stored, no_match when a
+// filter excluded every entry. The result list is always a list, never null.
+func markMemoryListZeroResults(payload map[string]any, storeEmpty bool) {
+	payload["results"] = []any{}
+	if storeEmpty {
+		payload["status"] = "store_empty"
+		payload["message"] = emptyMemoryListMessage
+		payload["help"] = []string{"Run `llm-semantic memory store --question <q> --answer <a>` to add an entry"}
+		return
+	}
+	payload["status"] = "no_match"
+	payload["message"] = "No memories match the filters."
+	payload["help"] = []string{"Drop `--status` or raise `--limit` to see more entries"}
+}
+
+// axiMemoryListRows is the default TOON memory list row: id, question, status
+// and the answer cut with a size hint. --full restores the whole entry.
+func axiMemoryListRows(entries []semantic.MemoryEntry) []map[string]any {
+	rows := make([]map[string]any, len(entries))
+	for i, e := range entries {
+		rows[i] = map[string]any{
+			"id":       e.ID,
+			"question": axiCut(e.Question),
+			"status":   e.Status,
+			"answer":   axiCut(e.Answer),
+		}
+	}
+	return rows
+}
+
+// memoryListMinRows is the compact row --min prints, in TOON and JSON alike.
+func memoryListMinRows(entries []semantic.MemoryEntry) []map[string]any {
+	rows := make([]map[string]any, len(entries))
+	for i, e := range entries {
+		rows[i] = map[string]any{
+			"id":     e.ID,
+			"q":      truncate(e.Question, 50),
+			"status": e.Status,
+		}
+	}
+	return rows
+}
+
+// memoryListHelp is the TOON next-step list for memory list.
+func memoryListHelp(total int) []string {
+	if total == 0 {
+		return []string{"Run `llm-semantic memory store --question <q> --answer <a>` to add an entry"}
+	}
+	return []string{
+		"Run `llm-semantic memory search <query>` to search the stored entries",
+		"Run `llm-semantic memory stats` to see retrieval statistics",
+	}
 }
 
 // ===== MEMORY DELETE COMMAND =====
@@ -1021,7 +1097,7 @@ func runMemoryDelete(ctx context.Context, opts memoryDeleteOpts) error {
 	if storageType == "" || storageType == "sqlite" {
 		indexPath = findIndexPath()
 		if indexPath == "" {
-			return fmt.Errorf("semantic index not found. Run 'llm-semantic memory store' first")
+			return withHelp(fmt.Errorf("semantic index not found. Run 'llm-semantic memory store' first"), memoryMissingHelp...)
 		}
 	}
 
@@ -1168,7 +1244,7 @@ func runMemoryStats(ctx context.Context, opts memoryStatsOpts) error {
 	if storageType == "" || storageType == "sqlite" {
 		indexPath = findIndexPath()
 		if indexPath == "" {
-			return fmt.Errorf("semantic index not found. Run 'llm-semantic memory store' first")
+			return withHelp(fmt.Errorf("semantic index not found. Run 'llm-semantic memory store' first"), memoryMissingHelp...)
 		}
 	}
 
@@ -1274,6 +1350,31 @@ func runMemoryStatsTable(ctx context.Context, tracker semantic.MemoryStatsTracke
 
 	// Handle JSON output
 	if opts.jsonOutput || opts.minOutput || GlobalAXIOutput {
+		if GlobalAXIOutput && !opts.minOutput {
+			var rows any
+			if opts.full {
+				rows = axiMemoryStatsFullRows(filtered)
+			} else {
+				rows = axiMemoryStatsRows(filtered)
+			}
+			payload := map[string]any{
+				"total_memories": totalMemories,
+				"pending":        pendingCount,
+				"promoted":       promotedCount,
+				"total":          len(filtered),
+				"results":        rows,
+				"help":           memoryStatsHelp(len(filtered)),
+				"stale":          axiStalenessNotApplicable(),
+			}
+			if len(filtered) == 0 {
+				storeEmpty, err := zeroResultsMemoryStoreEmpty(ctx, storage, 0)
+				if err != nil {
+					return err
+				}
+				markMemoryStatsZeroResults(payload, storeEmpty, opts)
+			}
+			return emitStdout(payload)
+		}
 		// Indent stays conditional on minOutput, carried per call so
 		// --json --min keeps emitting compact output.
 		if opts.minOutput {
@@ -1300,24 +1401,11 @@ func runMemoryStatsTable(ctx context.Context, tracker semantic.MemoryStatsTracke
 		}
 
 		// Full JSON output with summary
-		results := make([]map[string]interface{}, len(filtered))
-		for i, stat := range filtered {
-			results[i] = map[string]interface{}{
-				"id":              stat.MemoryID,
-				"question":        stat.Question,
-				"retrieval_count": stat.RetrievalCount,
-				"last_retrieved":  stat.LastRetrieved,
-				"avg_score":       stat.AvgScore,
-				"status":          stat.Status,
-				"created":         stat.CreatedAt,
-				"tags":            stat.Tags,
-			}
-		}
 		output := map[string]interface{}{
 			"total_memories": totalMemories,
 			"pending":        pendingCount,
 			"promoted":       promotedCount,
-			"results":        results,
+			"results":        axiMemoryStatsFullRows(filtered),
 		}
 		return emitJSON(os.Stdout, output, true)
 	}
@@ -1364,6 +1452,79 @@ func runMemoryStatsTable(ctx context.Context, tracker semantic.MemoryStatsTracke
 	// Display table
 	displayStatsTable(rows)
 	return nil
+}
+
+// emptyMemoryStatsMessage is the sentence memory stats prints over a store
+// with no entries.
+const emptyMemoryStatsMessage = "The memory store is empty, so there are no retrieval stats. Run `llm-semantic memory store` to add an entry."
+
+// markMemoryStatsZeroResults gives an empty TOON stats answer a status an
+// agent can branch on: store_empty when nothing is stored, no_match when the
+// filters excluded every entry or nothing has been retrieved yet. A store
+// with entries but no retrievals is not an empty store, and the message says
+// what is missing instead of claiming no memories exist.
+func markMemoryStatsZeroResults(payload map[string]any, storeEmpty bool, opts memoryStatsOpts) {
+	payload["results"] = []any{}
+	if storeEmpty {
+		payload["status"] = "store_empty"
+		payload["message"] = emptyMemoryStatsMessage
+		payload["help"] = []string{"Run `llm-semantic memory store --question <q> --answer <a>` to add an entry"}
+		return
+	}
+	payload["status"] = "no_match"
+	if opts.id != "" || opts.minRetrievals > 0 || opts.status != "" || opts.tagsFilter != "" {
+		payload["message"] = "No memories match the filters."
+		payload["help"] = []string{"Drop the filters to see every entry's stats"}
+		return
+	}
+	payload["message"] = "No retrievals recorded yet, so there are no stats to show. Run `llm-semantic memory search` to retrieve entries."
+	payload["help"] = []string{"Run `llm-semantic memory search <query>` to retrieve entries and record stats"}
+}
+
+// axiMemoryStatsRows is the default TOON stats row: id, question, the
+// retrieval count and the average score — four fields. --full restores the
+// rest.
+func axiMemoryStatsRows(stats []semantic.RetrievalStats) []map[string]any {
+	rows := make([]map[string]any, len(stats))
+	for i, s := range stats {
+		rows[i] = map[string]any{
+			"id":              s.MemoryID,
+			"question":        axiCut(s.Question),
+			"retrieval_count": s.RetrievalCount,
+			"avg_score":       s.AvgScore,
+		}
+	}
+	return rows
+}
+
+// axiMemoryStatsFullRows is every stats field, as --full and the pre-AXI
+// --json schema print them.
+func axiMemoryStatsFullRows(stats []semantic.RetrievalStats) []map[string]any {
+	rows := make([]map[string]any, len(stats))
+	for i, s := range stats {
+		rows[i] = map[string]any{
+			"id":              s.MemoryID,
+			"question":        s.Question,
+			"retrieval_count": s.RetrievalCount,
+			"last_retrieved":  s.LastRetrieved,
+			"avg_score":       s.AvgScore,
+			"status":          s.Status,
+			"created":         s.CreatedAt,
+			"tags":            s.Tags,
+		}
+	}
+	return rows
+}
+
+// memoryStatsHelp is the TOON next-step list for memory stats.
+func memoryStatsHelp(total int) []string {
+	if total == 0 {
+		return []string{"Run `llm-semantic memory search <query>` to retrieve entries and record stats"}
+	}
+	return []string{
+		"Run `llm-semantic memory stats --min-retrievals 5` to find promotion candidates",
+		"Run `llm-semantic memory promote <id> --target CLAUDE.md` to promote a frequently retrieved entry",
+	}
 }
 
 func displayStatsTable(rows []displayRow) {

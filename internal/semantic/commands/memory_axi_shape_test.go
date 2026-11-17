@@ -39,7 +39,7 @@ func TestMemoryListAXIDefaultIsShapedAndStatesTotal(t *testing.T) {
 		t.Errorf("default TOON memory list does not state total: 2:\n%s", out)
 	}
 	assertFieldSet(t, toonHeaderFields(t, out, "results"), []string{"id", "question", "status", "answer"}, "default memory list row")
-	for _, absent := range []string{"created_at:", "updated_at:", "occurrences:", "source:"} {
+	for _, absent := range []string{"created_at", "updated_at", "occurrences", "source"} {
 		if strings.Contains(out, absent) {
 			t.Errorf("default memory list row still carries %s:\n%s", absent, out)
 		}
@@ -76,11 +76,10 @@ func TestMemoryListAXICutsLongAnswerAndFullRestoresIt(t *testing.T) {
 	if !strings.Contains(full, longAnswer) {
 		t.Errorf("--full did not restore the whole answer:\n%s", full)
 	}
-	for _, want := range []string{"created_at:", "updated_at:", "occurrences:", "source:"} {
-		if !strings.Contains(full, want) {
-			t.Errorf("--full row is missing %s:\n%s", want, full)
-		}
-	}
+	// A uniform TOON row list names its fields once, in the header.
+	assertFieldSet(t, toonHeaderFields(t, full, "results"),
+		[]string{"id", "question", "answer", "status", "occurrences", "created_at", "updated_at", "source"},
+		"--full memory list row")
 	if !strings.Contains(full, "total: 1\n") {
 		t.Errorf("--full lost the total:\n%s", full)
 	}
@@ -133,6 +132,29 @@ func TestMemoryListAXIFilterExcludingEverythingIsNoMatch(t *testing.T) {
 	}
 	if !strings.Contains(out, "total: 0") {
 		t.Errorf("filter-empty list does not state total: 0:\n%s", out)
+	}
+}
+
+// TestMemoryListAXIMinStatesTotal: --min keeps its compact rows, but the TOON
+// payload states a total like every other TOON answer (principle 4).
+func TestMemoryListAXIMinStatesTotal(t *testing.T) {
+	newWorkspace(t)
+	useEmbedder(t, newFakeEmbedder(t))
+	seedMemories(t, newMemory("mem-1", "A question?", "An answer nobody needs in min mode"))
+	withAXI(t)
+
+	out := captureStdout(t, func() {
+		if err := runMemoryList(context.Background(), memoryListOpts{limit: 50, minOutput: true}); err != nil {
+			t.Fatalf("runMemoryList --min: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "total: 1\n") {
+		t.Errorf("--min TOON list does not state total: 1:\n%s", out)
+	}
+	assertFieldSet(t, toonHeaderFields(t, out, "results"), []string{"id", "q", "status"}, "--min memory list row")
+	if strings.Contains(out, "answer") {
+		t.Errorf("--min list carried the answer:\n%s", out)
 	}
 }
 
@@ -264,6 +286,35 @@ func TestMemoryStatsAXINoRetrievalsIsHonest(t *testing.T) {
 	}
 	if !strings.Contains(out, "retrieval") {
 		t.Errorf("the empty-stats message does not say what is missing:\n%s", out)
+	}
+}
+
+// TestMemoryStatsAXIFilterExcludingEverythingIsNoMatch: a filter that excludes
+// every entry is not an empty store, and the message names the filters.
+func TestMemoryStatsAXIFilterExcludingEverythingIsNoMatch(t *testing.T) {
+	newWorkspace(t)
+	useEmbedder(t, newFakeEmbedder(t))
+	seedMemories(t, newMemory("mem-1", "A question?", "An answer"))
+	seedRetrievals(t, "mem-1", "a query", 0.5, 1)
+	withAXI(t)
+
+	out := captureStdout(t, func() {
+		if err := runMemoryStats(context.Background(), memoryStatsOpts{minRetrievals: 100}); err != nil {
+			t.Fatalf("runMemoryStats: %v", err)
+		}
+	})
+
+	if !strings.Contains(out, "status: no_match") {
+		t.Errorf("filter-empty stats is not no_match:\n%s", out)
+	}
+	if strings.Contains(out, "store_empty") {
+		t.Errorf("a store with an entry was reported as store_empty:\n%s", out)
+	}
+	if !strings.Contains(out, "No memories match the filters.") {
+		t.Errorf("filter-empty stats does not name the filters:\n%s", out)
+	}
+	if !strings.Contains(out, "total: 0") || !strings.Contains(out, "total_memories: 1") {
+		t.Errorf("filter-empty stats lost its totals:\n%s", out)
 	}
 }
 
