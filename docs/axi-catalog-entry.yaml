@@ -24,7 +24,11 @@
 # below was re-checked against the source this release ships: main d2da5e1 plus
 # the final pre-tag fixes (callers/refs default TOON rows shaped to the AXI
 # minimum with a stated total and --full, README zero-result wording, this
-# file's line references). The c7645ab SHA below is stale and stays only until
+# file's line references, memory list/stats default TOON rows shaped with a
+# stated total, --full and a store_empty state, missing-index help on every
+# command that needs an index, refs --min no wider than the default, callers
+# rows deduped per caller, and the README Quick start output re-run from the
+# release tree). The c7645ab SHA below is stale and stays only until
 # the owner replaces it with the v2.0.0 tag commit, as step 1 says. If any file
 # listed under reviewed_components changes before the tag, re-run the checks
 # listed here.
@@ -41,13 +45,19 @@
 #   2. Rows and truncation: internal/semantic/commands/search.go:338
 #      (axiSearchRows: file, name, score, content) and search.go:324-332
 #      (axiContentLimit = 200, "… (N more chars, use --full for all)");
-#      internal/semantic/commands/refs.go:273 (writeCallersJSON: default TOON
-#      row file as path:line, name, ref) and refs.go:370 (writeRefsJSON:
-#      file as path:line, ref, resolved, type; external rows omit file).
+#      internal/semantic/commands/refs.go:285 (writeCallersJSON: default TOON
+#      row file as path:line, name, ref) and refs.go:412 (writeRefsJSON:
+#      file as path:line, ref, resolved, type; external rows omit file);
+#      internal/semantic/commands/memory.go:1016 (axiMemoryListRows: id,
+#      question, status, answer cut with axiCut) and memory.go:1487
+#      (axiMemoryStatsRows: id, question, retrieval_count, avg_score).
 #   3. Totals and empty states: search.go:291 (axiResultList carries `total`),
 #      search.go:592-600 (index_empty vs no_match),
-#      internal/semantic/commands/refs.go:198 ("not indexed for edges") and
-#      refs.go:309,415 (callers/refs TOON payloads state `total`).
+#      internal/semantic/commands/refs.go:199 ("not indexed for edges") and
+#      refs.go:310,451 (callers/refs TOON payloads state `total`);
+#      internal/semantic/commands/memory.go:1001,1466
+#      (markMemoryListZeroResults/markMemoryStatsZeroResults: store_empty vs
+#      no_match, with a message and an empty result list, never null).
 #   4. Errors and exit codes: pkg/output/formatter.go:342-395 (PrintError
 #      writes to the formatter's writer, stdout, in every mode: TOON, JSON, or
 #      `Error: ...` under --plain); pkg/output/exit.go:84,87 (2 for usage
@@ -56,7 +66,7 @@
 #      `$B --bogus` names the flag, lists the valid ones and exits 2; test
 #      TestMain_ErrorsGoToStdoutInTheActiveFormat.
 #   5. No prompts: internal/semantic/commands/collection.go:82 and
-#      internal/semantic/commands/memory.go:1482 (refuse without --force /
+#      internal/semantic/commands/memory.go:1651 (refuse without --force /
 #      --yes); test TestCollectionDeleteWithoutForceRefusesAndNeverPrompts.
 #   6. setup: internal/semantic/commands/setup.go:212-228 (the files per
 #      target), setup.go:27 (hook command `index-status || true`),
@@ -70,7 +80,7 @@
 #      the next step); `$B` in an empty directory exits 0 with
 #      `status: not_indexed` and a `help` list.
 #   8. --json schema: search.go:261-262 and :352 (outputJSON prints the bare
-#      result array, no total, no help); refs.go:311,417 (callers/refs --json
+#      result array, no total, no help); refs.go:312,453 (callers/refs --json
 #      keep `count`); test TestSearchJSONAndPlainHaveNoHelp.
 #   9. Call-edge languages: the only ExtractRefs implementations are
 #      internal/semantic/refs_go.go:14,
@@ -110,8 +120,8 @@
       - internal/semantic/treesitter/chunker_rust.go
     source_observations:
       - "TOON is the default output: every command prints TOON unless --json or --plain replaces it (internal/semantic/commands/axi.go, resolveOutputMode). --axi is still accepted and changes nothing; contradictory format flags such as --plain --json exit 2. TOON is encoded through go-axi (pkg/output/axi.go), and the MCP server runs the CLI in TOON (internal/semantic/mcpserver/handlers.go)."
-      - "A default search row carries four fields (file as path:line, name, score, content), and content over 200 characters is cut with a note of how many characters were left out and --full for the rest (internal/semantic/commands/search.go, axiSearchRows and axiCut). Default callers rows carry three fields (file as path:line, name, ref) and refs rows four (file as path:line, ref, resolved, type, external references omitting file), with --full restoring every field (internal/semantic/commands/refs.go, writeCallersJSON and writeRefsJSON)."
-      - "A default search result list states its total, and an empty answer carries status index_empty when the index has no chunks or no_match otherwise (search.go, axiResultList and markZeroResults). callers and refs state their total in the default TOON output and say 'not indexed for edges' instead of returning a bare empty list (internal/semantic/commands/refs.go)."
+      - "A default search row carries four fields (file as path:line, name, score, content), and content over 200 characters is cut with a note of how many characters were left out and --full for the rest (internal/semantic/commands/search.go, axiSearchRows and axiCut). Default callers rows carry three fields (file as path:line, name, ref) and refs rows four (file as path:line, ref, resolved, type, external references omitting file), with --full restoring every field (internal/semantic/commands/refs.go, writeCallersJSON and writeRefsJSON). memory list rows carry id, question, status and the cut answer, and memory stats rows id, question, retrieval_count, avg_score, with --full restoring every field (internal/semantic/commands/memory.go, axiMemoryListRows and axiMemoryStatsRows)."
+      - "A default search result list states its total, and an empty answer carries status index_empty when the index has no chunks or no_match otherwise (search.go, axiResultList and markZeroResults). callers and refs state their total in the default TOON output and say 'not indexed for edges' instead of returning a bare empty list (internal/semantic/commands/refs.go). memory list and memory stats state a total and carry status store_empty with a message over an empty store, no_match when a filter excludes every entry or nothing has been retrieved yet (internal/semantic/commands/memory.go, markMemoryListZeroResults and markMemoryStatsZeroResults)."
       - "Errors go to stdout in the active format: a TOON or JSON object with error: true, or `Error: ...` under --plain (pkg/output/formatter.go, PrintError); stderr carries only diagnostics. Unknown flags and commands, missing arguments and contradictory format flags exit 2 and name what was wrong with the valid choices, as axi.md asks; other failures exit 1 (pkg/output/exit.go). Output of `llm-semantic --bogus` and `llm-semantic index-status 2>/dev/null` in an empty directory shows both."
       - "No command prompts: collection delete without --force and memory stats --prune without --yes refuse with an error naming the flag and exit 1 (internal/semantic/commands/collection.go, memory.go)."
       - "setup registers a SessionStart hook with Claude Code (.claude/settings.json) and Codex (.codex/hooks.json, with [features] hooks = true in .codex/config.toml), and an OpenCode plugin (.opencode/plugins/llm-semantic.ts) on session.created; each runs `llm-semantic index-status || true`, so a session starts with the directory's index status. It also writes the Agent Skill to .claude/skills/llm-semantic/. --target narrows to one agent; only files under the current directory are written (internal/semantic/commands/setup.go; `llm-semantic setup --dry-run` lists the five files)."
