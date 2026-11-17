@@ -88,6 +88,7 @@ func writeCallers(ctx context.Context, w, errW io.Writer, rs semantic.RefStorage
 	if err != nil {
 		return fmt.Errorf("failed to look up callers of %q: %w", symbol, err)
 	}
+	edges = dedupeCallerEdges(edges)
 
 	zero, err := diagnoseWhenUsed(ctx, rs, symbol, "callers of", true, len(edges), jsonOutput, minOutput)
 	if err != nil {
@@ -217,7 +218,7 @@ func openRefStorage(ctx context.Context) (semantic.RefStorage, func(), error) {
 	if storageType == "" || storageType == "sqlite" {
 		indexPath = findIndexPath()
 		if indexPath == "" {
-			return nil, nil, fmt.Errorf("semantic index not found. Run 'llm-semantic index' first")
+			return nil, nil, withHelp(fmt.Errorf("semantic index not found. Run 'llm-semantic index' first"), indexMissingHelp...)
 		}
 	}
 
@@ -315,6 +316,32 @@ func writeCallersJSON(w, errW io.Writer, symbol string, edges []semantic.RefEdge
 	return emitJSON(w, payload, true)
 }
 
+// dedupeCallerEdges collapses call sites that share a caller chunk. Each
+// edge carries the caller's definition line, not the call site, so two calls
+// from one function arrive as identical rows; listing both says "2 callers"
+// when there is one. Reporting the call-site lines themselves is a separate
+// change (plan 28's scope).
+func dedupeCallerEdges(edges []semantic.RefEdge) []semantic.RefEdge {
+	type callerKey struct {
+		file    string
+		line    int
+		name    string
+		ref     string
+		refType semantic.RefType
+	}
+	seen := make(map[callerKey]bool, len(edges))
+	out := make([]semantic.RefEdge, 0, len(edges))
+	for _, e := range edges {
+		k := callerKey{e.FilePath, e.StartLine, e.Name, e.RefName, e.RefType}
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		out = append(out, e)
+	}
+	return out
+}
+
 // collapseRefEdges reports each referenced name once. A method call records
 // both a call edge and a uses_type edge under the same name, so listing every
 // edge shows most references twice. The call edge wins where both exist;
@@ -374,8 +401,9 @@ func writeRefsJSON(w, errW io.Writer, symbol string, edges []semantic.RefEdge, z
 	// `resolved` stays in the default so an external reference never reads as
 	// an indexed one with a missing file. The referring chunk's name is the
 	// queried symbol, already stated in the payload, so --full is where it
-	// lives. --json keeps its pre-AXI schema (board decision, 2026-10-31) and
-	// --min its own compact rows.
+	// lives. --min under TOON goes one field narrower still (it drops type),
+	// never wider than the default (EST-6878). --json keeps its pre-AXI schema
+	// (board decision, 2026-10-31) and --min its own compact rows.
 	shaped := GlobalAXIOutput && !minimal && !full
 	refs := make([]map[string]interface{}, 0, len(edges))
 	for _, e := range edges {
@@ -384,6 +412,14 @@ func writeRefsJSON(w, errW io.Writer, symbol string, edges []semantic.RefEdge, z
 			entry = map[string]interface{}{
 				"ref":      e.RefName,
 				"type":     string(e.RefType),
+				"resolved": e.Resolved(),
+			}
+			if e.Resolved() {
+				entry["file"] = fmt.Sprintf("%s:%d", e.FilePath, e.StartLine)
+			}
+		} else if GlobalAXIOutput && minimal {
+			entry = map[string]interface{}{
+				"ref":      e.RefName,
 				"resolved": e.Resolved(),
 			}
 			if e.Resolved() {

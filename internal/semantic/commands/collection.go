@@ -89,7 +89,7 @@ func runCollectionDelete(ctx context.Context, opts collectionDeleteOpts) error {
 	if storageType == "" || storageType == "sqlite" {
 		indexPath = findIndexPath()
 		if indexPath == "" {
-			return fmt.Errorf("semantic index not found. Run 'llm-semantic index' first")
+			return withHelp(fmt.Errorf("semantic index not found. Run 'llm-semantic index' first"), indexMissingHelp...)
 		}
 	}
 

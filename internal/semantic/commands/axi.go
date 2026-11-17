@@ -151,6 +151,14 @@ var indexMissingHelp = []string{
 	"Run `llm-semantic index-status` to check which index this directory resolves to",
 }
 
+// memoryMissingHelp is the next step when the index a memory command needs
+// does not exist. The memory store is created by `memory store`, not `index`,
+// so the memory commands get their own wording.
+var memoryMissingHelp = []string{
+	"Run `llm-semantic memory store --question <q> --answer <a>` to create the index and store an entry, then repeat this command",
+	"Run `llm-semantic index-status` to check which index this directory resolves to",
+}
+
 // helpPointer is the --axi next step for a malformed invocation of cmd.
 func helpPointer(cmd *cobra.Command) string {
 	return fmt.Sprintf("Run `%s --help` to see its commands and flags", cmd.CommandPath())
