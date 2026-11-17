@@ -85,7 +85,7 @@ func TestCallersAXIDefaultIsShapedAndStatesTotal(t *testing.T) {
 func TestRefsAXIDefaultIsShapedAndStatesTotal(t *testing.T) {
 	withAXI(t)
 	var buf bytes.Buffer
-	if err := formatRefs(&buf, io.Discard, "Run", sampleEdges(), nil, nil, false, false); err != nil {
+	if err := formatRefs(&buf, io.Discard, "Run", sampleEdges(), nil, nil, false, false, false); err != nil {
 		t.Fatalf("formatRefs: %v", err)
 	}
 	out := buf.String()
@@ -102,7 +102,7 @@ func TestRefsAXIDefaultIsShapedAndStatesTotal(t *testing.T) {
 	if strings.Contains(out, "line:") {
 		t.Errorf("default TOON refs row still carries a separate line key:\n%s", out)
 	}
-	if !strings.Contains(out, "file: a.go:12") {
+	if !strings.Contains(out, `file: "a.go:12"`) {
 		t.Errorf("resolved refs row does not carry file as path:line:\n%s", out)
 	}
 	if !strings.Contains(out, "resolved: false") {
@@ -141,9 +141,7 @@ func TestRefsAXIFullRestoresEveryField(t *testing.T) {
 	if !strings.Contains(out, "total: 1\n") {
 		t.Errorf("--full refs does not state total: 1:\n%s", out)
 	}
-	if !strings.Contains(out, "name:") || !strings.Contains(out, "line:") {
-		t.Errorf("--full refs did not restore name and line:\n%s", out)
-	}
+	assertFieldSet(t, toonHeaderFields(t, out, "references"), []string{"file", "line", "name", "ref", "resolved", "type"}, "--full refs row")
 	if strings.Contains(out, "count:") {
 		t.Errorf("--full refs still says count:\n%s", out)
 	}
@@ -170,7 +168,7 @@ func TestCallersAndRefsJSONKeepCountAndFullFields(t *testing.T) {
 	withPlain(t)
 
 	var callers bytes.Buffer
-	if err := formatCallers(&callers, io.Discard, "Process", sampleEdges()[:1], nil, nil, true, false); err != nil {
+	if err := formatCallers(&callers, io.Discard, "Process", sampleEdges()[:1], nil, nil, true, false, false); err != nil {
 		t.Fatalf("formatCallers: %v", err)
 	}
 	var payload struct {
@@ -193,7 +191,7 @@ func TestCallersAndRefsJSONKeepCountAndFullFields(t *testing.T) {
 	}
 
 	var refs bytes.Buffer
-	if err := formatRefs(&refs, io.Discard, "Run", sampleEdges(), nil, nil, true, false); err != nil {
+	if err := formatRefs(&refs, io.Discard, "Run", sampleEdges(), nil, nil, true, false, false); err != nil {
 		t.Fatalf("formatRefs: %v", err)
 	}
 	var refsPayload struct {
@@ -224,7 +222,7 @@ func TestCallersAndRefsMinUnderTOONStateTotal(t *testing.T) {
 	withAXI(t)
 
 	var callers bytes.Buffer
-	if err := formatCallers(&callers, io.Discard, "Process", sampleEdges()[:1], nil, nil, false, true); err != nil {
+	if err := formatCallers(&callers, io.Discard, "Process", sampleEdges()[:1], nil, nil, false, true, false); err != nil {
 		t.Fatalf("formatCallers: %v", err)
 	}
 	if !strings.Contains(callers.String(), "total: 1\n") || strings.Contains(callers.String(), "count:") {
@@ -233,7 +231,7 @@ func TestCallersAndRefsMinUnderTOONStateTotal(t *testing.T) {
 	assertFieldSet(t, toonHeaderFields(t, callers.String(), "callers"), []string{"file", "line", "name"}, "--min callers row")
 
 	var refs bytes.Buffer
-	if err := formatRefs(&refs, io.Discard, "Run", sampleEdges(), nil, nil, false, true); err != nil {
+	if err := formatRefs(&refs, io.Discard, "Run", sampleEdges(), nil, nil, false, true, false); err != nil {
 		t.Fatalf("formatRefs: %v", err)
 	}
 	if !strings.Contains(refs.String(), "total: 2\n") || strings.Contains(refs.String(), "count:") {

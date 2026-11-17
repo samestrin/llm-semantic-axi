@@ -295,8 +295,8 @@ func TestZeroEdgesForANonGoSymbolSayNotIndexedForEdges(t *testing.T) {
 	mixedWorkspace(t)
 
 	for name, run := range map[string]func() error{
-		"callers": func() error { return runCallers(context.Background(), "validate_token", false, false) },
-		"refs":    func() error { return runRefs(context.Background(), "handler", false, false) },
+		"callers": func() error { return runCallers(context.Background(), "validate_token", false, false, false) },
+		"refs":    func() error { return runRefs(context.Background(), "handler", false, false, false) },
 	} {
 		out := captureStdout(t, func() {
 			if err := run(); err != nil {
@@ -318,8 +318,8 @@ func TestZeroEdgesForAnUnknownSymbolSaySymbolNotIndexed(t *testing.T) {
 	mixedWorkspace(t)
 
 	for name, run := range map[string]func() error{
-		"callers": func() error { return runCallers(context.Background(), "NoSuchSymbol", false, false) },
-		"refs":    func() error { return runRefs(context.Background(), "NoSuchSymbol", false, false) },
+		"callers": func() error { return runCallers(context.Background(), "NoSuchSymbol", false, false, false) },
+		"refs":    func() error { return runRefs(context.Background(), "NoSuchSymbol", false, false, false) },
 	} {
 		out := captureStdout(t, func() {
 			if err := run(); err != nil {
@@ -342,7 +342,7 @@ func TestZeroCallersOfAGoSymbolIsAGenuineNone(t *testing.T) {
 	mixedWorkspace(t)
 
 	out := captureStdout(t, func() {
-		if err := runCallers(context.Background(), "Caller", false, false); err != nil {
+		if err := runCallers(context.Background(), "Caller", false, false, false); err != nil {
 			t.Fatalf("runCallers: %v", err)
 		}
 	})
@@ -352,7 +352,9 @@ func TestZeroCallersOfAGoSymbolIsAGenuineNone(t *testing.T) {
 }
 
 // TestZeroEdgesInAXICarryTheStatus: --axi is what an agent reads, so the
-// distinction has to be a field it can branch on, not only prose.
+// distinction has to be a field it can branch on, not only prose. The stated
+// aggregate is `total` since EST-6829 brought the TOON payload to the AXI
+// shape; --json keeps `count` (pinned by TestZeroEdgesJSONKeepsItsSchema).
 func TestZeroEdgesInAXICarryTheStatus(t *testing.T) {
 	mixedWorkspace(t)
 	withAXI(t)
@@ -367,17 +369,17 @@ func TestZeroEdgesInAXICarryTheStatus(t *testing.T) {
 	}
 	for _, c := range cases {
 		out := captureStdout(t, func() {
-			if err := runCallers(context.Background(), c.symbol, false, false); err != nil {
+			if err := runCallers(context.Background(), c.symbol, false, false, false); err != nil {
 				t.Fatalf("runCallers %s: %v", c.symbol, err)
 			}
 		})
-		if !strings.Contains(out, c.status) || !strings.Contains(out, "message:") || !strings.Contains(out, "count: 0\n") {
-			t.Errorf("--axi callers %s lacks %q, a message or the count:\n%s", c.symbol, c.status, out)
+		if !strings.Contains(out, c.status) || !strings.Contains(out, "message:") || !strings.Contains(out, "total: 0\n") {
+			t.Errorf("--axi callers %s lacks %q, a message or the total:\n%s", c.symbol, c.status, out)
 		}
 	}
 
 	refsOut := captureStdout(t, func() {
-		if err := runRefs(context.Background(), "handler", false, false); err != nil {
+		if err := runRefs(context.Background(), "handler", false, false, false); err != nil {
 			t.Fatalf("runRefs: %v", err)
 		}
 	})
@@ -392,7 +394,7 @@ func TestZeroEdgesJSONKeepsItsSchema(t *testing.T) {
 	mixedWorkspace(t)
 
 	out := captureStdout(t, func() {
-		if err := runCallers(context.Background(), "validate_token", true, false); err != nil {
+		if err := runCallers(context.Background(), "validate_token", true, false, false); err != nil {
 			t.Fatalf("runCallers: %v", err)
 		}
 	})
@@ -417,7 +419,7 @@ func TestZeroCallersOfANameInGoAndRubyNamesTheUncoveredLanguage(t *testing.T) {
 	})
 
 	out := captureStdout(t, func() {
-		if err := runCallers(context.Background(), "Caller", false, false); err != nil {
+		if err := runCallers(context.Background(), "Caller", false, false, false); err != nil {
 			t.Fatalf("runCallers: %v", err)
 		}
 	})

@@ -135,14 +135,14 @@ var stalenessCommands = []stalenessCommand{
 	{
 		name: "callers",
 		run: func(ctx context.Context, m outputMode) error {
-			return runCallers(ctx, "Authenticate", m.json, m.min)
+			return runCallers(ctx, "Authenticate", m.json, m.min, false)
 		},
 		want: "Caller",
 	},
 	{
 		name: "refs",
 		run: func(ctx context.Context, m outputMode) error {
-			return runRefs(ctx, "Caller", m.json, m.min)
+			return runRefs(ctx, "Caller", m.json, m.min, false)
 		},
 		want: "Authenticate",
 	},
@@ -469,7 +469,7 @@ func TestStalenessWithAnIndexDirMeasuresTheIndexedRepository(t *testing.T) {
 
 	withAXI(t)
 	out := captureStdout(t, func() {
-		if err := runCallers(context.Background(), "Authenticate", false, false); err != nil {
+		if err := runCallers(context.Background(), "Authenticate", false, false, false); err != nil {
 			t.Fatalf("callers: %v", err)
 		}
 	})

@@ -14,7 +14,7 @@ The session runs `--version`, a `search` and a `callers` query against a release
 
 - Grep finds exact text, not intent. `llm-semantic search "where is the retry logic"` finds the code that does it, whatever it is named.
 - Following a call chain by hand costs an agent many reads. `callers` and `refs` answer from call edges recorded at index time, with no language server, for Go, JavaScript, TypeScript, Python and Rust.
-- Tool output is paid for in tokens. The default output is TOON, a token-dense format built to the [AXI](https://axi.md) principles, with four fields per result, long content cut and a stated total. `--plain` prints text for a person instead.
+- Tool output is paid for in tokens. The default output is TOON, a token-dense format built to the [AXI](https://axi.md) principles, with at most four fields per result, long content cut and a stated total. `--plain` prints text for a person instead.
 - An empty answer is easy to misread as "none exist". Every command says which kind of empty it is: no match, an empty index, a symbol not indexed, a language with no recorded call edges, or an index that is behind the working tree.
 - Code, docs and stored decisions are different questions. Profiles (`code`, `docs`, `memory`, `sprints`) keep each in its own index when each points at its own `--index-dir` (sqlite) or collection (Qdrant), so a docs question is not answered from source.
 
@@ -135,8 +135,8 @@ $ llm-semantic callers EnrichForEmbedding --plain
 | `index-status` | Shows files, chunks, calibration and text-window files. Exits 1 when there is no index. |
 | `search <query>` | Finds code by meaning. `code-search`, `docs-search` and `memory-search` are the same search on one profile. |
 | `multisearch <q1> [q2] ...` | Runs several queries, removes duplicates and boosts results more than one query found. |
-| `callers <symbol>` | Lists what calls a symbol, from recorded call edges. |
-| `refs <symbol>` | Lists what a symbol calls, imports and uses. |
+| `callers <symbol>` | Lists what calls a symbol, from recorded call edges. `--full` restores every field of each row. |
+| `refs <symbol>` | Lists what a symbol calls, imports and uses. `--full` restores every field of each row. |
 | `memory <store\|search\|list\|delete\|promote\|stats\|import>` | Stores and searches question and answer pairs (decisions, clarifications). |
 | `collection delete` | Deletes every chunk in one profile. Requires `--force`. |
 | `setup` | Registers the tool with Claude Code, Codex and OpenCode in this project (see Install). |
@@ -206,9 +206,9 @@ Flags win over environment variables, and environment variables over defaults. S
 
 | Flag | Output |
 |---|---|
-| none | TOON, the token-dense AXI format to give a model: four fields per result, content cut at 200 characters with `--full` for the rest, a `total`, a `status` for empty answers and a `help` list of next steps. |
+| none | TOON, the token-dense AXI format to give a model: at most four fields per result, content cut at 200 characters with `--full` for the rest, a `total`, a `status` for empty answers and a `help` list of next steps. |
 | `--plain` | Human-readable text. |
-| `--json` | JSON. Keeps its pre-AXI schema (full fields, no total) so existing scripts keep working. A search with no results prints `null`, or `[]` when reranking is on, so treat both as empty. |
+| `--json` | JSON. Keeps its pre-AXI schema (full fields, no total) so existing scripts keep working. A search with no results prints `null` when the store returns nothing, or `[]` when reranking or `--hybrid` fusion removes every result (`--min` always prints `[]` when empty), so treat both as empty. |
 | `--min` | A minimal TOON or JSON payload. Not valid with `--plain`. |
 | `--axi` | Accepted so v1 invocations keep working; TOON is already the default, so it changes nothing. |
 
