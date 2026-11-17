@@ -15,6 +15,7 @@ func callersCmd() *cobra.Command {
 	var (
 		jsonOutput bool
 		minOutput  bool
+		full       bool
 	)
 
 	cmd := &cobra.Command{
@@ -30,12 +31,13 @@ Example:
   llm-semantic callers ResolveRefs`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runCallers(cmd.Context(), args[0], jsonOutput, minOutput)
+			return runCallers(cmd.Context(), args[0], jsonOutput, minOutput, full)
 		},
 	}
 
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 	cmd.Flags().BoolVar(&minOutput, "min", false, "Minimal output format")
+	cmd.Flags().BoolVar(&full, "full", false, "Return every field of each result")
 
 	return cmd
 }
@@ -44,6 +46,7 @@ func refsCmd() *cobra.Command {
 	var (
 		jsonOutput bool
 		minOutput  bool
+		full       bool
 	)
 
 	cmd := &cobra.Command{
@@ -58,28 +61,29 @@ Example:
   llm-semantic refs ResolveRefs`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runRefs(cmd.Context(), args[0], jsonOutput, minOutput)
+			return runRefs(cmd.Context(), args[0], jsonOutput, minOutput, full)
 		},
 	}
 
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 	cmd.Flags().BoolVar(&minOutput, "min", false, "Minimal output format")
+	cmd.Flags().BoolVar(&full, "full", false, "Return every field of each result")
 
 	return cmd
 }
 
-func runCallers(ctx context.Context, symbol string, jsonOutput, minOutput bool) error {
+func runCallers(ctx context.Context, symbol string, jsonOutput, minOutput, full bool) error {
 	rs, cleanup, err := openRefStorage(ctx)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	return writeCallers(ctx, os.Stdout, os.Stderr, rs, symbol, jsonOutput, minOutput)
+	return writeCallers(ctx, os.Stdout, os.Stderr, rs, symbol, jsonOutput, minOutput, full)
 }
 
 // writeCallers answers runCallers from an opened call graph view.
-func writeCallers(ctx context.Context, w, errW io.Writer, rs semantic.RefStorage, symbol string, jsonOutput, minOutput bool) error {
+func writeCallers(ctx context.Context, w, errW io.Writer, rs semantic.RefStorage, symbol string, jsonOutput, minOutput, full bool) error {
 	edges, err := rs.GetCallersByName(ctx, symbol)
 	if err != nil {
 		return fmt.Errorf("failed to look up callers of %q: %w", symbol, err)
@@ -91,21 +95,21 @@ func writeCallers(ctx context.Context, w, errW io.Writer, rs semantic.RefStorage
 	}
 
 	stale := refStaleness(ctx, rs)
-	return formatCallers(w, errW, symbol, edges, zero, &stale, jsonOutput, minOutput)
+	return formatCallers(w, errW, symbol, edges, zero, &stale, jsonOutput, minOutput, full)
 }
 
-func runRefs(ctx context.Context, symbol string, jsonOutput, minOutput bool) error {
+func runRefs(ctx context.Context, symbol string, jsonOutput, minOutput, full bool) error {
 	rs, cleanup, err := openRefStorage(ctx)
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	return writeRefs(ctx, os.Stdout, os.Stderr, rs, symbol, jsonOutput, minOutput)
+	return writeRefs(ctx, os.Stdout, os.Stderr, rs, symbol, jsonOutput, minOutput, full)
 }
 
 // writeRefs answers runRefs from an opened call graph view.
-func writeRefs(ctx context.Context, w, errW io.Writer, rs semantic.RefStorage, symbol string, jsonOutput, minOutput bool) error {
+func writeRefs(ctx context.Context, w, errW io.Writer, rs semantic.RefStorage, symbol string, jsonOutput, minOutput, full bool) error {
 	edges, err := rs.GetRefsByName(ctx, symbol)
 	if err != nil {
 		return fmt.Errorf("failed to look up references from %q: %w", symbol, err)
@@ -117,7 +121,7 @@ func writeRefs(ctx context.Context, w, errW io.Writer, rs semantic.RefStorage, s
 	}
 
 	stale := refStaleness(ctx, rs)
-	return formatRefs(w, errW, symbol, edges, zero, &stale, jsonOutput, minOutput)
+	return formatRefs(w, errW, symbol, edges, zero, &stale, jsonOutput, minOutput, full)
 }
 
 // zeroEdges says what an empty callers or refs answer means. Without it the
@@ -244,9 +248,9 @@ func openRefStorage(ctx context.Context) (semantic.RefStorage, func(), error) {
 // formatCallers prints the callers of symbol. zero is the diagnosis of an
 // empty answer; with none, the empty text can only say the symbol may not be
 // indexed.
-func formatCallers(w, errW io.Writer, symbol string, edges []semantic.RefEdge, zero *zeroEdges, stale *semantic.Staleness, jsonOutput, minOutput bool) error {
+func formatCallers(w, errW io.Writer, symbol string, edges []semantic.RefEdge, zero *zeroEdges, stale *semantic.Staleness, jsonOutput, minOutput, full bool) error {
 	if jsonOutput || minOutput || GlobalAXIOutput {
-		return writeCallersJSON(w, errW, symbol, edges, zero, stale, minOutput)
+		return writeCallersJSON(w, errW, symbol, edges, zero, stale, minOutput, full)
 	}
 	defer writeStalenessLine(w, stale)
 
@@ -266,25 +270,45 @@ func formatCallers(w, errW io.Writer, symbol string, edges []semantic.RefEdge, z
 	return nil
 }
 
-func writeCallersJSON(w, errW io.Writer, symbol string, edges []semantic.RefEdge, zero *zeroEdges, stale *semantic.Staleness, minimal bool) error {
+func writeCallersJSON(w, errW io.Writer, symbol string, edges []semantic.RefEdge, zero *zeroEdges, stale *semantic.Staleness, minimal, full bool) error {
+	// The default TOON row is the AXI shape (EST-6829): location as path:line,
+	// the caller's name and the written reference — three fields. The edge type
+	// is always "calls" here, so it is what --full restores, not what the
+	// default spends tokens on. --json keeps its pre-AXI schema (board decision,
+	// 2026-10-31) and --min its own compact rows.
+	shaped := GlobalAXIOutput && !minimal && !full
 	callers := make([]map[string]interface{}, 0, len(edges))
 	for _, e := range edges {
-		entry := map[string]interface{}{
-			"file": e.FilePath,
-			"line": e.StartLine,
-			"name": e.Name,
-		}
-		if !minimal {
-			entry["type"] = string(e.RefType)
-			entry["ref"] = e.RefName
+		var entry map[string]interface{}
+		if shaped {
+			entry = map[string]interface{}{
+				"file": fmt.Sprintf("%s:%d", e.FilePath, e.StartLine),
+				"name": e.Name,
+				"ref":  e.RefName,
+			}
+		} else {
+			entry = map[string]interface{}{
+				"file": e.FilePath,
+				"line": e.StartLine,
+				"name": e.Name,
+			}
+			if !minimal {
+				entry["type"] = string(e.RefType)
+				entry["ref"] = e.RefName
+			}
 		}
 		callers = append(callers, entry)
 	}
 
 	payload := map[string]interface{}{
 		"symbol":  symbol,
-		"count":   len(callers),
 		"callers": callers,
+	}
+	// TOON always states a total (principle 4); --json keeps `count`.
+	if GlobalAXIOutput {
+		payload["total"] = len(callers)
+	} else {
+		payload["count"] = len(callers)
 	}
 	addZeroEdges(payload, zero)
 	addStaleness(errW, payload, stale)
@@ -315,11 +339,11 @@ func collapseRefEdges(edges []semantic.RefEdge) []semantic.RefEdge {
 }
 
 // formatRefs prints the references from symbol; zero is as for formatCallers.
-func formatRefs(w, errW io.Writer, symbol string, edges []semantic.RefEdge, zero *zeroEdges, stale *semantic.Staleness, jsonOutput, minOutput bool) error {
+func formatRefs(w, errW io.Writer, symbol string, edges []semantic.RefEdge, zero *zeroEdges, stale *semantic.Staleness, jsonOutput, minOutput, full bool) error {
 	edges = collapseRefEdges(edges)
 
 	if jsonOutput || minOutput || GlobalAXIOutput {
-		return writeRefsJSON(w, errW, symbol, edges, zero, stale, minOutput)
+		return writeRefsJSON(w, errW, symbol, edges, zero, stale, minOutput, full)
 	}
 	defer writeStalenessLine(w, stale)
 
@@ -343,19 +367,40 @@ func formatRefs(w, errW io.Writer, symbol string, edges []semantic.RefEdge, zero
 	return nil
 }
 
-func writeRefsJSON(w, errW io.Writer, symbol string, edges []semantic.RefEdge, zero *zeroEdges, stale *semantic.Staleness, minimal bool) error {
+func writeRefsJSON(w, errW io.Writer, symbol string, edges []semantic.RefEdge, zero *zeroEdges, stale *semantic.Staleness, minimal, full bool) error {
+	// The default TOON row is the AXI shape (EST-6829): a resolved reference
+	// carries file as path:line, ref, resolved and type — four fields; an
+	// external one carries ref, resolved and type, because it has no location.
+	// `resolved` stays in the default so an external reference never reads as
+	// an indexed one with a missing file. The referring chunk's name is the
+	// queried symbol, already stated in the payload, so --full is where it
+	// lives. --json keeps its pre-AXI schema (board decision, 2026-10-31) and
+	// --min its own compact rows.
+	shaped := GlobalAXIOutput && !minimal && !full
 	refs := make([]map[string]interface{}, 0, len(edges))
 	for _, e := range edges {
-		entry := map[string]interface{}{
-			"ref":      e.RefName,
-			"type":     string(e.RefType),
-			"resolved": e.Resolved(),
-		}
-		if e.Resolved() {
-			entry["file"] = e.FilePath
-			entry["line"] = e.StartLine
-			if !minimal {
-				entry["name"] = e.Name
+		var entry map[string]interface{}
+		if shaped {
+			entry = map[string]interface{}{
+				"ref":      e.RefName,
+				"type":     string(e.RefType),
+				"resolved": e.Resolved(),
+			}
+			if e.Resolved() {
+				entry["file"] = fmt.Sprintf("%s:%d", e.FilePath, e.StartLine)
+			}
+		} else {
+			entry = map[string]interface{}{
+				"ref":      e.RefName,
+				"type":     string(e.RefType),
+				"resolved": e.Resolved(),
+			}
+			if e.Resolved() {
+				entry["file"] = e.FilePath
+				entry["line"] = e.StartLine
+				if !minimal {
+					entry["name"] = e.Name
+				}
 			}
 		}
 		refs = append(refs, entry)
@@ -363,8 +408,13 @@ func writeRefsJSON(w, errW io.Writer, symbol string, edges []semantic.RefEdge, z
 
 	payload := map[string]interface{}{
 		"symbol":     symbol,
-		"count":      len(refs),
 		"references": refs,
+	}
+	// TOON always states a total (principle 4); --json keeps `count`.
+	if GlobalAXIOutput {
+		payload["total"] = len(refs)
+	} else {
+		payload["count"] = len(refs)
 	}
 	addZeroEdges(payload, zero)
 	addStaleness(errW, payload, stale)

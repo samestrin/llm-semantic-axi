@@ -42,7 +42,7 @@ func TestCallersFindsTheCallingFunction(t *testing.T) {
 	callGraphWorkspace(t)
 
 	out := captureStdout(t, func() {
-		if err := runCallers(context.Background(), "Authenticate", false, false); err != nil {
+		if err := runCallers(context.Background(), "Authenticate", false, false, false); err != nil {
 			t.Fatalf("runCallers: %v", err)
 		}
 	})
@@ -61,7 +61,7 @@ func TestRefsListsWhatASymbolCalls(t *testing.T) {
 	callGraphWorkspace(t)
 
 	out := captureStdout(t, func() {
-		if err := runRefs(context.Background(), "Caller", false, false); err != nil {
+		if err := runRefs(context.Background(), "Caller", false, false, false); err != nil {
 			t.Fatalf("runRefs: %v", err)
 		}
 	})
@@ -80,7 +80,7 @@ func TestCallersOfAnUnindexedSymbolIsNotAnError(t *testing.T) {
 	callGraphWorkspace(t)
 
 	out := captureStdout(t, func() {
-		if err := runCallers(context.Background(), "NoSuchSymbol", false, false); err != nil {
+		if err := runCallers(context.Background(), "NoSuchSymbol", false, false, false); err != nil {
 			t.Fatalf("runCallers must not error on an empty result: %v", err)
 		}
 	})
@@ -96,7 +96,7 @@ func TestRefsJSONCarriesTheSymbolAndCount(t *testing.T) {
 	callGraphWorkspace(t)
 
 	out := captureStdout(t, func() {
-		if err := runRefs(context.Background(), "Caller", true, false); err != nil {
+		if err := runRefs(context.Background(), "Caller", true, false, false); err != nil {
 			t.Fatalf("runRefs: %v", err)
 		}
 	})
@@ -128,8 +128,8 @@ func TestRefCommandsNeedAnIndex(t *testing.T) {
 	useEmbedder(t, newFakeEmbedder(t))
 
 	for name, run := range map[string]func() error{
-		"callers": func() error { return runCallers(context.Background(), "X", false, false) },
-		"refs":    func() error { return runRefs(context.Background(), "X", false, false) },
+		"callers": func() error { return runCallers(context.Background(), "X", false, false, false) },
+		"refs":    func() error { return runRefs(context.Background(), "X", false, false, false) },
 	} {
 		err := run()
 		if err == nil {
@@ -185,7 +185,7 @@ func TestCallersAndRefsAnswerForTypeScriptAndJavaScript(t *testing.T) {
 		{"jsHelper", "other.js", "jsRun"},
 	} {
 		callers := captureStdout(t, func() {
-			if err := runCallers(context.Background(), c.symbol, false, false); err != nil {
+			if err := runCallers(context.Background(), c.symbol, false, false, false); err != nil {
 				t.Fatalf("runCallers: %v", err)
 			}
 		})
@@ -196,7 +196,7 @@ func TestCallersAndRefsAnswerForTypeScriptAndJavaScript(t *testing.T) {
 		}
 
 		refs := captureStdout(t, func() {
-			if err := runRefs(context.Background(), c.caller, false, false); err != nil {
+			if err := runRefs(context.Background(), c.caller, false, false, false); err != nil {
 				t.Fatalf("runRefs: %v", err)
 			}
 		})
@@ -228,8 +228,8 @@ func TestCallersOfAPreEdgeJSTSIndexIsNotIndexedForEdges(t *testing.T) {
 	withAXI(t)
 
 	for name, run := range map[string]func() error{
-		"callers": func() error { return runCallers(context.Background(), "helper", false, false) },
-		"refs":    func() error { return runRefs(context.Background(), "run", false, false) },
+		"callers": func() error { return runCallers(context.Background(), "helper", false, false, false) },
+		"refs":    func() error { return runRefs(context.Background(), "run", false, false, false) },
 	} {
 		out := captureStdout(t, func() {
 			if err := run(); err != nil {
@@ -276,7 +276,7 @@ func TestCallersAndRefsAnswerForPython(t *testing.T) {
 	pythonWorkspace(t)
 
 	callers := captureStdout(t, func() {
-		if err := runCallers(context.Background(), "py_helper", false, false); err != nil {
+		if err := runCallers(context.Background(), "py_helper", false, false, false); err != nil {
 			t.Fatalf("runCallers: %v", err)
 		}
 	})
@@ -287,7 +287,7 @@ func TestCallersAndRefsAnswerForPython(t *testing.T) {
 	}
 
 	refs := captureStdout(t, func() {
-		if err := runRefs(context.Background(), "py_run", false, false); err != nil {
+		if err := runRefs(context.Background(), "py_run", false, false, false); err != nil {
 			t.Fatalf("runRefs: %v", err)
 		}
 	})
@@ -318,8 +318,8 @@ func TestCallersOfAPrePythonEdgeIndexIsNotIndexedForEdges(t *testing.T) {
 	withAXI(t)
 
 	for name, run := range map[string]func() error{
-		"callers": func() error { return runCallers(context.Background(), "py_helper", false, false) },
-		"refs":    func() error { return runRefs(context.Background(), "py_run", false, false) },
+		"callers": func() error { return runCallers(context.Background(), "py_helper", false, false, false) },
+		"refs":    func() error { return runRefs(context.Background(), "py_run", false, false, false) },
 	} {
 		out := captureStdout(t, func() {
 			if err := run(); err != nil {
@@ -353,7 +353,7 @@ export function onResize() {
 	runIndexIn(t, ".", indexOpts{skipCalibration: true})
 
 	out := captureStdout(t, func() {
-		if err := runRefs(context.Background(), "onResize", true, false); err != nil {
+		if err := runRefs(context.Background(), "onResize", true, false, false); err != nil {
 			t.Fatalf("runRefs: %v", err)
 		}
 	})
@@ -421,7 +421,7 @@ func TestCallersAndRefsAnswerForRust(t *testing.T) {
 	rustWorkspace(t)
 
 	callers := captureStdout(t, func() {
-		if err := runCallers(context.Background(), "rs_helper", false, false); err != nil {
+		if err := runCallers(context.Background(), "rs_helper", false, false, false); err != nil {
 			t.Fatalf("runCallers: %v", err)
 		}
 	})
@@ -432,7 +432,7 @@ func TestCallersAndRefsAnswerForRust(t *testing.T) {
 	}
 
 	selfCallers := captureStdout(t, func() {
-		if err := runCallers(context.Background(), "rs_stop", false, false); err != nil {
+		if err := runCallers(context.Background(), "rs_stop", false, false, false); err != nil {
 			t.Fatalf("runCallers: %v", err)
 		}
 	})
@@ -443,7 +443,7 @@ func TestCallersAndRefsAnswerForRust(t *testing.T) {
 	}
 
 	refs := captureStdout(t, func() {
-		if err := runRefs(context.Background(), "rs_run", false, false); err != nil {
+		if err := runRefs(context.Background(), "rs_run", false, false, false); err != nil {
 			t.Fatalf("runRefs: %v", err)
 		}
 	})
@@ -474,8 +474,8 @@ func TestCallersOfAPreRustEdgeIndexIsNotIndexedForEdges(t *testing.T) {
 	withAXI(t)
 
 	for name, run := range map[string]func() error{
-		"callers": func() error { return runCallers(context.Background(), "rs_helper", false, false) },
-		"refs":    func() error { return runRefs(context.Background(), "rs_run", false, false) },
+		"callers": func() error { return runCallers(context.Background(), "rs_helper", false, false, false) },
+		"refs":    func() error { return runRefs(context.Background(), "rs_run", false, false, false) },
 	} {
 		out := captureStdout(t, func() {
 			if err := run(); err != nil {

@@ -37,8 +37,8 @@ func TestCallersAndRefsNameAChunkWithNoRecordedLanguage(t *testing.T) {
 	db.Close()
 
 	runs := map[string]func() error{
-		"callers": func() error { return runCallers(context.Background(), "py_helper", false, false) },
-		"refs":    func() error { return runRefs(context.Background(), "py_run", false, false) },
+		"callers": func() error { return runCallers(context.Background(), "py_helper", false, false, false) },
+		"refs":    func() error { return runRefs(context.Background(), "py_run", false, false, false) },
 	}
 	for name, run := range runs {
 		plain := captureStdout(t, func() {
@@ -100,10 +100,10 @@ func TestZeroEdgeDiagnosisRunsOnlyWhereItsResultIsPrinted(t *testing.T) {
 	}
 	writers := map[string]func(*bytes.Buffer, bool, bool) error{
 		"callers": func(b *bytes.Buffer, j, m bool) error {
-			return writeCallers(context.Background(), b, io.Discard, failingLangs{}, "sym", j, m)
+			return writeCallers(context.Background(), b, io.Discard, failingLangs{}, "sym", j, m, false)
 		},
 		"refs": func(b *bytes.Buffer, j, m bool) error {
-			return writeRefs(context.Background(), b, io.Discard, failingLangs{}, "sym", j, m)
+			return writeRefs(context.Background(), b, io.Discard, failingLangs{}, "sym", j, m, false)
 		},
 	}
 	for _, tc := range cases {
@@ -149,7 +149,7 @@ func TestCallersOfALanguageWithOnlyImportEdgesIsNotIndexedForEdges(t *testing.T)
 	withAXI(t)
 
 	var callers bytes.Buffer
-	if err := writeCallers(context.Background(), &callers, io.Discard, importsOnly{}, "Run", false, false); err != nil {
+	if err := writeCallers(context.Background(), &callers, io.Discard, importsOnly{}, "Run", false, false, false); err != nil {
 		t.Fatalf("callers: %v", err)
 	}
 	if !strings.Contains(callers.String(), "status: "+zeroNotIndexedForEdges) {
@@ -157,7 +157,7 @@ func TestCallersOfALanguageWithOnlyImportEdgesIsNotIndexedForEdges(t *testing.T)
 	}
 
 	var refs bytes.Buffer
-	if err := writeRefs(context.Background(), &refs, io.Discard, importsOnly{}, "Run", false, false); err != nil {
+	if err := writeRefs(context.Background(), &refs, io.Discard, importsOnly{}, "Run", false, false, false); err != nil {
 		t.Fatalf("refs: %v", err)
 	}
 	if strings.Contains(refs.String(), "calls") || !strings.Contains(refs.String(), "imports") {
@@ -173,10 +173,10 @@ func TestCallersOfALanguageWithOnlyImportEdgesIsNotIndexedForEdges(t *testing.T)
 func TestCallersAndRefsWriteTheJSONStalenessLineToTheGivenStderr(t *testing.T) {
 	writers := map[string]func(out, errOut *bytes.Buffer, j, m bool) error{
 		"callers": func(out, errOut *bytes.Buffer, j, m bool) error {
-			return writeCallers(context.Background(), out, errOut, importsOnly{}, "Run", j, m)
+			return writeCallers(context.Background(), out, errOut, importsOnly{}, "Run", j, m, false)
 		},
 		"refs": func(out, errOut *bytes.Buffer, j, m bool) error {
-			return writeRefs(context.Background(), out, errOut, importsOnly{}, "Run", j, m)
+			return writeRefs(context.Background(), out, errOut, importsOnly{}, "Run", j, m, false)
 		},
 	}
 	for name, write := range writers {

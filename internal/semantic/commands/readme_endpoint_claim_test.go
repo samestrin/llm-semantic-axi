@@ -35,10 +35,10 @@ func TestCallersAndRefsEndpointUseByBackend(t *testing.T) {
 	useEmbedder(t, fe)
 
 	captureStdout(t, func() {
-		if err := runCallers(context.Background(), "validate_token", false, false); err != nil {
+		if err := runCallers(context.Background(), "validate_token", false, false, false); err != nil {
 			t.Fatalf("runCallers: %v", err)
 		}
-		if err := runRefs(context.Background(), "validate_token", false, false); err != nil {
+		if err := runRefs(context.Background(), "validate_token", false, false, false); err != nil {
 			t.Fatalf("runRefs: %v", err)
 		}
 	})

@@ -90,7 +90,7 @@ type refsJSON struct {
 func refsOf(t *testing.T, symbol string) refsJSON {
 	t.Helper()
 	out := captureStdout(t, func() {
-		if err := runRefs(context.Background(), symbol, true, false); err != nil {
+		if err := runRefs(context.Background(), symbol, true, false, false); err != nil {
 			t.Fatalf("runRefs(%s): %v", symbol, err)
 		}
 	})
@@ -125,7 +125,7 @@ func TestThisCallNeverLinksOutsideItsClass(t *testing.T) {
 
 	for _, symbol := range []string{"fetch", "#purge"} {
 		out := captureStdout(t, func() {
-			if err := runCallers(context.Background(), symbol, false, false); err != nil {
+			if err := runCallers(context.Background(), symbol, false, false, false); err != nil {
 				t.Fatalf("runCallers(%s): %v", symbol, err)
 			}
 		})
@@ -158,7 +158,7 @@ func TestThisCallResolvesToItsOwnClass(t *testing.T) {
 
 	for _, symbol := range []string{"get", "#drop"} {
 		out := captureStdout(t, func() {
-			if err := runCallers(context.Background(), symbol, false, false); err != nil {
+			if err := runCallers(context.Background(), symbol, false, false, false); err != nil {
 				t.Fatalf("runCallers(%s): %v", symbol, err)
 			}
 		})
@@ -189,7 +189,7 @@ func TestThisCallToAClassOfTheSameNameStaysUnresolved(t *testing.T) {
 	}
 
 	out := captureStdout(t, func() {
-		if err := runCallers(context.Background(), "get", false, false); err != nil {
+		if err := runCallers(context.Background(), "get", false, false, false); err != nil {
 			t.Fatalf("runCallers(get): %v", err)
 		}
 	})
@@ -215,7 +215,7 @@ func (this *T) Run() {
 `})
 
 	out := captureStdout(t, func() {
-		if err := runCallers(context.Background(), "Method", false, false); err != nil {
+		if err := runCallers(context.Background(), "Method", false, false, false); err != nil {
 			t.Fatalf("runCallers(Method): %v", err)
 		}
 	})
