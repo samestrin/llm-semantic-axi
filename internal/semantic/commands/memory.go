@@ -865,6 +865,7 @@ func memoryListCmd() *cobra.Command {
 		status     string
 		jsonOutput bool
 		minOutput  bool
+		full       bool
 	)
 
 	cmd := &cobra.Command{
@@ -880,6 +881,7 @@ Example:
 				status:     status,
 				jsonOutput: jsonOutput,
 				minOutput:  minOutput,
+				full:       full,
 			})
 		},
 	}
@@ -888,6 +890,7 @@ Example:
 	cmd.Flags().StringVar(&status, "status", "", "Filter by status (pending, promoted)")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 	cmd.Flags().BoolVar(&minOutput, "min", false, "Minimal output format")
+	cmd.Flags().BoolVar(&full, "full", false, "Return every field and the whole text of each memory")
 
 	return cmd
 }
@@ -897,6 +900,7 @@ type memoryListOpts struct {
 	status     string
 	jsonOutput bool
 	minOutput  bool
+	full       bool
 }
 
 func runMemoryList(ctx context.Context, opts memoryListOpts) error {
@@ -1083,6 +1087,7 @@ func memoryStatsCmd() *cobra.Command {
 		skipConfirm   bool
 		jsonOutput    bool
 		minOutput     bool
+		full          bool
 	)
 
 	cmd := &cobra.Command{
@@ -1117,6 +1122,7 @@ Examples:
 				skipConfirm:   skipConfirm,
 				jsonOutput:    jsonOutput,
 				minOutput:     minOutput,
+				full:          full,
 			})
 		},
 	}
@@ -1132,6 +1138,7 @@ Examples:
 	cmd.Flags().BoolVar(&skipConfirm, "yes", false, "Confirm the prune (required with --prune; the command never prompts)")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 	cmd.Flags().BoolVar(&minOutput, "min", false, "Minimal output format")
+	cmd.Flags().BoolVar(&full, "full", false, "Return every field of each stats row")
 
 	// Require flags together
 	cmd.MarkFlagsRequiredTogether("history", "id")
@@ -1152,6 +1159,7 @@ type memoryStatsOpts struct {
 	skipConfirm   bool
 	jsonOutput    bool
 	minOutput     bool
+	full          bool
 }
 
 func runMemoryStats(ctx context.Context, opts memoryStatsOpts) error {
