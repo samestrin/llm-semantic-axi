@@ -52,6 +52,7 @@ func memoryStoreCmd() *cobra.Command {
 		files      string
 		jsonOutput bool
 		minOutput  bool
+		full       bool
 	)
 
 	cmd := &cobra.Command{
@@ -76,6 +77,7 @@ Example:
 				files:      files,
 				jsonOutput: jsonOutput,
 				minOutput:  minOutput,
+				full:       full,
 			})
 		},
 	}
@@ -89,6 +91,7 @@ Example:
 	cmd.Flags().StringVar(&files, "files", "", "Comma-separated file references (e.g., 'src/auth.ts,src/db.go')")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 	cmd.Flags().BoolVar(&minOutput, "min", false, "Minimal output format")
+	cmd.Flags().BoolVar(&full, "full", false, "Print the whole stored answer instead of cutting it at 200 characters")
 
 	cmd.MarkFlagRequired("question")
 	cmd.MarkFlagRequired("answer")
@@ -106,6 +109,7 @@ type memoryStoreOpts struct {
 	files      string
 	jsonOutput bool
 	minOutput  bool
+	full       bool
 }
 
 func runMemoryStore(ctx context.Context, opts memoryStoreOpts) error {
@@ -192,7 +196,13 @@ func runMemoryStore(ctx context.Context, opts memoryStoreOpts) error {
 		}
 		if !opts.minOutput {
 			result["question"] = entry.Question
-			result["answer"] = entry.Answer
+			// The default TOON confirmation cuts the echoed answer like any
+			// other content; the database holds it whole either way.
+			if GlobalAXIOutput && !opts.full {
+				result["answer"] = axiCut(entry.Answer)
+			} else {
+				result["answer"] = entry.Answer
+			}
 		}
 		if opts.filePath != "" {
 			result["file_path"] = opts.filePath

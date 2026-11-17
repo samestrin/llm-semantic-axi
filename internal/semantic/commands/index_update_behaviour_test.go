@@ -3,6 +3,7 @@ package commands
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
+	"github.com/samestrin/llm-semantic-axi/v2/pkg/output"
 )
 
 // buildIndex indexes the working directory so an update has something to
@@ -58,6 +60,71 @@ func TestIndexUpdateFullScanReindexesAChangedFile(t *testing.T) {
 	}
 	if fe.callCount() == callsBefore {
 		t.Error("the update re-indexed nothing; no embedding call was made")
+	}
+}
+
+// TestIndexUpdateFailsWhenAFileFails is the index-update half of EST-7026
+// finding 1: an update whose changed file could not be embedded printed the
+// error and exited 0, so a commit hook or agent believed the index was current.
+// It must fail in every format, with TOON and --json carrying error: true in
+// the one document they print, and the changed file must not count as updated.
+func TestIndexUpdateFailsWhenAFileFails(t *testing.T) {
+	for _, mode := range []string{"plain", "toon", "json"} {
+		t.Run(mode, func(t *testing.T) {
+			dir := newWorkspace(t)
+			useEmbedder(t, newPoisonedEmbedder(t, "Unembeddable"))
+			writeFile(t, filepath.Join(dir, "sample.go"), sampleGoSource)
+			buildIndex(t)
+
+			writeFile(t, filepath.Join(dir, "sample.go"), sampleGoSource+"\n// Unembeddable is refused by the embedder.\nfunc Unembeddable() {}\n")
+			opts := updateOpts{noGit: true}
+			switch mode {
+			case "plain":
+				withPlain(t)
+			case "toon":
+				withAXI(t)
+			case "json":
+				withPlain(t)
+				opts.jsonOutput = true
+			}
+
+			var err error
+			out := captureStdout(t, func() {
+				err = runIndexUpdate(context.Background(), ".", opts)
+			})
+
+			if err == nil {
+				t.Fatalf("runIndexUpdate returned nil when the changed file failed, so the process exits 0:\n%s", out)
+			}
+			if output.ExitCodeFor(err) != 1 {
+				t.Errorf("exit code %d, want 1", output.ExitCodeFor(err))
+			}
+			var reported *output.ReportedError
+			if got := errors.As(err, &reported); got != (mode != "plain") {
+				t.Errorf("already-reported = %v in %s mode: main would print the error twice or not at all", got, mode)
+			}
+			if !strings.Contains(err.Error(), "1 of 1 files failed") {
+				t.Errorf("error = %q, want it to count the failed file", err)
+			}
+			switch mode {
+			case "plain":
+				if !strings.Contains(out, "Skipped 1 files with errors") || !strings.Contains(out, "Updated 0 files") {
+					t.Errorf("the summary does not show the failure:\n%s", out)
+				}
+			case "toon":
+				for _, want := range []string{"error: true", "message: ", "files_skipped: 1", "files_updated: 0"} {
+					if !strings.Contains(out, want) {
+						t.Errorf("TOON output lacks %q:\n%s", want, out)
+					}
+				}
+			case "json":
+				var payload map[string]any
+				decodeJSON(t, out, &payload)
+				if payload["error"] != true || payload["files_skipped"] != float64(1) {
+					t.Errorf("the JSON payload does not report the failure:\n%s", out)
+				}
+			}
+		})
 	}
 }
 
@@ -302,9 +369,12 @@ func TestIndexUpdateCountsAndNamesAFileItCouldNotProcess(t *testing.T) {
 			writeFile(t, filepath.Join(dir, "sample.go"), sampleGoSource)
 			mode.setup(t, dir)
 
+			// A partial update exits 1 (EST-7026); the summary still says
+			// what was done and what failed.
 			text := captureStdout(t, func() {
-				if err := runIndexUpdate(context.Background(), ".", mode.opts); err != nil {
-					t.Fatalf("runIndexUpdate: %v", err)
+				err := runIndexUpdate(context.Background(), ".", mode.opts)
+				if err == nil || !strings.Contains(err.Error(), "1 of 2 files failed") {
+					t.Errorf("runIndexUpdate error = %v, want the partial failure counted", err)
 				}
 			})
 			if !strings.Contains(text, "Updated 1 files") {
@@ -321,8 +391,8 @@ func TestIndexUpdateCountsAndNamesAFileItCouldNotProcess(t *testing.T) {
 			jsonOpts := mode.opts
 			jsonOpts.jsonOutput = true
 			out := captureStdout(t, func() {
-				if err := runIndexUpdate(context.Background(), ".", jsonOpts); err != nil {
-					t.Fatalf("runIndexUpdate --json: %v", err)
+				if err := runIndexUpdate(context.Background(), ".", jsonOpts); err == nil {
+					t.Error("runIndexUpdate --json returned nil for a partial failure")
 				}
 			})
 			var payload struct {

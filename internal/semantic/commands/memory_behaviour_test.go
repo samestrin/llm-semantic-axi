@@ -90,6 +90,66 @@ func TestMemoryStoreRoundTripsThroughTheIndex(t *testing.T) {
 	}
 }
 
+// TestMemoryStoreCutsTheEchoedAnswerUnderTOON defends EST-7026 finding 3: the
+// README and docs/axi-conformance.md row 3 say default output cuts content over
+// 200 characters, but `memory store` echoed a long answer back whole. The
+// default TOON confirmation cuts it with the size hint, --full restores it, and
+// --json keeps its pre-AXI shape with the whole answer. Whatever is printed,
+// the database holds the whole answer.
+func TestMemoryStoreCutsTheEchoedAnswerUnderTOON(t *testing.T) {
+	long := strings.Repeat("a", axiContentLimit) + strings.Repeat("b", 50)
+	cases := []struct {
+		name    string
+		axi     bool
+		opts    memoryStoreOpts
+		wantCut bool
+	}{
+		{"default TOON", true, memoryStoreOpts{}, true},
+		{"--full", true, memoryStoreOpts{full: true}, false},
+		{"--json", false, memoryStoreOpts{jsonOutput: true}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			newWorkspace(t)
+			if c.axi {
+				withAXI(t)
+			} else {
+				withPlain(t)
+			}
+			useEmbedder(t, newFakeEmbedder(t))
+			opts := c.opts
+			opts.question, opts.answer = "What is the long answer?", long
+
+			out := captureStdout(t, func() {
+				if err := runMemoryStore(context.Background(), opts); err != nil {
+					t.Fatalf("runMemoryStore: %v", err)
+				}
+			})
+
+			cut := strings.Contains(out, "(50 more chars, use --full for all)")
+			if cut != c.wantCut {
+				t.Errorf("answer cut = %v, want %v:\n%s", cut, c.wantCut, out)
+			}
+			if whole := strings.Contains(out, long); whole == c.wantCut {
+				t.Errorf("whole answer printed = %v, want %v:\n%s", whole, !c.wantCut, out)
+			}
+
+			storage, err := semantic.NewSQLiteStorage(filepath.Join(".index", "semantic.db"), 0)
+			if err != nil {
+				t.Fatalf("reopen index: %v", err)
+			}
+			defer storage.Close()
+			entries, err := storage.ListMemory(context.Background(), semantic.MemoryListOptions{})
+			if err != nil {
+				t.Fatalf("ListMemory: %v", err)
+			}
+			if len(entries) != 1 || entries[0].Answer != long {
+				t.Errorf("the stored answer is not the whole answer: %+v", entries)
+			}
+		})
+	}
+}
+
 // TestMemoryStoreWritesTheMarkdownFile covers --file-path, including the parent
 // directory it has to create first.
 func TestMemoryStoreWritesTheMarkdownFile(t *testing.T) {

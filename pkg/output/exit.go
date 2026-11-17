@@ -86,3 +86,12 @@ func ExitCodeFor(err error) int {
 	}
 	return int(goaxi.ExitError)
 }
+
+// ReportedError is a failure the command has already printed as its result, as
+// `index` does when files fail: the counts and the errors list are the report,
+// and printing an error object after them would put two documents on stdout.
+// main exits with ExitCodeFor(err) and prints nothing more.
+type ReportedError struct{ Err error }
+
+func (e *ReportedError) Error() string { return e.Err.Error() }
+func (e *ReportedError) Unwrap() error { return e.Err }
