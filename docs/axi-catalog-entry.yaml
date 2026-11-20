@@ -4,35 +4,22 @@
 # kunchenguid/axi. The owner submits it (the PR is public).
 #
 # Steps the owner runs:
-#   1. Tag the release this entry describes (v2.0.0, the release that makes
-#      TOON the default) and replace `reviewed_revision` below with
-#      `git rev-parse v2.0.0^{commit}`. Until then it names the main commit the
-#      observations were checked at (see the tag-commit note below).
-#   2. Fork kunchenguid/axi and branch from its main.
-#   3. Append the `- name: llm-semantic-axi` entry below (without these comments)
+#   1. Fork kunchenguid/axi and branch from its main.
+#   2. Append the `- name: llm-semantic-axi` entry below (without these comments)
 #      to the `community` list in catalog.yaml.
-#   4. Run `pnpm run docs:gen` to regenerate README.md and docs/index.html, and
+#   3. Run `pnpm run docs:gen` to regenerate README.md and docs/index.html, and
 #      commit all three files together (CI `docs:check` fails on drift).
-#   5. Push through the `no-mistakes` gate: `no-mistakes init --fork-url
+#   4. Push through the `no-mistakes` gate: `no-mistakes init --fork-url
 #      git@github.com:<you>/axi.git`, then `git push no-mistakes`. Pushing from
 #      a fork needs no-mistakes v1.30.1 or newer. It runs the pipeline and
 #      opens the PR.
 #
-# Tag-commit note: `reviewed_revision` must be the commit a release tag points
-# at (`git rev-parse <tag>^{commit}`), not a branch head. Repo PRs are
-# squash-merged, so a branch commit can vanish; a tag cannot. Every observation
-# below was re-checked against the source this release ships: main d2da5e1 plus
-# the final pre-tag fixes (callers/refs default TOON rows shaped to the AXI
-# minimum with a stated total and --full, README zero-result wording, this
-# file's line references, memory list/stats default TOON rows shaped with a
-# stated total, --full and a store_empty state, missing-index help on every
-# command that needs an index, refs --min no wider than the default, callers
-# rows deduped per caller, the README Quick start output re-run from the
-# release tree, `index` and `index-update` exiting 1 when a file fails, and the
-# `memory store` confirmation cutting its echoed answer). The c7645ab SHA below is stale and stays only until
-# the owner replaces it with the v2.0.0 tag commit, as step 1 says. If any file
-# listed under reviewed_components changes before the tag, re-run the checks
-# listed here.
+# Tag-commit note: `reviewed_revision` is 3cad1c0, the commit the v2.0.0 tag
+# carries (`git rev-parse v2.0.0^{commit}`), not a branch head. Repo PRs are
+# squash-merged, so a branch commit can vanish; a tag cannot. Every file:line
+# below and every `$B` probe was re-checked at 3cad1c0. If a later release
+# moves the pin, re-run the checks listed here at its tag and replace
+# `reviewed_revision` with that tag's commit.
 #
 # How each source observation was checked (paths are relative to the repo
 # root; `$B` is `go build -o $B ./cmd/llm-semantic`, run in an empty
@@ -102,7 +89,7 @@
   description: "Semantic code search over a local embedding index, with `callers` and `refs` call-edge lookup for Go, JavaScript, TypeScript, Python and Rust."
   admission:
     status: exception
-    reviewed_revision: c7645abc6bae51b4f0f2361cdbf03ff404d546d9
+    reviewed_revision: 3cad1c001ef528b53c300ec8cc178bb3ab5a7020
     reviewed_components:
       - README.md
       - docs/axi-conformance.md
