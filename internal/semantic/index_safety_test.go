@@ -359,3 +359,24 @@ func TestReadIndexFileRefusesSpecialFiles(t *testing.T) {
 		t.Errorf("readIndexFile(ok) = %q, %v", b, err)
 	}
 }
+
+// TestIndexHonoursWorktreeExclude: in a git worktree or submodule .git is a
+// file pointing at the git directory, whose commondir holds info/exclude.
+func TestIndexHonoursWorktreeExclude(t *testing.T) {
+	base := t.TempDir()
+	root := filepath.Join(base, "wt")
+	writeTree(t, base, map[string]string{
+		"common/info/exclude":           "excluded.txt\n",
+		"common/worktrees/wt/commondir": "../..\n",
+		"wt/.git":                       "gitdir: ../common/worktrees/wt\n",
+		"wt/kept.txt":                   "kept",
+		"wt/excluded.txt":               "LEAK-excluded",
+	})
+
+	_, rec, storage := runSafetyIndex(t, root)
+
+	assertIndexed(t, indexedRel(t, storage, root), "kept.txt")
+	if rec.sent("LEAK") {
+		t.Error("a file the worktree's info/exclude names reached the embedding API")
+	}
+}
