@@ -155,3 +155,52 @@ func TestRedactURL(t *testing.T) {
 		}
 	}
 }
+
+// EST-8278 item 1 (review): the reranker builds its URL and reports a failed
+// send the same way, so the same leak and the same path bug applied to it.
+func TestRerankerJoinsPathBeforeQuery(t *testing.T) {
+	var gotPath, gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotPath, gotQuery = r.URL.Path, r.URL.RawQuery
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"results":[{"index":0,"relevance_score":0.5}]}`))
+	}))
+	defer srv.Close()
+
+	cases := []struct{ base, path, query string }{
+		{srv.URL + "/", "/v1/rerank", ""},
+		{srv.URL + "/?api-key=K", "/v1/rerank", "api-key=K"},
+		{srv.URL + "/proxy/?api-key=K", "/proxy/v1/rerank", "api-key=K"},
+	}
+	for _, c := range cases {
+		r, err := NewReranker(RerankerConfig{APIURL: c.base, Model: "m"})
+		if err != nil {
+			t.Fatalf("NewReranker: %v", err)
+		}
+		if _, err := r.Rerank(context.Background(), "q", []string{"d"}); err != nil {
+			t.Fatalf("%s: Rerank: %v", c.base, err)
+		}
+		if gotPath != c.path || gotQuery != c.query {
+			t.Errorf("%s: request path %q query %q, want %q %q", c.base, gotPath, gotQuery, c.path, c.query)
+		}
+	}
+}
+
+func TestRerankerSendErrorDoesNotPrintURLCredentials(t *testing.T) {
+	base := strings.Replace(closedServerURL(t), "http://", "http://user:S3CRETPASS@", 1) + "/?api-key=S3CRETKEY"
+	r, err := NewReranker(RerankerConfig{APIURL: base, Model: "m"})
+	if err != nil {
+		t.Fatalf("NewReranker: %v", err)
+	}
+
+	_, err = r.Rerank(context.Background(), "q", []string{"d"})
+
+	if err == nil {
+		t.Fatal("a send to a closed server succeeded")
+	}
+	for _, secret := range []string{"S3CRETPASS", "S3CRETKEY"} {
+		if strings.Contains(err.Error(), secret) {
+			t.Errorf("reranker send error shows %q: %v", secret, err)
+		}
+	}
+}

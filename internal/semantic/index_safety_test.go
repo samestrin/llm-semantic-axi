@@ -324,7 +324,12 @@ func TestIndexUpdateGitAppliesTheSameRules(t *testing.T) {
 		".hidden/x.txt":    "LEAK-hidden",
 		"big.txt":          strings.Repeat("LEAK-big ", MaxIndexFileSize/9+1),
 		"two.txt":          "kept",
+		"ignored.txt":      "LEAK-ignored",
+		".gitignore":       "ignored.txt\n",
 	})
+	// git add -A skips an ignored file; force it in, as a file tracked
+	// before the rule was added would be.
+	gitRun(t, repo, "add", "-f", "ignored.txt")
 	gitRun(t, repo, "add", "-A")
 	gitRun(t, repo, "commit", "-m", "more")
 
