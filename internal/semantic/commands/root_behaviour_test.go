@@ -602,6 +602,10 @@ func TestBareRunWithQdrantNeverReportsNotIndexed(t *testing.T) {
 			if !strings.Contains(out, "qdrant") {
 				t.Errorf("qdrant bare run did not report the qdrant status:\n%s", out)
 			}
+			// EST-8171 item 2: every bare run carries bin and description.
+			if !strings.Contains(out, "bin") || !strings.Contains(out, rootDescription) {
+				t.Errorf("qdrant bare run %s lacks bin or description:\n%s", flag, out)
+			}
 		})
 	}
 }

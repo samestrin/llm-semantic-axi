@@ -55,6 +55,14 @@ type indexStatusAXI struct {
 	Help []string `json:"help,omitempty"`
 }
 
+// homeStatus is the bare run's status: the index-status payload led by the
+// executable path and description, as the not_indexed home view is.
+type homeStatus struct {
+	Bin         string `json:"bin"`
+	Description string `json:"description"`
+	indexStatusAXI
+}
+
 // withStatusHelp adds next steps to the --axi status. An index with no files
 // or chunks is not a working one, so it is pointed at indexing, not search.
 func withStatusHelp(s indexStatusJSON) any {
@@ -91,6 +99,12 @@ func indexStatusCmd() *cobra.Command {
 }
 
 func runIndexStatus(ctx context.Context, jsonOutput bool) error {
+	return runStatus(ctx, jsonOutput, false)
+}
+
+// runStatus reports the index status; home adds the bare run's bin and
+// description to the structured payload.
+func runStatus(ctx context.Context, jsonOutput, home bool) error {
 	indexPath := findIndexPath()
 	if indexPath == "" && storageType != "qdrant" {
 		// An error, not a printed notice: exiting 0 here told a script that
@@ -121,14 +135,19 @@ func runIndexStatus(ctx context.Context, jsonOutput bool) error {
 		if embedderOffline {
 			collection := resolveCollectionName()
 			if jsonOutput || GlobalAXIOutput {
-				// indent=false: compact here too, for the same reason.
-				return emitJSON(os.Stdout, map[string]interface{}{
+				offline := map[string]interface{}{
 					"indexed":          "unknown",
 					"storage":          "qdrant",
 					"collection":       collection,
 					"embedder_offline": true,
 					"message":          "Embedder service unavailable. Cannot retrieve full index status.",
-				}, false)
+				}
+				if home {
+					offline["bin"] = executableDisplayPath()
+					offline["description"] = rootDescription
+				}
+				// indent=false: compact here too, for the same reason.
+				return emitJSON(os.Stdout, offline, false)
 			}
 			fmt.Printf("Semantic Index Status (Limited - Embedder Offline)\n")
 			fmt.Printf("==================================================\n")
@@ -187,6 +206,16 @@ func runIndexStatus(ctx context.Context, jsonOutput bool) error {
 			result.Collection = resolveCollectionName()
 		} else {
 			result.Path = indexPath
+		}
+		if home {
+			// Under --json Help stays nil, so the status fields are
+			// indexStatusJSON's.
+			out := homeStatus{Bin: executableDisplayPath(), Description: rootDescription}
+			out.indexStatusAXI = indexStatusAXI{indexStatusJSON: result}
+			if h, ok := withStatusHelp(result).(indexStatusAXI); ok {
+				out.indexStatusAXI = h
+			}
+			return emitStdout(out)
 		}
 		return emitStdout(withStatusHelp(result))
 	}
