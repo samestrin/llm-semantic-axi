@@ -793,6 +793,11 @@ const maxImportSourceSize = 16 << 20
 // readImportSource reads a memory import source that is a regular file no
 // larger than maxImportSourceSize.
 func readImportSource(path string) ([]byte, error) {
+	// Checked before opening: opening a FIFO blocks until a writer appears.
+	// os.Stat follows a symlink, so a link to a FIFO is refused too.
+	if info, err := os.Stat(path); err == nil && !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("--source %s is not a regular file", path)
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read source file: %w", err)
