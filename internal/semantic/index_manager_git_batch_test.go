@@ -417,7 +417,7 @@ func TestIndexManager_CollectFiles(t *testing.T) {
 		return out
 	}
 
-	all, err := mgr.collectFiles(tmpDir, nil, nil, false)
+	all, _, err := mgr.collectFiles(tmpDir, nil, nil, false)
 	if err != nil {
 		t.Fatalf("collectFiles() error = %v", err)
 	}
@@ -427,7 +427,7 @@ func TestIndexManager_CollectFiles(t *testing.T) {
 		t.Errorf("collectFiles() = %v, want %v (README.md has no chunker)", got, want)
 	}
 
-	filtered, err := mgr.collectFiles(tmpDir, nil, []string{"vendor"}, true)
+	filtered, _, err := mgr.collectFiles(tmpDir, nil, []string{"vendor"}, true)
 	if err != nil {
 		t.Fatalf("collectFiles() error = %v", err)
 	}
@@ -437,7 +437,7 @@ func TestIndexManager_CollectFiles(t *testing.T) {
 		t.Errorf("collectFiles(exclude vendor, ExcludeTests) = %v, want %v", got, want)
 	}
 
-	deep, err := mgr.collectFiles(tmpDir, nil, []string{"**/deep/**"}, false)
+	deep, _, err := mgr.collectFiles(tmpDir, nil, []string{"**/deep/**"}, false)
 	if err != nil {
 		t.Fatalf("collectFiles() error = %v", err)
 	}
@@ -447,7 +447,7 @@ func TestIndexManager_CollectFiles(t *testing.T) {
 		}
 	}
 
-	only, err := mgr.collectFiles(tmpDir, []string{"util.go"}, nil, false)
+	only, _, err := mgr.collectFiles(tmpDir, []string{"util.go"}, nil, false)
 	if err != nil {
 		t.Fatalf("collectFiles() error = %v", err)
 	}

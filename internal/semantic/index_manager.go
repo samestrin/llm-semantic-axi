@@ -131,12 +131,20 @@ type IndexResult struct {
 	// not be reached, so the command can say how to fix that rather than leave
 	// it in the per-file strings.
 	Unreachable error `json:"-"`
+	// FilesWithheld counts, by reason, files that passed the include, exclude
+	// and language checks but were not read: a likely-secret name, a symlink
+	// out of the root, not a regular file, too large, or binary. Omitted when
+	// none were.
+	FilesWithheld map[string]int `json:"files_withheld,omitempty"`
 }
 
 // UpdateResult contains statistics from an update operation
 type UpdateResult struct {
 	FilesUpdated int `json:"files_updated"`
 	FilesRemoved int `json:"files_removed"`
+	// FilesWithheld is IndexResult.FilesWithheld for the files this update
+	// looked at.
+	FilesWithheld map[string]int `json:"files_withheld,omitempty"`
 	// FilesSkipped counts files that could not be processed; Errors names each
 	// one with its error, and is empty rather than nil on a clean run.
 	FilesSkipped  int      `json:"files_skipped"`
@@ -227,10 +235,11 @@ func (m *IndexManager) Index(ctx context.Context, rootPath string, opts IndexOpt
 	}
 
 	// Walk directory and collect files
-	files, err := m.collectFiles(rootPath, opts.Includes, opts.Excludes, opts.ExcludeTests)
+	files, withheld, err := m.collectFiles(rootPath, opts.Includes, opts.Excludes, opts.ExcludeTests)
 	if err != nil {
 		return nil, fmt.Errorf("failed to collect files: %w", err)
 	}
+	result.FilesWithheld = withheld
 
 	fellBack, err := m.storedFallbacks(ctx)
 	if err != nil {
@@ -467,7 +476,7 @@ func (m *IndexManager) indexWithCrossFileBatching(ctx context.Context, files []s
 		// Apply overlap and parent context enrichment
 		overlapCfg := m.getOverlapConfig()
 		if overlapCfg.OverlapLines > 0 || overlapCfg.IncludeParentContext {
-			if fileContent, err := os.ReadFile(file); err == nil {
+			if fileContent, err := readIndexFile(file); err == nil {
 				chunks = ApplyOverlap(chunks, fileContent, overlapCfg)
 			}
 		}
@@ -633,7 +642,7 @@ func (m *IndexManager) chunkFile(filePath string) ([]Chunk, string, FallbackReas
 	}
 
 	// Read file content
-	content, err := os.ReadFile(filePath)
+	content, err := readIndexFile(filePath)
 	if err != nil {
 		return nil, "", FallbackNone, fmt.Errorf("failed to read file: %w", err)
 	}
@@ -723,7 +732,7 @@ func (m *IndexManager) processFileWithDiff(ctx context.Context, filePath string,
 	// Apply overlap and parent context enrichment
 	overlapCfg := m.getOverlapConfig()
 	if overlapCfg.OverlapLines > 0 || overlapCfg.IncludeParentContext {
-		if fileContent, err := os.ReadFile(filePath); err == nil {
+		if fileContent, err := readIndexFile(filePath); err == nil {
 			chunks = ApplyOverlap(chunks, fileContent, overlapCfg)
 		}
 	}
@@ -810,7 +819,7 @@ func (m *IndexManager) processFileWithDiff(ctx context.Context, filePath string,
 	// rewritten, so edges recorded against the previous ones are stale and any
 	// call added by this edit has not been recorded at all.
 	if chunker, ok := m.factory.GetByExtension(filePath); ok {
-		if fileContent, err := os.ReadFile(filePath); err == nil {
+		if fileContent, err := readIndexFile(filePath); err == nil {
 			m.extractAndStoreRefs(ctx, chunker, filePath, fileContent, chunks)
 		}
 	}
@@ -845,10 +854,11 @@ func (m *IndexManager) Update(ctx context.Context, rootPath string, opts UpdateO
 	}
 
 	// Collect current files
-	files, err := m.collectFiles(rootPath, opts.Includes, opts.Excludes, opts.ExcludeTests)
+	files, withheld, err := m.collectFiles(rootPath, opts.Includes, opts.Excludes, opts.ExcludeTests)
 	if err != nil {
 		return nil, fmt.Errorf("failed to collect files: %w", err)
 	}
+	result.FilesWithheld = withheld
 
 	currentFiles := make(map[string]bool)
 	for _, file := range files {
@@ -925,6 +935,10 @@ func (m *IndexManager) UpdateGit(ctx context.Context, rootPath string, gitRef st
 	if err != nil {
 		return nil, fmt.Errorf("failed to get git changes: %w", err)
 	}
+	policy, err := newPathPolicy(rootPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve %s: %w", rootPath, err)
+	}
 
 	// Filter changed files against include/exclude patterns and supported extensions.
 	// A changed file that fails is counted and named in the result.
@@ -932,6 +946,13 @@ func (m *IndexManager) UpdateGit(ctx context.Context, rootPath string, gitRef st
 		absPath := filepath.Join(rootPath, relPath)
 
 		if !m.fileMatchesFilters(rootPath, absPath, opts.Includes, opts.Excludes, opts.ExcludeTests) {
+			continue
+		}
+		if policy.skipPath(absPath) {
+			continue
+		}
+		if reason := policy.withhold(absPath); reason != "" {
+			result.FilesWithheld = addWithheld(result.FilesWithheld, reason)
 			continue
 		}
 
@@ -1109,9 +1130,25 @@ func (m *IndexManager) Status(ctx context.Context) (*IndexStats, error) {
 	return m.storage.Stats(ctx)
 }
 
-// collectFiles walks the directory and collects files matching criteria
-func (m *IndexManager) collectFiles(rootPath string, includes, excludes []string, excludeTests bool) ([]string, error) {
+// addWithheld counts one withheld file under reason.
+func addWithheld(counts map[string]int, reason string) map[string]int {
+	if counts == nil {
+		counts = map[string]int{}
+	}
+	counts[reason]++
+	return counts
+}
+
+// collectFiles walks the directory and collects files matching criteria. It
+// skips hidden and git-ignored directories and files, and counts by reason
+// the files it withholds (see pathPolicy).
+func (m *IndexManager) collectFiles(rootPath string, includes, excludes []string, excludeTests bool) ([]string, map[string]int, error) {
 	var files []string
+	var withheld map[string]int
+	policy, err := newPathPolicy(rootPath)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	// Build effective exclude list by combining user excludes with test patterns
 	allExcludes := excludes
@@ -1140,7 +1177,7 @@ func (m *IndexManager) collectFiles(rootPath string, includes, excludes []string
 		}
 	}
 
-	err := filepath.WalkDir(rootPath, func(path string, d fs.DirEntry, err error) error {
+	err = filepath.WalkDir(rootPath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -1150,9 +1187,13 @@ func (m *IndexManager) collectFiles(rootPath string, includes, excludes []string
 		if relPath == "" {
 			relPath = "."
 		}
+		absPath := filepath.Join(policy.root, relPath)
 
 		// Skip excluded directories
 		if d.IsDir() {
+			if policy.skipDir(absPath) {
+				return filepath.SkipDir
+			}
 			// Check simple patterns (against directory name)
 			for _, pattern := range simpleExcludes {
 				if m, _ := filepath.Match(pattern, d.Name()); m {
@@ -1237,11 +1278,19 @@ func (m *IndexManager) collectFiles(rootPath string, includes, excludes []string
 			return nil
 		}
 
+		if policy.ignored(absPath, false) {
+			return nil
+		}
+		if reason := policy.withhold(absPath); reason != "" {
+			withheld = addWithheld(withheld, reason)
+			return nil
+		}
+
 		files = append(files, path)
 		return nil
 	})
 
-	return files, err
+	return files, withheld, err
 }
 
 // processFile chunks and embeds a single file
@@ -1275,7 +1324,7 @@ func (m *IndexManager) prepareFile(ctx context.Context, filePath string, domain 
 	}
 
 	// Read file content
-	content, err := os.ReadFile(filePath)
+	content, err := readIndexFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
@@ -1520,7 +1569,7 @@ func (m *IndexManager) resolveRefs(ctx context.Context) {
 // file cannot be read or its stored hash cannot be fetched; callers count the file failed.
 func (m *IndexManager) fileNeedsUpdate(ctx context.Context, filePath string) (bool, error) {
 	// Get file content
-	content, err := os.ReadFile(filePath)
+	content, err := readIndexFile(filePath)
 	if err != nil {
 		return false, err
 	}
