@@ -146,7 +146,7 @@ func (e *CohereEmbedder) EmbedBatch(ctx context.Context, texts []string) ([][]fl
 	// Execute request
 	resp, err := e.client.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		return nil, unreachable(e.config.BaseURL, true, err)
 	}
 	defer resp.Body.Close()
 

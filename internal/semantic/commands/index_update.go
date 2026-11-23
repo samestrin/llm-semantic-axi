@@ -202,6 +202,7 @@ func reportUpdateResult(result *semantic.UpdateResult, jsonOutput bool) error {
 	var failed error
 	if result.FilesSkipped > 0 {
 		failed = incompleteError("updated", result.FilesUpdated, result.FilesSkipped)
+		failed = explainUnreachable(failed, result.Unreachable)
 	}
 
 	if jsonOutput || GlobalAXIOutput {

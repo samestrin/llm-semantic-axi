@@ -190,7 +190,7 @@ func (e *OpenRouterEmbedder) EmbedBatch(ctx context.Context, texts []string) ([]
 	}
 
 	if lastErr != nil {
-		return nil, fmt.Errorf("failed to send request: %w", lastErr)
+		return nil, unreachable(e.config.BaseURL, true, lastErr)
 	}
 	defer resp.Body.Close()
 

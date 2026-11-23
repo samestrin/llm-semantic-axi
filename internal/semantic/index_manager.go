@@ -127,6 +127,10 @@ type IndexResult struct {
 	// it as an empty slice, so a clean run prints "errors": [] rather than null
 	// or no key at all.
 	Errors []string `json:"errors"`
+	// Unreachable is set when a file failed because the embedding API could
+	// not be reached, so the command can say how to fix that rather than leave
+	// it in the per-file strings.
+	Unreachable error `json:"-"`
 }
 
 // UpdateResult contains statistics from an update operation
@@ -146,6 +150,8 @@ type UpdateResult struct {
 	FallbackFiles              []string `json:"fallback_files,omitempty"`
 	FallbackChunkerFailedFiles []string `json:"fallback_chunker_failed_files,omitempty"`
 	Mode                       string   `json:"mode"` // "git" or "full"
+	// Unreachable: see IndexResult.Unreachable.
+	Unreachable error `json:"-"`
 }
 
 // IndexManager handles indexing operations
@@ -355,6 +361,7 @@ func (m *IndexManager) indexPerFile(ctx context.Context, files []string, opts In
 		if processErr != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", file, processErr))
 			result.FilesSkipped++
+			result.Unreachable = firstUnreachable(result.Unreachable, processErr)
 		} else {
 			result.FilesProcessed++
 		}
@@ -681,6 +688,16 @@ func (r *UpdateResult) addFallback(path string, reason FallbackReason) {
 func (r *UpdateResult) addSkipped(path string, err error) {
 	r.FilesSkipped++
 	r.Errors = append(r.Errors, fmt.Sprintf("%s: %v", path, err))
+	r.Unreachable = firstUnreachable(r.Unreachable, err)
+}
+
+// firstUnreachable keeps the first embedder-unreachable error seen in a run.
+func firstUnreachable(seen, err error) error {
+	var u *EmbedderUnreachableError
+	if seen == nil && errors.As(err, &u) {
+		return u
+	}
+	return seen
 }
 
 // processFileWithDiff re-indexes a file using content-aware diffing.

@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -383,6 +384,7 @@ func runIndex(ctx context.Context, path string, opts indexOpts) error {
 	var failed error
 	if result.FilesSkipped > 0 {
 		failed = incompleteError("indexed", result.FilesProcessed, result.FilesSkipped)
+		failed = explainUnreachable(failed, result.Unreachable)
 	}
 
 	// Output results
@@ -442,19 +444,36 @@ func incompleteError(verb string, done, failed int) error {
 	return fmt.Errorf("the index is incomplete: %d of %d files failed and the rest were %s; see errors", failed, done+failed, verb)
 }
 
+// explainUnreachable appends the embedder-unreachable error, when files failed
+// for that reason, to a run's failure, so its plain message and help reach the
+// caller instead of staying in the per-file errors.
+func explainUnreachable(failed, unreachable error) error {
+	if unreachable == nil {
+		return failed
+	}
+	return fmt.Errorf("%w; %w", failed, unreachable)
+}
+
 // failurePayload adds the error: true and message every failure carries under
 // TOON and --json to a result that is itself the failure report. Both are
-// omitted on success, so a clean run's payload is unchanged.
+// omitted on success, so a clean run's payload is unchanged. Help is the TOON
+// next step, as PrintError gives every other failure.
 type failurePayload struct {
-	Error   bool   `json:"error,omitempty"`
-	Message string `json:"message,omitempty"`
+	Error   bool     `json:"error,omitempty"`
+	Message string   `json:"message,omitempty"`
+	Help    []string `json:"help,omitempty"`
 }
 
 func newFailurePayload(err error) failurePayload {
 	if err == nil {
 		return failurePayload{}
 	}
-	return failurePayload{Error: true, Message: err.Error()}
+	p := failurePayload{Error: true, Message: err.Error()}
+	var h output.AXIHelper
+	if GlobalAXIOutput && errors.As(err, &h) {
+		p.Help = h.AXIHelp()
+	}
+	return p
 }
 
 // reportResult prints a TOON or JSON result and, when the run failed, returns
