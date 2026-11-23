@@ -21,10 +21,12 @@ BINARIES=(
 echo -e "${YELLOW}llm-semantic installer${NC}"
 echo "======================"
 
-# Root is needed only when the install directory is not writable, as
-# /usr/local/bin is not for most users.
+# Create the install directory if it is missing, so the check below tests the
+# real target. Root is needed only when it is not writable, as /usr/local/bin
+# is not for most users.
+mkdir -p "$INSTALL_DIR" 2>/dev/null || true
 if [[ $EUID -ne 0 && ! -w "$INSTALL_DIR" ]]; then
-    echo -e "${RED}Error: This script must be run with sudo${NC}"
+    echo -e "${RED}Error: $INSTALL_DIR is not writable; run with sudo, or set INSTALL_DIR to a directory you can write${NC}"
     echo "Usage: sudo ./install.sh"
     exit 1
 fi

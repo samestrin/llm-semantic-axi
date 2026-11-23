@@ -133,3 +133,25 @@ func TestInstallShUsesGtimeoutWhenThatIsAllThereIs(t *testing.T) {
 		t.Errorf("verify step did not use gtimeout:\n%s", out)
 	}
 }
+
+// TestInstallShCreatesAMissingInstallDir defends the review of EST-8249: an
+// INSTALL_DIR that did not exist yet failed the writability check and was
+// misreported as "must be run with sudo" (and, as root, died at cp).
+func TestInstallShCreatesAMissingInstallDir(t *testing.T) {
+	repo, bin, _ := installEnv(t, nil)
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash not available")
+	}
+	dest := filepath.Join(t.TempDir(), "not", "yet")
+	cmd := exec.Command(bash, filepath.Join(repo, "install.sh"))
+	cmd.Dir = t.TempDir()
+	cmd.Env = []string{"PATH=" + bin, "HOME=" + t.TempDir(), "INSTALL_DIR=" + dest}
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("install.sh into a missing INSTALL_DIR failed: %v\n%s", err, out)
+	}
+	if _, err := os.Stat(filepath.Join(dest, "llm-semantic")); err != nil {
+		t.Errorf("llm-semantic not installed into %s: %v", dest, err)
+	}
+}

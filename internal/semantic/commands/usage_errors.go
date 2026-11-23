@@ -191,19 +191,16 @@ func flagValueError(cmd *cobra.Command, err error) error {
 	return nil
 }
 
-// valueKind says in words what a flag's value must be.
+// valueKind says in words what a flag's value must be. It covers the flag
+// types the commands declare; a new type falls to the generic wording.
 func valueKind(f *pflag.Flag) string {
 	switch t := f.Value.Type(); t {
-	case "int", "int8", "int16", "int32", "int64", "uint", "uint8", "uint16", "uint32", "uint64":
+	case "int":
 		return "a whole number, such as 30"
-	case "float32", "float64":
+	case "float64":
 		return "a number, such as 0.5"
 	case "bool":
 		return "true or false"
-	case "duration":
-		return "a duration, such as 30s or 5m"
-	case "intSlice", "int32Slice", "int64Slice", "uintSlice":
-		return "comma-separated whole numbers"
 	case "stringSlice", "stringArray":
 		return "a value (comma-separated or repeated)"
 	default:

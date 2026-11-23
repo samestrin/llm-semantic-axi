@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"errors"
 	"os"
 	"strings"
 	"testing"
@@ -191,5 +192,52 @@ func TestCommandsShowExamplesInHelp(t *testing.T) {
 				t.Errorf("%s --help has %d examples, want 2-3:\n%s", name, n, c.Example)
 			}
 		})
+	}
+}
+
+// TestFlagValueErrorsNameEveryFlagTypeInUse defends the review of EST-8249:
+// valueKind's wording was only exercised for int and float flags. Each flag
+// type a command declares must get its own words, end to end.
+func TestFlagValueErrorsNameEveryFlagTypeInUse(t *testing.T) {
+	cases := map[string]struct {
+		args []string
+		want []string
+	}{
+		"bool":         {[]string{"search", "foo", "--hybrid=nope"}, []string{`"nope"`, "--hybrid", "true or false"}},
+		"string slice": {[]string{"search", "foo", "--profiles"}, []string{"--profiles needs a value", "comma-separated or repeated"}},
+		"string array": {[]string{"setup", "--target"}, []string{"--target needs a value", "comma-separated or repeated"}},
+		"string":       {[]string{"search", "foo", "--path"}, []string{"--path needs a value", "a string value"}},
+		"shorthand":    {[]string{"search", "foo", "-n"}, []string{"--top needs a value", "whole number"}},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			newWorkspace(t)
+			err := executeRoot(t, tc.args...)
+			assertUsageError(t, err, tc.want, []string{"strconv.", "flag needs an argument"}, "Usage: `llm-semantic")
+		})
+	}
+}
+
+// TestFlagValueErrorLeavesUnrecognisedErrorsToTheCaller: when the error names
+// a flag the command does not have, or a value that will not unquote, there
+// is nothing to translate; flagError's generic path must handle it instead.
+func TestFlagValueErrorLeavesUnrecognisedErrorsToTheCaller(t *testing.T) {
+	cmd, _, err := RootCmd().Find([]string{"search"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, e := range map[string]error{
+		"unknown flag in value error": errors.New(`invalid argument "x" for "--nosuch" flag: bad`),
+		"value that will not unquote": errors.New(`invalid argument "\q" for "--top" flag: bad`),
+		"unknown flag needs value":    errors.New("flag needs an argument: --nosuch"),
+		"unrelated error":             errors.New("something else"),
+	} {
+		if got := flagValueError(cmd, e); got != nil {
+			t.Errorf("%s: translated to %v, want nil", name, got)
+		}
+	}
+	// And the generic path still classifies such an error as exit 2.
+	if code := output.ExitCodeFor(flagError(cmd, errors.New(`invalid argument "x" for "--nosuch" flag: bad`))); code != 2 {
+		t.Errorf("generic flag error exit = %d, want 2", code)
 	}
 }
