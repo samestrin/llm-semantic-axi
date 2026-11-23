@@ -128,3 +128,27 @@ func TestIndexDirTildeIsExpanded(t *testing.T) {
 		t.Errorf("index not written under $HOME/idx: %v", err)
 	}
 }
+
+// TestValidFusionAndRecencyValuesPassTheFlagCheck: the EST-8336 range checks
+// must accept good values too, or a check that refuses everything would ship.
+// Boundary values are included.
+func TestValidFusionAndRecencyValuesPassTheFlagCheck(t *testing.T) {
+	cases := [][]string{
+		{"--fusion-k", "1"}, {"--fusion-k", "60"},
+		{"--fusion-alpha", "0"}, {"--fusion-alpha", "0.7"}, {"--fusion-alpha", "1"},
+		{"--recency-factor", "0"}, {"--recency-factor", "0.5"},
+		{"--recency-decay", "0.5"}, {"--recency-decay", "7"},
+	}
+	for _, flag := range cases {
+		t.Run(strings.Join(flag, " "), func(t *testing.T) {
+			newWorkspace(t)
+			err := executeRoot(t, append([]string{"search", "x"}, flag...)...)
+			if err != nil && strings.Contains(err.Error(), "invalid value") {
+				t.Errorf("a valid %s was refused: %v", strings.Join(flag, " "), err)
+			}
+			if code := output.ExitCodeFor(err); code == 2 {
+				t.Errorf("exit 2 for a valid %s: %v", strings.Join(flag, " "), err)
+			}
+		})
+	}
+}

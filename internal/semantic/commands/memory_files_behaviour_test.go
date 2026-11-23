@@ -16,7 +16,16 @@ func TestMemoryImportRefusesANonRegularOrHugeSource(t *testing.T) {
 	big.Truncate(maxImportSourceSize + 1)
 	big.Close()
 	os.Symlink("/dev/zero", "zero.yaml")
-	for _, src := range []string{"/dev/zero", "zero.yaml", "big.yaml", "."} {
+	// Opening a FIFO blocks until a writer appears, so it must be refused
+	// before it is opened (review of EST-8336).
+	sources := []string{"/dev/zero", "zero.yaml", "big.yaml", "."}
+	if ok, err := mkfifo("pipe.yaml"); err != nil {
+		t.Fatal(err)
+	} else if ok {
+		os.Symlink("pipe.yaml", "pipe-link.yaml")
+		sources = append(sources, "pipe.yaml", "pipe-link.yaml")
+	}
+	for _, src := range sources {
 		t.Run(src, func(t *testing.T) {
 			fe := newFakeEmbedder(t)
 			useEmbedder(t, fe)
