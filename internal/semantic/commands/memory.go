@@ -746,6 +746,9 @@ type ClarificationFile struct {
 	Entries []ClarificationEntry `yaml:"entries"`
 }
 
+// maxImportSourceSize caps the clarification YAML memory import reads.
+const maxImportSourceSize = 16 << 20
+
 func runMemoryImport(ctx context.Context, opts memoryImportOpts) error {
 	// Read and parse YAML
 	data, err := os.ReadFile(opts.source)
