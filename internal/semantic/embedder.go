@@ -138,7 +138,10 @@ func (e *Embedder) EmbedBatch(ctx context.Context, texts []string) ([][]float32,
 	}
 
 	// Build HTTP request
-	url := e.config.APIURL + "/v1/embeddings"
+	url, err := joinURL(e.config.APIURL, "/v1/embeddings")
+	if err != nil {
+		return nil, err
+	}
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
