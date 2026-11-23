@@ -93,6 +93,7 @@ func GetToolDefinitions() []ToolDefinition {
 							},
 							"top_k": {
 								"type": "integer",
+								"minimum": 1,
 								"description": "Max results (default: 10)"
 							},
 							"threshold": {
@@ -194,6 +195,7 @@ func GetToolDefinitions() []ToolDefinition {
 							},
 							"top_k": {
 								"type": "integer",
+								"minimum": 1,
 								"description": "Max results after dedup (default: 15)"
 							},
 							"threshold": {
@@ -248,6 +250,7 @@ func GetToolDefinitions() []ToolDefinition {
 							},
 							"top_k": {
 								"type": "integer",
+								"minimum": 1,
 								"description": "Max results (default: 10)"
 							},
 							"threshold": {
@@ -289,6 +292,7 @@ func GetToolDefinitions() []ToolDefinition {
 							},
 							"top_k": {
 								"type": "integer",
+								"minimum": 1,
 								"description": "Max results (default: 10)"
 							},
 							"threshold": {
@@ -322,6 +326,7 @@ func GetToolDefinitions() []ToolDefinition {
 							},
 							"top_k": {
 								"type": "integer",
+								"minimum": 1,
 								"description": "Max results (default: 10)"
 							},
 							"threshold": {
@@ -509,6 +514,7 @@ func GetToolDefinitions() []ToolDefinition {
 							},
 							"top_k": {
 								"type": "integer",
+								"minimum": 1,
 								"description": "Max results (default: 10)"
 							},
 							"threshold": {
