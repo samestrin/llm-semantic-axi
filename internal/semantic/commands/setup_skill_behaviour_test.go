@@ -222,3 +222,21 @@ func TestSkillTextRound2(t *testing.T) {
 		t.Errorf("%s points at a repo-relative docs/ path, which a user's project does not have", committedSkillRel)
 	}
 }
+
+// TestSkillStaleAdviceDoesNotLoop (EST-8278 item 6): the skill said `stale`
+// is fixed by `index-update`, which diffs from HEAD~1 only, so an index
+// several commits behind, or with untracked files, stayed stale and the agent
+// ran it again. The advice must name the full rescan and say that
+// uncommitted files keep the state stale.
+func TestSkillStaleAdviceDoesNotLoop(t *testing.T) {
+	_, committed := readCommittedSkill(t)
+	text := string(committed)
+	for _, want := range []string{"`llm-semantic index-update --no-git`", "rescans every file", "until they are committed"} {
+		if !strings.Contains(text, want) {
+			t.Errorf("%s does not say %q", committedSkillRel, want)
+		}
+	}
+	if strings.Contains(text, "behind the working tree; run `llm-semantic index-update`.") {
+		t.Errorf("%s still says plain index-update fixes stale", committedSkillRel)
+	}
+}
