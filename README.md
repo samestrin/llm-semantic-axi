@@ -8,7 +8,7 @@
 
 ![A terminal session running --version, a search and a callers query](docs/demo/llm-semantic.gif)
 
-The session runs `--version`, a `search` and a `callers` query against a release binary, with nothing mocked. [docs/demo/README.md](docs/demo/README.md) has the tape and the steps to render the GIF again.
+The session runs `--version`, a `search` and a `callers` query against a release binary, with nothing mocked. The GIF is still the v1.2.0 render: it types `--axi`, which v2 does not need because TOON is the default, and its `callers` rows predate v2.0.0's default row shape. [docs/demo/README.md](docs/demo/README.md) has the tape and the steps to render the GIF again.
 
 ## Why
 

@@ -35,7 +35,7 @@ This writes `docs/demo/llm-semantic.gif`. Check the result is under 30 seconds b
 
 `llm-semantic.gif` was rendered on 2026-11-11 from `main` stamped `v1.2.0`, against a Qwen3-Embedding-4B endpoint with its reranker and a fresh index of this repository. It runs **22.6 seconds** (565 frames at 40 ms each), inside the 30-second budget.
 
-That render predates v2.0.0: it types `--axi` after `search` and `callers`, which v1.2.0 needed for TOON. The tape no longer passes it, because TOON is the default and `--axi` is a no-op, so the output is the same format but the typed commands differ. Re-render before tagging v2.0.0 (see [the release checklist](../release-checklist.md)) and replace this paragraph with the new render's date, version and timing.
+That render is still the v1.2.0 one; it was not re-rendered for v2.0.0 or later. It types `--axi` after `search` and `callers`, which v1.2.0 needed for TOON, and its rows are v1.2.0's: v2.0.0 changed the default TOON rows of `callers` (see the CHANGELOG). The tape no longer passes `--axi`, because TOON is the default. Re-rendering needs VHS and a live embedding endpoint; when it is done (see [the release checklist](../release-checklist.md)), replace this paragraph with the new render's date, version and timing, and drop the caveat under the README's Demo heading.
 
 Two details of the tape come from that render:
 
