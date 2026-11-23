@@ -101,8 +101,9 @@ func setupCmd() *cobra.Command {
 All three by default; --target narrows (repeatable). The hooks run
 "llm-semantic index-status || true" when PATH finds llm-semantic, otherwise
 this binary's absolute path; rerun setup after moving the binary to repair
-them. Only files under the current directory are written. Safe to run again;
-never prompts.`,
+them. Only files under the current directory are written: a path that is a
+symlink out of it, or a settings file that is not a single JSON object, is
+refused, and so is the home directory. Safe to run again; never prompts.`,
 		Example: `  llm-semantic setup
   llm-semantic setup --target claude --target codex
   llm-semantic setup --dry-run`,
