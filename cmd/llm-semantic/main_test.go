@@ -350,7 +350,7 @@ func TestMain_ArgumentCountErrorsExitTwoOnTheRequestedStream(t *testing.T) {
 			if code != 2 {
 				t.Errorf("exit code = %d, want 2; stderr=%q", code, stderr)
 			}
-			if stderr != "" || !strings.HasPrefix(stdout, "Error:") || !strings.Contains(stdout, "arg(s)") {
+			if stderr != "" || !strings.HasPrefix(stdout, "Error:") || !strings.Contains(stdout, "argument") {
 				t.Errorf("plain error should be on stdout only: stdout=%q stderr=%q", stdout, stderr)
 			}
 		})
@@ -367,7 +367,7 @@ func TestMain_ArgumentCountErrorsExitTwoOnTheRequestedStream(t *testing.T) {
 			if err := json.Unmarshal([]byte(stdout), &got); err != nil {
 				t.Fatalf("stdout is not a JSON error: %v; stdout=%q stderr=%q", err, stdout, stderr)
 			}
-			if !got.Error || !strings.Contains(got.Message, "arg(s)") {
+			if !got.Error || !strings.Contains(got.Message, "argument") {
 				t.Errorf("stdout JSON = %+v, want error: true naming the argument count", got)
 			}
 			if stderr != "" {

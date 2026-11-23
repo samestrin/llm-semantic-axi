@@ -1,6 +1,6 @@
 # Languages and call edges
 
-What `llm-semantic index` indexes, and what `callers` and `refs` can answer for it. The README's known-limit section summarises this page.
+What `llm-semantic index` indexes, and what `callers` and `refs` can answer for it. The README's Limits section summarises this page.
 
 **Empty means "not indexed", not "none exist".** Only the Go, JavaScript, TypeScript, Python and Rust chunkers record call edges, so an empty `callers` or `refs` answer in any other language is not proof that nothing calls the symbol. The table and the per-language limits are below.
 

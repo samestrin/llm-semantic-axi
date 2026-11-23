@@ -27,6 +27,9 @@ By default, uses git to detect changed files (fast path). Falls back to
 full directory scan if not in a git repo or if --no-git is specified.
 
 Use --since to specify a custom git ref (default: HEAD~1 for post-commit hooks).`,
+		Example: `  llm-semantic index-update
+  llm-semantic index-update . --since main
+  llm-semantic index-update ./src --no-git`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path := "."

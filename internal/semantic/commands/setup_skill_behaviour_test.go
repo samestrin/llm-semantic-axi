@@ -199,3 +199,26 @@ func TestSkillTextCoversWhatAnAgentNeedsToReadAnAnswer(t *testing.T) {
 		}
 	}
 }
+
+// TestSkillTextRound2 defends axi.md review round 2 items 5-8: the skill
+// offered --json but told agents to read `status`, which --json does not carry;
+// never said what `stale.state: stale` asks for; pointed at docs/languages.md,
+// which is not in a user's project after install; and left out the refused
+// destructive commands from exit 1 and `Error:` from the --plain failure shape.
+func TestSkillTextRound2(t *testing.T) {
+	_, committed := readCommittedSkill(t)
+	text := string(committed)
+	for _, want := range []string{
+		"`--json` keeps the old JSON schema", "`stale`", "`stale.state: stale`", "llm-semantic index-update",
+		"https://github.com/samestrin/llm-semantic-axi/blob/main/docs/languages.md",
+		"`collection delete`", "`memory stats --prune`", "`--force` / `--yes`", "`Error: ...` under `--plain`",
+		"`multisearch`", "`memory import`",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("%s does not mention %q", committedSkillRel, want)
+		}
+	}
+	if strings.Contains(text, " `docs/") {
+		t.Errorf("%s points at a repo-relative docs/ path, which a user's project does not have", committedSkillRel)
+	}
+}
