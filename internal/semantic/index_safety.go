@@ -355,3 +355,21 @@ func readIndexFile(path string) ([]byte, error) {
 	}
 	return b, nil
 }
+
+// CheckIndexPathNotSymlink refuses an index database whose directory, file or
+// sidecar (-wal, -shm, .lock) is a symlink: a .index linked outside the
+// project sent the database there, and an empty file it pointed at became a
+// database. A path that does not exist yet is fine.
+func CheckIndexPathNotSymlink(dbPath string) error {
+	for _, p := range []string{filepath.Dir(dbPath), dbPath, dbPath + "-wal", dbPath + "-shm", dbPath + ".lock"} {
+		info, err := os.Lstat(p)
+		if err != nil {
+			continue
+		}
+		if info.Mode()&fs.ModeSymlink != 0 {
+			target, _ := os.Readlink(p)
+			return fmt.Errorf("%s is a symlink to %s, refusing to write the index through it; remove the link, or pass --index-dir with a real directory", p, target)
+		}
+	}
+	return nil
+}

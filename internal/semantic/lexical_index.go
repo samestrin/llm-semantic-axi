@@ -25,6 +25,9 @@ type LexicalIndex struct {
 func NewLexicalIndex(dbPath string, embeddingDim int) (*LexicalIndex, error) {
 	// Create parent directories if needed (skip for in-memory)
 	if dbPath != ":memory:" {
+		if err := CheckIndexPathNotSymlink(dbPath); err != nil {
+			return nil, err
+		}
 		dir := filepath.Dir(dbPath)
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return nil, fmt.Errorf("failed to create directory %s: %w", dir, err)

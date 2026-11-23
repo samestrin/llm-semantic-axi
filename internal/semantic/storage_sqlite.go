@@ -35,6 +35,9 @@ func NewSQLiteStorage(dbPath string, embeddingDim int) (*SQLiteStorage, error) {
 
 	// Ensure parent directory exists for file-based databases
 	if dbPath != ":memory:" {
+		if err := CheckIndexPathNotSymlink(dbPath); err != nil {
+			return nil, err
+		}
 		dir := filepath.Dir(dbPath)
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return nil, fmt.Errorf("failed to create database directory: %w", err)
