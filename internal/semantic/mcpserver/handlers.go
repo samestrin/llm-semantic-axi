@@ -31,28 +31,31 @@ type argBuilder struct {
 	build    func(args map[string]interface{}) []string
 	validate func(args map[string]interface{}) error // optional validation, nil means no extra validation
 	profile  string                                  // auto-injected profile (e.g., "memory", "code"); empty = no injection
+	// positional names the tool argument the builder passes as CLI
+	// positionals, after a "--". A value starting with "-" is refused.
+	positional string
 }
 
 // commandRegistry maps command names to their argument builders.
 // This provides compile-time verification that all commands are handled
 // and makes it easy to see which commands exist.
 var commandRegistry = map[string]argBuilder{
-	"search":            {build: buildSearchArgs, validate: validateSearchArgs},
-	"search_code":       {build: buildSearchCodeArgs, validate: validateSearchArgs, profile: "code"},
-	"search_docs":       {build: buildSearchDocsArgs, validate: validateSearchArgs, profile: "docs"},
-	"search_memory":     {build: buildSearchMemoryArgs, validate: validateSearchArgs, profile: "memory"},
-	"multisearch":       {build: buildMultisearchArgs, validate: validateMultisearchArgs},
-	"index":             {build: buildIndexArgs, validate: nil},
+	"search":            {build: buildSearchArgs, validate: validateSearchArgs, positional: "query"},
+	"search_code":       {build: buildSearchCodeArgs, validate: validateSearchArgs, profile: "code", positional: "query"},
+	"search_docs":       {build: buildSearchDocsArgs, validate: validateSearchArgs, profile: "docs", positional: "query"},
+	"search_memory":     {build: buildSearchMemoryArgs, validate: validateSearchArgs, profile: "memory", positional: "query"},
+	"multisearch":       {build: buildMultisearchArgs, validate: validateMultisearchArgs, positional: "queries"},
+	"index":             {build: buildIndexArgs, validate: nil, positional: "path"},
 	"index_status":      {build: buildStatusArgs, validate: nil},
-	"index_update":      {build: buildUpdateArgs, validate: nil},
+	"index_update":      {build: buildUpdateArgs, validate: nil, positional: "path"},
 	"memory_store":      {build: buildMemoryStoreArgs, validate: nil, profile: "memory"},
-	"memory_search":     {build: buildMemorySearchArgs, validate: validateMemorySearchArgs, profile: "memory"},
-	"memory_promote":    {build: buildMemoryPromoteArgs, validate: nil, profile: "memory"},
+	"memory_search":     {build: buildMemorySearchArgs, validate: validateMemorySearchArgs, profile: "memory", positional: "query"},
+	"memory_promote":    {build: buildMemoryPromoteArgs, validate: nil, profile: "memory", positional: "id"},
 	"memory_list":       {build: buildMemoryListArgs, validate: nil, profile: "memory"},
-	"memory_delete":     {build: buildMemoryDeleteArgs, validate: nil, profile: "memory"},
+	"memory_delete":     {build: buildMemoryDeleteArgs, validate: nil, profile: "memory", positional: "id"},
 	"memory_stats":      {build: buildMemoryStatsArgs, validate: nil, profile: "memory"},
 	"collection_delete": {build: buildCollectionDeleteArgs, validate: nil},
-	"callers":           {build: buildCallersArgs, validate: validateCallersArgs},
+	"callers":           {build: buildCallersArgs, validate: validateCallersArgs, positional: "symbol"},
 }
 
 // RegisteredCommands returns a list of all registered command names.
@@ -156,25 +159,26 @@ func ExecuteHandler(toolName string, args map[string]interface{}) (string, error
 	}
 
 	// Add --axi so the CLI emits TOON for the model
-	cmdArgs = append(cmdArgs, "--axi")
+	extra := []string{"--axi"}
 
 	// Forward current env vars as explicit flags to ensure subprocess gets fresh values
 	if apiURL := os.Getenv("LLM_SEMANTIC_API_URL"); apiURL != "" {
-		cmdArgs = append(cmdArgs, "--api-url", apiURL)
+		extra = append(extra, "--api-url", apiURL)
 	}
 	if model := os.Getenv("LLM_SEMANTIC_MODEL"); model != "" {
-		cmdArgs = append(cmdArgs, "--model", model)
+		extra = append(extra, "--model", model)
 	}
 
 	// Pass config and profile to CLI so it can resolve storage/collection from config
 	if cfgPath, ok := args["config"].(string); ok && cfgPath != "" {
-		cmdArgs = append(cmdArgs, "--config", cfgPath)
+		extra = append(extra, "--config", cfgPath)
 	} else if _, hasProfile := args["profile"].(string); hasProfile {
-		cmdArgs = append(cmdArgs, "--config", config.DefaultConfigPath)
+		extra = append(extra, "--config", config.DefaultConfigPath)
 	}
 	if p, ok := args["profile"].(string); ok && p != "" {
-		cmdArgs = append(cmdArgs, "--profile", p)
+		extra = append(extra, "--profile", p)
 	}
+	cmdArgs = insertFlags(cmdArgs, extra)
 
 	// Execute command
 	ctx, cancel := context.WithTimeout(context.Background(), CommandTimeout)
@@ -210,6 +214,50 @@ func ExecuteHandler(toolName string, args map[string]interface{}) (string, error
 	return string(output), nil
 }
 
+// insertFlags puts flags right after the subcommand words at the head of
+// cmdArgs, so they land before the "--" that precedes any positional.
+// Subcommand words never start with "-", and a builder emits nothing but
+// flags and the "--" after them.
+func insertFlags(cmdArgs, flags []string) []string {
+	i := 0
+	for i < len(cmdArgs) && !strings.HasPrefix(cmdArgs[i], "-") {
+		i++
+	}
+	out := make([]string, 0, len(cmdArgs)+len(flags))
+	out = append(out, cmdArgs[:i]...)
+	out = append(out, flags...)
+	return append(out, cmdArgs[i:]...)
+}
+
+// withPositionals appends values as CLI positionals after a "--", so a value
+// is never read as an option. It appends nothing when there are no values.
+func withPositionals(cmdArgs []string, values ...string) []string {
+	if len(values) == 0 {
+		return cmdArgs
+	}
+	return append(append(cmdArgs, "--"), values...)
+}
+
+// validatePositional refuses a tool value that would reach the CLI as a
+// positional and starts with "-". The "--" already keeps it from being read
+// as an option; refusing it as well means a prompt-injected value such as
+// {"path":"--api-url=http://host"} is reported, not quietly searched for.
+func validatePositional(key string, args map[string]interface{}) error {
+	var values []string
+	switch v := args[key].(type) {
+	case string:
+		values = []string{v}
+	case []interface{}, []string:
+		values = getStringSlice(args, key)
+	}
+	for _, v := range values {
+		if strings.HasPrefix(v, "-") {
+			return fmt.Errorf("%s %q starts with \"-\"; a %s may not start with \"-\" (for a path, write ./%s)", key, v, key, v)
+		}
+	}
+	return nil
+}
+
 func stripPrefix(toolName string) string {
 	if len(toolName) > len(ToolPrefix) {
 		return toolName[len(ToolPrefix):]
@@ -222,6 +270,12 @@ func buildArgs(cmdName string, args map[string]interface{}) ([]string, error) {
 	builder, ok := commandRegistry[cmdName]
 	if !ok {
 		return nil, fmt.Errorf("unknown command: %s", cmdName)
+	}
+
+	if builder.positional != "" {
+		if err := validatePositional(builder.positional, args); err != nil {
+			return nil, err
+		}
 	}
 
 	// Run validation if defined
@@ -246,14 +300,14 @@ func validateSearchArgs(args map[string]interface{}) error {
 func buildCallersArgs(args map[string]interface{}) []string {
 	cmdArgs := []string{"callers"}
 
-	if symbol, ok := args["symbol"].(string); ok && symbol != "" {
-		cmdArgs = append(cmdArgs, symbol)
-	}
 	if storage, ok := args["storage"].(string); ok && storage != "" {
 		cmdArgs = append(cmdArgs, "--storage", storage)
 	}
 	if collection, ok := args["collection"].(string); ok && collection != "" {
 		cmdArgs = append(cmdArgs, "--collection", collection)
+	}
+	if symbol, ok := args["symbol"].(string); ok && symbol != "" {
+		cmdArgs = withPositionals(cmdArgs, symbol)
 	}
 
 	return cmdArgs
@@ -300,9 +354,6 @@ func validateMultisearchArgs(args map[string]interface{}) error {
 func buildSearchArgs(args map[string]interface{}) []string {
 	cmdArgs := []string{"search"}
 
-	if query, ok := args["query"].(string); ok && query != "" {
-		cmdArgs = append(cmdArgs, query)
-	}
 	// The CLI rejects --top below 1; a non-positive top_k means its default.
 	if topK, ok := getInt(args, "top_k"); ok && topK > 0 {
 		cmdArgs = append(cmdArgs, "--top", strconv.Itoa(topK))
@@ -372,6 +423,9 @@ func buildSearchArgs(args map[string]interface{}) []string {
 	if prefilterTop, ok := getInt(args, "prefilter_top"); ok && prefilterTop > 0 {
 		cmdArgs = append(cmdArgs, "--prefilter-top", strconv.Itoa(prefilterTop))
 	}
+	if query, ok := args["query"].(string); ok && query != "" {
+		cmdArgs = withPositionals(cmdArgs, query)
+	}
 
 	return cmdArgs
 }
@@ -393,11 +447,6 @@ func buildSearchMemoryArgs(args map[string]interface{}) []string {
 
 func buildMultisearchArgs(args map[string]interface{}) []string {
 	cmdArgs := []string{"multisearch"}
-
-	// Add queries as positional arguments
-	if queries := getStringSlice(args, "queries"); len(queries) > 0 {
-		cmdArgs = append(cmdArgs, queries...)
-	}
 
 	// The CLI rejects --top below 1; a non-positive top_k means its default.
 	if topK, ok := getInt(args, "top_k"); ok && topK > 0 {
@@ -430,15 +479,13 @@ func buildMultisearchArgs(args map[string]interface{}) []string {
 		cmdArgs = append(cmdArgs, "--collection", collection)
 	}
 
-	return cmdArgs
+	// Queries are positionals, after the "--"
+	return withPositionals(cmdArgs, getStringSlice(args, "queries")...)
 }
 
 func buildIndexArgs(args map[string]interface{}) []string {
 	cmdArgs := []string{"index"}
 
-	if path, ok := args["path"].(string); ok && path != "" {
-		cmdArgs = append(cmdArgs, path)
-	}
 	if includes, ok := args["include"].([]interface{}); ok {
 		for _, inc := range includes {
 			if s, ok := inc.(string); ok {
@@ -483,6 +530,9 @@ func buildIndexArgs(args map[string]interface{}) []string {
 	if getBool(args, "skip_calibration") {
 		cmdArgs = append(cmdArgs, "--skip-calibration")
 	}
+	if path, ok := args["path"].(string); ok && path != "" {
+		cmdArgs = withPositionals(cmdArgs, path)
+	}
 
 	return cmdArgs
 }
@@ -503,9 +553,6 @@ func buildStatusArgs(args map[string]interface{}) []string {
 func buildUpdateArgs(args map[string]interface{}) []string {
 	cmdArgs := []string{"index-update"}
 
-	if path, ok := args["path"].(string); ok && path != "" {
-		cmdArgs = append(cmdArgs, path)
-	}
 	if includes, ok := args["include"].([]interface{}); ok {
 		for _, inc := range includes {
 			if s, ok := inc.(string); ok {
@@ -528,6 +575,9 @@ func buildUpdateArgs(args map[string]interface{}) []string {
 	}
 	if profile, ok := args["profile"].(string); ok && profile != "" {
 		cmdArgs = append(cmdArgs, "--profile", profile)
+	}
+	if path, ok := args["path"].(string); ok && path != "" {
+		cmdArgs = withPositionals(cmdArgs, path)
 	}
 
 	return cmdArgs
@@ -651,9 +701,6 @@ func buildMemoryStoreArgs(args map[string]interface{}) []string {
 func buildMemorySearchArgs(args map[string]interface{}) []string {
 	cmdArgs := []string{"memory", "search"}
 
-	if query, ok := args["query"].(string); ok && query != "" {
-		cmdArgs = append(cmdArgs, query)
-	}
 	// The CLI rejects --top below 1; a non-positive top_k means its default.
 	if topK, ok := getInt(args, "top_k"); ok && topK > 0 {
 		cmdArgs = append(cmdArgs, "--top", strconv.Itoa(topK))
@@ -682,6 +729,9 @@ func buildMemorySearchArgs(args map[string]interface{}) []string {
 	if getBool(args, "hybrid") {
 		cmdArgs = append(cmdArgs, "--hybrid")
 	}
+	if query, ok := args["query"].(string); ok && query != "" {
+		cmdArgs = withPositionals(cmdArgs, query)
+	}
 
 	return cmdArgs
 }
@@ -690,9 +740,6 @@ func buildMemoryPromoteArgs(args map[string]interface{}) []string {
 	// Profile injected by ExecuteHandler from registry
 	cmdArgs := []string{"memory", "promote"}
 
-	if id, ok := args["id"].(string); ok && id != "" {
-		cmdArgs = append(cmdArgs, id)
-	}
 	if target, ok := args["target"].(string); ok && target != "" {
 		cmdArgs = append(cmdArgs, "--target", target)
 	}
@@ -707,6 +754,9 @@ func buildMemoryPromoteArgs(args map[string]interface{}) []string {
 	}
 	if collection, ok := args["collection"].(string); ok && collection != "" {
 		cmdArgs = append(cmdArgs, "--collection", collection)
+	}
+	if id, ok := args["id"].(string); ok && id != "" {
+		cmdArgs = withPositionals(cmdArgs, id)
 	}
 
 	return cmdArgs
@@ -736,9 +786,6 @@ func buildMemoryDeleteArgs(args map[string]interface{}) []string {
 	// Profile injected by ExecuteHandler from registry
 	cmdArgs := []string{"memory", "delete"}
 
-	if id, ok := args["id"].(string); ok && id != "" {
-		cmdArgs = append(cmdArgs, id)
-	}
 	if getBool(args, "force") {
 		cmdArgs = append(cmdArgs, "--force")
 	}
@@ -747,6 +794,9 @@ func buildMemoryDeleteArgs(args map[string]interface{}) []string {
 	}
 	if collection, ok := args["collection"].(string); ok && collection != "" {
 		cmdArgs = append(cmdArgs, "--collection", collection)
+	}
+	if id, ok := args["id"].(string); ok && id != "" {
+		cmdArgs = withPositionals(cmdArgs, id)
 	}
 
 	return cmdArgs

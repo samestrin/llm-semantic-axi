@@ -58,8 +58,10 @@ func TestBuildMemorySearchArgs(t *testing.T) {
 		t.Errorf("buildMemorySearchArgs() should start with ['memory', 'search'], got %v", result[:2])
 	}
 
-	if result[2] != "authentication handling" {
-		t.Errorf("buildMemorySearchArgs() query = %s, want 'authentication handling'", result[2])
+	// The positional comes last, after a "--" (EST-8336: a value read as an
+	// option let a tool input inject --api-url).
+	if tail := result[len(result)-2:]; tail[0] != "--" || tail[1] != "authentication handling" {
+		t.Errorf("buildMemorySearchArgs() should end with [--, 'authentication handling'], got %v", result)
 	}
 }
 
@@ -77,8 +79,10 @@ func TestBuildMemoryPromoteArgs(t *testing.T) {
 		t.Errorf("buildMemoryPromoteArgs() should start with ['memory', 'promote'], got %v", result[:2])
 	}
 
-	if result[2] != "mem-123" {
-		t.Errorf("buildMemoryPromoteArgs() id = %s, want 'mem-123'", result[2])
+	// The positional comes last, after a "--" (EST-8336: a value read as an
+	// option let a tool input inject --api-url).
+	if tail := result[len(result)-2:]; tail[0] != "--" || tail[1] != "mem-123" {
+		t.Errorf("buildMemoryPromoteArgs() should end with [--, mem-123], got %v", result)
 	}
 
 	// Check --force flag is present
@@ -115,7 +119,9 @@ func TestBuildMemoryDeleteArgs(t *testing.T) {
 
 	result := buildMemoryDeleteArgs(args)
 
-	expected := []string{"memory", "delete", "mem-456", "--force"}
+	// The positional comes last, after a "--" (EST-8336: a value read as an
+	// option let a tool input inject --api-url).
+	expected := []string{"memory", "delete", "--force", "--", "mem-456"}
 	if !reflect.DeepEqual(result, expected) {
 		t.Errorf("buildMemoryDeleteArgs() = %v, want %v", result, expected)
 	}
@@ -232,8 +238,10 @@ func TestBuildSearchArgs_HybridParameters(t *testing.T) {
 	result := buildSearchArgs(args)
 
 	// Check base command and query
-	if len(result) < 2 || result[0] != "search" || result[1] != "authentication handling" {
-		t.Errorf("buildSearchArgs() should start with ['search', '<query>'], got %v", result[:2])
+	// The positional comes last, after a "--" (EST-8336: a value read as an
+	// option let a tool input inject --api-url).
+	if result[0] != "search" || result[len(result)-2] != "--" || result[len(result)-1] != "authentication handling" {
+		t.Errorf("buildSearchArgs() should be [search ... -- '<query>'], got %v", result)
 	}
 
 	// Check --hybrid flag
@@ -1090,8 +1098,10 @@ func TestBuildSearchArgs_Basic(t *testing.T) {
 	if result[0] != "search" {
 		t.Errorf("buildSearchArgs() first arg = %s, want search", result[0])
 	}
-	if result[1] != "test query" {
-		t.Errorf("buildSearchArgs() query = %s, want 'test query'", result[1])
+	// The positional comes last, after a "--" (EST-8336: a value read as an
+	// option let a tool input inject --api-url).
+	if !reflect.DeepEqual(result, []string{"search", "--", "test query"}) {
+		t.Errorf("buildSearchArgs() = %v, want [search -- 'test query']", result)
 	}
 }
 
@@ -1301,8 +1311,10 @@ func TestBuildMemoryDeleteArgs_AllParams(t *testing.T) {
 
 	result := buildMemoryDeleteArgs(args)
 
-	if result[0] != "memory" || result[1] != "delete" || result[2] != "mem-456" {
-		t.Errorf("buildMemoryDeleteArgs() should start with [memory, delete, mem-456], got %v", result[:3])
+	// The positional comes last, after a "--" (EST-8336: a value read as an
+	// option let a tool input inject --api-url).
+	if result[0] != "memory" || result[1] != "delete" || result[len(result)-2] != "--" || result[len(result)-1] != "mem-456" {
+		t.Errorf("buildMemoryDeleteArgs() should be [memory delete ... -- mem-456], got %v", result)
 	}
 
 	for _, flag := range []string{"--force", "--storage", "--collection"} {
