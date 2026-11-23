@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-11-23
+
+### Fixed
+
+- With no embedding API listening, `search`, `memory search`, `index` and `index-update` said `cannot reach the embedding API at <url> (connection refused)` instead of Go's `failed to send request: Post "...": dial tcp ...` error, and TOON output carries a `help` list: start the embedder, or set `--api-url` / `LLM_SEMANTIC_API_URL` to one that is running (for a hosted `--embedder`, check that its URL is reachable). `index` and `index-update` put the message and help in their one failure document, and the per-file `errors` read the same way. A cancelled request is not reported as unreachable. `--json` keeps its keys.
+- The bare `llm-semantic` run carries `bin` and `description` in TOON and `--json` when the directory is indexed too, as `docs/axi-conformance.md` row 8 says; only the unindexed run had them. `index-status` is unchanged.
+- `memory stats` counts `total_memories`, `pending` and `promoted` from the store. It counted only memories that had been retrieved, so after one `memory store` it said `total_memories: 0` while `memory list` said `total: 1`, and `--plain` said `No memories found.`; `--plain` now prints the totals and says no retrievals are recorded yet.
+- `search --min` under TOON prints `file`, `line`, `name` and `score` per row. It printed relevance and preview too, six fields against the default's four, though the README calls `--min` the minimal payload. `--json --min` is unchanged.
+- `install-release.sh --help` prints its embedded usage text. It printed lines 2-19 of `$0`, including a stray `set -eu`, and under `curl ... | sh`, where `$0` is the shell, it printed the shell binary.
+- The Agent Skill says that indexing and search need an embedding API (`--api-url`, `LLM_SEMANTIC_API_URL`, default `http://localhost:8080`) and what the connection error means, that an empty `callers` or `refs` answer carries a `status` to read and is not proof for calls through another object or Rust path calls, that an old index needs `index --force`, and what `--full`, `error: true` and exits 1 and 2 mean.
+- `docs/axi-conformance.md` row 1 says `--axi` with `--json` or `--plain` exits 2; it said `--axi` "changes nothing". Rows 4, 6, 8 and 9 describe the fixes above. `docs/axi-audit.md` points 6b and 6d at the conformance row that closed them.
+- The README says `setup --dry-run` prints `would_write`, the TOON value; it said `would write`. `benchmarks/results-tokens.md` calls the TOON mode "TOON (default)" in its prose, as its table does.
+- The README Demo section and `docs/demo/README.md` say the committed GIF is still the v1.2.0 render, which types `--axi` and shows v1.2.0's `callers` rows; the demo README no longer asks for a re-render before a tag that has already been cut.
+- The 2.0.0 entry below no longer carries the bullet saying the Quick start matched the v1.2.0 binary, which its own last bullet contradicted.
+- `docs/axi-catalog-entry.yaml` adds upstream CONTRIBUTING's step to clone the parent repo or set `origin` back to it before `no-mistakes init --fork-url`, lists `skills/llm-semantic/SKILL.md` among the reviewed components, and says `--axi` conflicts with the other format flags.
+
 ### Changed
 
 - The AXI catalog entry's `reviewed_revision` is re-pinned to `3cad1c0`, the commit the `v2.0.0` tag carries, and its pre-tag notes are removed; every `file:line` and probe it cites was re-checked at that commit.
@@ -179,6 +195,7 @@ First standalone release, extracted from [samestrin/llm-tools](https://github.co
 
 CI fails below 80% total coverage rather than printing a percentage and moving on. The sibling repo only echoes the number, which is how its coverage drifted unobserved.
 
+[2.0.1]: https://github.com/samestrin/llm-semantic-axi/compare/v2.0.0...v2.0.1
 [2.0.0]: https://github.com/samestrin/llm-semantic-axi/compare/v1.2.0...v2.0.0
 [1.2.0]: https://github.com/samestrin/llm-semantic-axi/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/samestrin/llm-semantic-axi/compare/v1.0.0...v1.1.0
