@@ -142,18 +142,11 @@ func (e *Embedder) EmbedBatch(ctx context.Context, texts []string) ([][]float32,
 	if err != nil {
 		return nil, err
 	}
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBody))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	httpReq.Header.Set("Content-Type", "application/json")
-	if e.config.APIKey != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+e.config.APIKey)
-	}
-
-	// Execute with retries
+	// Execute with retries. Each attempt gets a fresh request: a reused one
+	// sent an empty body after the first, so a retried 5xx came back as
+	// "cannot reach the embedding API".
 	var resp *http.Response
+	var body []byte
 	var lastErr error
 
 	maxAttempts := e.config.MaxRetries + 1
@@ -171,24 +164,36 @@ func (e *Embedder) EmbedBatch(ctx context.Context, texts []string) ([][]float32,
 			}
 		}
 
+		httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBody))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+		httpReq.Header.Set("Content-Type", "application/json")
+		if e.config.APIKey != "" {
+			httpReq.Header.Set("Authorization", "Bearer "+e.config.APIKey)
+		}
+
 		resp, lastErr = e.client.Do(httpReq)
-		if lastErr == nil && resp.StatusCode < 500 {
+		if lastErr != nil {
+			continue
+		}
+		// Read the body before closing it, so the last 5xx's status and
+		// message survive the loop; they were lost as "read on closed
+		// response body".
+		body, lastErr = io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if lastErr != nil {
+			lastErr = fmt.Errorf("failed to read response: %w", lastErr)
+			resp = nil
+			continue
+		}
+		if resp.StatusCode < 500 {
 			break
 		}
-		if resp != nil {
-			resp.Body.Close()
-		}
 	}
 
-	if lastErr != nil {
+	if resp == nil {
 		return nil, unreachable(e.config.APIURL, false, lastErr)
-	}
-	defer resp.Body.Close()
-
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
 
 	// Check for error response
@@ -196,7 +201,7 @@ func (e *Embedder) EmbedBatch(ctx context.Context, texts []string) ([][]float32,
 		var errResp errorResponse
 		json.Unmarshal(body, &errResp)
 		if errResp.Error.Message != "" {
-			return nil, fmt.Errorf("API error: %s", errResp.Error.Message)
+			return nil, fmt.Errorf("API error: status %d: %s", resp.StatusCode, errResp.Error.Message)
 		}
 		return nil, fmt.Errorf("API error: status %d", resp.StatusCode)
 	}
