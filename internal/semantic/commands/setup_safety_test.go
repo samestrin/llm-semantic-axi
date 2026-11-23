@@ -79,7 +79,7 @@ func TestSetupRefusesSymlinkOutOfProject(t *testing.T) {
 
 		err := runSetup(&bytes.Buffer{}, dir, setupOptions{targets: []string{l.target}})
 
-		if err == nil || !strings.Contains(err.Error(), "outside") {
+		if err == nil || !strings.Contains(err.Error(), "symlink") {
 			t.Errorf("%s: setup followed a symlink out of the project: %v", l.link, err)
 		}
 		assertEmptyDir(t, outside)

@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/samestrin/llm-semantic-axi/v2/pkg/output"
 	"github.com/spf13/cobra"
 )
 
@@ -215,8 +216,15 @@ func runSetup(w io.Writer, dir string, opts setupOptions) error {
 		}
 	}
 
+	if err := refuseHomeDir(dir); err != nil {
+		return err
+	}
+
 	var actions []setupAction
 	plan := func(rel string, planner func(path string) (setupAction, error)) error {
+		if err := checkInsideDir(dir, rel); err != nil {
+			return err
+		}
 		a, err := planner(filepath.Join(dir, rel))
 		if err != nil {
 			return err
@@ -281,6 +289,75 @@ func runSetup(w io.Writer, dir string, opts setupOptions) error {
 	return nil
 }
 
+// refuseHomeDir refuses to run setup in the home directory, where the project
+// files it writes are the global ~/.claude and ~/.codex configuration that
+// every project on the machine loads.
+func refuseHomeDir(dir string) error {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return nil
+	}
+	if samePath(dir, home) {
+		return &output.UsageError{Err: fmt.Errorf("refusing to run setup in your home directory (%s): it would change the global ~/.claude and ~/.codex configuration of every project; cd into a project and rerun", home)}
+	}
+	return nil
+}
+
+// samePath reports whether a and b name the same directory once symlinks are
+// resolved.
+func samePath(a, b string) bool {
+	ra, errA := filepath.EvalSymlinks(a)
+	rb, errB := filepath.EvalSymlinks(b)
+	if errA != nil || errB != nil {
+		return filepath.Clean(a) == filepath.Clean(b)
+	}
+	return ra == rb
+}
+
+// checkInsideDir refuses rel when one of its existing components is a symlink
+// that resolves outside dir: a .claude linked elsewhere would send the write
+// there, against the promise that only files under dir are written.
+func checkInsideDir(dir, rel string) error {
+	root, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return err
+	}
+	cur := dir
+	for _, part := range strings.Split(rel, string(filepath.Separator)) {
+		cur = filepath.Join(cur, part)
+		info, err := os.Lstat(cur)
+		if os.IsNotExist(err) {
+			return nil // MkdirAll creates the rest inside dir
+		}
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink == 0 {
+			continue
+		}
+		resolved, err := filepath.EvalSymlinks(cur)
+		if err != nil {
+			if os.IsNotExist(err) {
+				// A dangling link would still be followed by the write.
+				target, _ := os.Readlink(cur)
+				return fmt.Errorf("%s is a symlink to %s, which does not exist, refusing to write through it", cur, target)
+			}
+			return err
+		}
+		if !isWithin(root, resolved) {
+			return fmt.Errorf("%s is a symlink to %s, outside %s, refusing to write through it", cur, resolved, dir)
+		}
+	}
+	return nil
+}
+
+// isWithin reports whether path is root or below it; both must be clean and
+// symlink-free.
+func isWithin(root, path string) bool {
+	r, err := filepath.Rel(root, path)
+	return err == nil && r != ".." && !strings.HasPrefix(r, ".."+string(filepath.Separator)) && !filepath.IsAbs(r)
+}
+
 // planFixedFile plans a file setup owns outright: rewritten whenever its bytes
 // differ from content.
 func planFixedFile(path string, content []byte) (setupAction, error) {
@@ -306,6 +383,11 @@ func planHooksJSON(path, command string) (setupAction, error) {
 		dec.UseNumber()
 		if err := dec.Decode(&root); err != nil {
 			return setupAction{}, fmt.Errorf("%s is not a JSON object, refusing to overwrite: %w", path, err)
+		}
+		// Decode stops after the first value; rewriting from it would drop
+		// whatever followed.
+		if _, err := dec.Token(); err != io.EOF {
+			return setupAction{}, fmt.Errorf("%s is not a single JSON object (more follows the first value), refusing to overwrite; fix the file and rerun setup", path)
 		}
 		if root == nil { // the JSON value null
 			return setupAction{}, fmt.Errorf("%s is null, not a JSON object, refusing to overwrite", path)
