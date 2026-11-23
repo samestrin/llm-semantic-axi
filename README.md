@@ -8,7 +8,7 @@
 
 ![A terminal session running --version, a search and a callers query](docs/demo/llm-semantic.gif)
 
-The session runs `--version`, a `search` and a `callers` query against a release binary, with nothing mocked. [docs/demo/README.md](docs/demo/README.md) has the tape and the steps to render the GIF again.
+The session runs `--version`, a `search` and a `callers` query against a release binary, with nothing mocked. The GIF is still the v1.2.0 render: it types `--axi`, which v2 does not need because TOON is the default, and its `callers` rows predate v2.0.0's default row shape. [docs/demo/README.md](docs/demo/README.md) has the tape and the steps to render the GIF again.
 
 ## Why
 
@@ -72,7 +72,7 @@ sudo ./install.sh   # or: build and install both to /usr/local/bin
 
 Two ways to tell an agent the tool exists:
 
-- `llm-semantic setup`, run in a project, registers the tool with three agents, each at session start. Claude Code: a SessionStart hook merged into `.claude/settings.json` (other keys are kept) and the Agent Skill at `.claude/skills/llm-semantic/SKILL.md`. Codex: a SessionStart hook merged into `.codex/hooks.json`, and `[features] hooks = true` merged into `.codex/config.toml` (other keys are kept). OpenCode: a plugin at `.opencode/plugins/llm-semantic.ts` that runs on `session.created`. `--target claude`, `codex` or `opencode` (repeatable) registers only those. Each hook runs `llm-semantic index-status || true`, so a session starts with the index status and a project with no index starts without a hook error; when `llm-semantic` is not on `PATH` the hook names this binary's absolute path, and re-running `setup` after moving the binary repairs it. `setup` prints each path as `wrote`, `unchanged` or, with `--dry-run`, `would write`. It is safe to re-run, never prompts, and writes only under the current directory.
+- `llm-semantic setup`, run in a project, registers the tool with three agents, each at session start. Claude Code: a SessionStart hook merged into `.claude/settings.json` (other keys are kept) and the Agent Skill at `.claude/skills/llm-semantic/SKILL.md`. Codex: a SessionStart hook merged into `.codex/hooks.json`, and `[features] hooks = true` merged into `.codex/config.toml` (other keys are kept). OpenCode: a plugin at `.opencode/plugins/llm-semantic.ts` that runs on `session.created`. `--target claude`, `codex` or `opencode` (repeatable) registers only those. Each hook runs `llm-semantic index-status || true`, so a session starts with the index status and a project with no index starts without a hook error; when `llm-semantic` is not on `PATH` the hook names this binary's absolute path, and re-running `setup` after moving the binary repairs it. `setup` prints each path as `wrote`, `unchanged` or, with `--dry-run`, `would_write`. It is safe to re-run, never prompts, and writes only under the current directory.
 - `npx skills add samestrin/llm-semantic-axi --skill llm-semantic` installs the same skill, [`skills/llm-semantic/SKILL.md`](skills/llm-semantic/SKILL.md), through the `skills` CLI for any agent it supports. It adds no hook.
 
 ### Upgrade
@@ -107,22 +107,22 @@ Output of `index` and `callers` as text (trimmed, paths shortened); without `--p
 ```text
 $ llm-semantic index . --plain
 Indexing .../llm-semantic-axi...
-  [100/320 files] 927 chunks...
-  [200/320 files] 2183 chunks...
-  [300/320 files] 3457 chunks...
-  [320/320 files] 3661 chunks...
+  [100/325 files] 950 chunks...
+  [200/325 files] 2141 chunks...
+  [300/325 files] 3436 chunks...
+  [325/325 files] 3713 chunks...
 
 Running initial calibration...
-Indexed 320 files, created 3661 chunks
+Indexed 325 files, created 3713 chunks
 
 $ llm-semantic callers EnrichForEmbedding --plain
 5 caller(s) of EnrichForEmbedding
 
   .../internal/semantic/embed_enrichment_test.go:8  TestEnrichForEmbedding
   .../internal/semantic/embed_enrichment_test.go:152  TestEnrichForEmbedding_EmptyContent
-  .../internal/semantic/index_manager.go:377  indexWithCrossFileBatching
-  .../internal/semantic/index_manager.go:686  processFileWithDiff
-  .../internal/semantic/index_manager.go:1252  prepareFile
+  .../internal/semantic/index_manager.go:384  indexWithCrossFileBatching
+  .../internal/semantic/index_manager.go:703  processFileWithDiff
+  .../internal/semantic/index_manager.go:1269  prepareFile
 ```
 
 ## Usage
@@ -226,8 +226,8 @@ Search-family output also says how far the index is behind the working tree (`fr
 
 ## Performance
 
-- **Version:** `v1.2.0-15-g658dd66` (`llm-semantic --version`)
-- **Date:** 2026-11-16
+- **Version:** `v2.0.0` (`llm-semantic --version`)
+- **Date:** 2026-11-23
 - **Machine:** Intel(R) Xeon(R) W-2295 CPU @ 3.00GHz, 36 threads, 141.2 GiB RAM, Debian GNU/Linux 13 (trixie) (linux/amd64), kernel 7.0.0-38-generic
 - **Method:** each case runs its warmup runs untimed, then its timed runs: warmup 3 (cold start), 3 (typical command), 1 (large input); runs 20 (cold start), 20 (typical command), 5 (large input). Each timing is the wall clock of one `llm-semantic` process, from start to exit, on the release build. Every `index` and `search` run also gets `--api-url`, `--model`, `--storage sqlite` and `--index-dir` pointing at the fake embedder and a temporary index; each `index` run starts from an empty index.
 - **Embeddings:** a fixed-latency local fake: a loopback OpenAI-compatible server that waits 1.0 ms per request and answers with deterministic 256-dimension hash vectors, so the numbers measure the tool and not a model.
@@ -235,9 +235,9 @@ Search-family output also says how far the index is behind the working tree (`fr
 
 | Case | Command | Warmup | Runs | Min (ms) | Median (ms) | Mean (ms) | Max (ms) |
 |---|---|---:|---:|---:|---:|---:|---:|
-| cold start | `llm-semantic --version` | 3 | 20 | 3.7 | 3.9 | 3.9 | 4.3 |
-| typical command | `llm-semantic search "load the config file and validate it" --json` | 3 | 20 | 81.6 | 82.9 | 83.1 | 86.5 |
-| large input | `llm-semantic index <corpus> --json` | 1 | 5 | 32753.6 | 33126.9 | 33289.4 | 34265.3 |
+| cold start | `llm-semantic --version` | 3 | 20 | 3.8 | 4.0 | 4.0 | 4.5 |
+| typical command | `llm-semantic search "load the config file and validate it" --json` | 3 | 20 | 84.4 | 89.4 | 90.1 | 100.3 |
+| large input | `llm-semantic index <corpus> --json` | 1 | 5 | 33973.2 | 35688.4 | 35674.8 | 37751.7 |
 
 Every timing is in [benchmarks/results-performance.json](benchmarks/results-performance.json). Measured by [`benchmarks/cmd/perf`](benchmarks/cmd/perf/main.go).
 

@@ -4,7 +4,10 @@
 # kunchenguid/axi. The owner submits it (the PR is public).
 #
 # Steps the owner runs:
-#   1. Fork kunchenguid/axi and branch from its main.
+#   1. Fork kunchenguid/axi. Then, as upstream CONTRIBUTING.md says, clone
+#      the parent repo or set origin back to the parent repo (not the fork),
+#      and branch from its main: `no-mistakes init --fork-url` in step 4
+#      expects origin to be the parent.
 #   2. Append the `- name: llm-semantic-axi` entry below (without these comments)
 #      to the `community` list in catalog.yaml.
 #   3. Run `pnpm run docs:gen` to regenerate README.md and docs/index.html, and
@@ -92,6 +95,7 @@
     reviewed_revision: 3cad1c001ef528b53c300ec8cc178bb3ab5a7020
     reviewed_components:
       - README.md
+      - skills/llm-semantic/SKILL.md
       - docs/axi-conformance.md
       - benchmarks/results-tokens.md
       - cmd/llm-semantic/main.go
@@ -113,7 +117,7 @@
       - internal/semantic/treesitter/chunker_python.go
       - internal/semantic/treesitter/chunker_rust.go
     source_observations:
-      - "TOON is the default output: every command prints TOON unless --json or --plain replaces it (internal/semantic/commands/axi.go, resolveOutputMode). --axi is still accepted and changes nothing; contradictory format flags such as --plain --json exit 2. TOON is encoded through go-axi (pkg/output/axi.go), and the MCP server runs the CLI in TOON (internal/semantic/mcpserver/handlers.go)."
+      - "TOON is the default output: every command prints TOON unless --json or --plain replaces it (internal/semantic/commands/axi.go, resolveOutputMode). --axi is still accepted as an alias for TOON; contradictory format flags, such as --plain --json or --axi with --json or --plain, exit 2. TOON is encoded through go-axi (pkg/output/axi.go), and the MCP server runs the CLI in TOON (internal/semantic/mcpserver/handlers.go)."
       - "A default search row carries four fields (file as path:line, name, score, content), and content over 200 characters is cut with a note of how many characters were left out and --full for the rest (internal/semantic/commands/search.go, axiSearchRows and axiCut). Default callers rows carry three fields (file as path:line, name, ref) and refs rows four (file as path:line, ref, resolved, type, external references omitting file), with --full restoring every field (internal/semantic/commands/refs.go, writeCallersJSON and writeRefsJSON). memory list rows carry id, question, status and the cut answer (as does the answer memory store echoes back), and memory stats rows id, question, retrieval_count, avg_score, with --full restoring every field (internal/semantic/commands/memory.go, axiMemoryListRows and axiMemoryStatsRows)."
       - "A default search result list states its total, and an empty answer carries status index_empty when the index has no chunks or no_match otherwise (search.go, axiResultList and markZeroResults). callers and refs state their total in the default TOON output and say 'not indexed for edges' instead of returning a bare empty list (internal/semantic/commands/refs.go). memory list and memory stats state a total and carry status store_empty with a message over an empty store, no_match when a filter excludes every entry or nothing has been retrieved yet (internal/semantic/commands/memory.go, markMemoryListZeroResults and markMemoryStatsZeroResults)."
       - "Errors go to stdout in the active format: a TOON or JSON object with error: true, or `Error: ...` under --plain (pkg/output/formatter.go, PrintError); stderr carries only diagnostics. Unknown flags and commands, missing arguments and contradictory format flags exit 2 and name what was wrong with the valid choices, as axi.md asks; other failures exit 1 (pkg/output/exit.go). index and index-update exit 1 when any file failed, printing the counts and the errors list in one document with error: true (internal/semantic/commands/index.go, incompleteError). Output of `llm-semantic --bogus` and `llm-semantic index-status 2>/dev/null` in an empty directory shows both."

@@ -181,3 +181,21 @@ func TestSkillTextClaimsEveryCallEdgeLanguage(t *testing.T) {
 		}
 	}
 }
+
+// TestSkillTextCoversWhatAnAgentNeedsToReadAnAnswer defends EST-8171 item 6:
+// the skill named the commands but not that indexing and search need an
+// embedding API, what the connection error means, that an empty callers/refs
+// answer carries a status to read, or that an old index needs --force. An
+// agent without those reads an outage or a gap in the index as an answer.
+func TestSkillTextCoversWhatAnAgentNeedsToReadAnAnswer(t *testing.T) {
+	_, committed := readCommittedSkill(t)
+	for _, want := range []string{
+		"--api-url", "LLM_SEMANTIC_API_URL", "http://localhost:8080", "cannot reach the embedding API",
+		"`status`", "symbol_not_indexed", "not_indexed_for_edges", "obj.foo()", "super.foo()", "Type::f()",
+		"index --force", "--full", "error: true", "Exit 1", "Exit 2",
+	} {
+		if !strings.Contains(string(committed), want) {
+			t.Errorf("%s does not mention %q", committedSkillRel, want)
+		}
+	}
+}

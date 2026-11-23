@@ -438,7 +438,10 @@ func TestBareRunShowsStatusPathAndDescription(t *testing.T) {
 			t.Errorf("bare run printed help:\n%s", out)
 		}
 	})
-	// The description/path lines must not precede a machine-readable payload.
+	// The description/path lines must not precede a machine-readable payload;
+	// they are fields of it instead. EST-8171 item 2: the indexed bare run
+	// dropped bin and description, which only the not_indexed run carried,
+	// while the conformance doc and catalog entry claim them on every bare run.
 	for _, flag := range []string{"--json", "--axi"} {
 		t.Run("structured "+flag, func(t *testing.T) {
 			indexedWorkspace(t)
@@ -448,7 +451,7 @@ func TestBareRunShowsStatusPathAndDescription(t *testing.T) {
 			if runErr != nil {
 				t.Fatalf("bare run %s: %v", flag, runErr)
 			}
-			if strings.Contains(out, rootDescription) || strings.Contains(out, "Executable:") {
+			if strings.Contains(out, "Executable:") || strings.HasPrefix(out, rootDescription) {
 				t.Errorf("%s output carries human header lines:\n%s", flag, out)
 			}
 			if flag == "--json" {
@@ -456,11 +459,34 @@ func TestBareRunShowsStatusPathAndDescription(t *testing.T) {
 				if err := json.Unmarshal([]byte(out), &p); err != nil {
 					t.Fatalf("not JSON: %v (%q)", err, out)
 				}
-			} else if !strings.Contains(out, "files_indexed") {
-				t.Errorf("no status payload:\n%s", out)
+				if p["description"] != rootDescription || p["bin"] == nil || p["bin"] == "" {
+					t.Errorf("--json bare run lacks bin or description: %v", p)
+				}
+				if p["files_indexed"] == nil {
+					t.Errorf("no status payload: %v", p)
+				}
+				return
+			}
+			for _, want := range []string{"bin: ", "description: ", "files_indexed", "help["} {
+				if !strings.Contains(out, want) {
+					t.Errorf("TOON bare run lacks %q:\n%s", want, out)
+				}
 			}
 		})
 	}
+	// index-status itself is not the home view and keeps its own payload.
+	t.Run("index-status has no bin", func(t *testing.T) {
+		indexedWorkspace(t)
+		t.Cleanup(func() { GlobalAXIOutput = false; GlobalJSONOutput = false })
+		out := captureStdout(t, func() { _, _ = executeCommand(RootCmd(), "index-status", "--json") })
+		var p map[string]any
+		if err := json.Unmarshal([]byte(out), &p); err != nil {
+			t.Fatalf("not JSON: %v (%q)", err, out)
+		}
+		if _, ok := p["bin"]; ok {
+			t.Errorf("index-status gained the home view's bin: %v", p)
+		}
+	})
 	t.Run("help unchanged", func(t *testing.T) {
 		newWorkspace(t)
 		out, err := executeCommand(RootCmd(), "--help")
@@ -575,6 +601,10 @@ func TestBareRunWithQdrantNeverReportsNotIndexed(t *testing.T) {
 			}
 			if !strings.Contains(out, "qdrant") {
 				t.Errorf("qdrant bare run did not report the qdrant status:\n%s", out)
+			}
+			// EST-8171 item 2: every bare run carries bin and description.
+			if !strings.Contains(out, "bin") || !strings.Contains(out, rootDescription) {
+				t.Errorf("qdrant bare run %s lacks bin or description:\n%s", flag, out)
 			}
 		})
 	}

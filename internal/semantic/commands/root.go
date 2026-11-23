@@ -158,7 +158,7 @@ Supports any OpenAI-compatible embedding API (TEI, Ollama, vLLM, OpenAI, Azure, 
 				fmt.Printf("%s\n", rootDescription)
 				fmt.Printf("Executable: %s\n\n", executableDisplayPath())
 			}
-			return runIndexStatus(cmd.Context(), GlobalJSONOutput)
+			return runStatus(cmd.Context(), GlobalJSONOutput, true)
 		},
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			// Publish the output mode to the output package first, before

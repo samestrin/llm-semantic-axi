@@ -152,7 +152,7 @@ func (e *HuggingFaceEmbedder) EmbedBatch(ctx context.Context, texts []string) ([
 	for attempt := 0; attempt < maxRetries; attempt++ {
 		resp, err = e.client.Do(httpReq)
 		if err != nil {
-			return nil, fmt.Errorf("failed to send request: %w", err)
+			return nil, unreachable(e.config.BaseURL, true, err)
 		}
 
 		// Check if model is loading

@@ -241,13 +241,15 @@ func runSearch(ctx context.Context, query string, opts searchOpts) error {
 	query = strings.TrimSpace(query)
 	if opts.jsonOutput || opts.minOutput || GlobalAXIOutput {
 		if GlobalAXIOutput {
-			// --full restores the whole chunk, --min keeps its own compact shape.
+			// --full restores the whole chunk. --min keeps its locator row but
+			// drops relevance and preview, so it is never wider than the
+			// default (EST-8171), matching refs --min.
 			var rows any
 			switch {
 			case opts.full:
 				rows = results
 			case opts.minOutput:
-				rows = searchRows(results, true)
+				rows = axiSearchMinRows(results)
 			default:
 				rows = axiSearchRows(results)
 			}
@@ -344,6 +346,21 @@ func axiSearchRows(results []semantic.SearchResult) []map[string]any {
 			"name":    r.Chunk.Name,
 			"score":   r.Score,
 			"content": content,
+		}
+	}
+	return rows
+}
+
+// axiSearchMinRows is the TOON --min row: file, line, name and score. --json
+// --min keeps searchRows' compact row with relevance and preview.
+func axiSearchMinRows(results []semantic.SearchResult) []map[string]any {
+	rows := make([]map[string]any, len(results))
+	for i, r := range results {
+		rows[i] = map[string]any{
+			"file":  r.Chunk.FilePath,
+			"line":  r.Chunk.StartLine,
+			"name":  r.Chunk.Name,
+			"score": r.Score,
 		}
 	}
 	return rows

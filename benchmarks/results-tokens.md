@@ -44,10 +44,10 @@ Tokens per query:
 The three modes do not carry the same information, and the counts show what each one costs:
 
 - **`--json`** carries every field of every result: the whole chunk content, untruncated, its id, line range, language, signature and a preview. Its schema is kept as it was before the AXI work (board decision, 2026-10-31; see [docs/axi-conformance.md](../docs/axi-conformance.md)).
-- **`--axi`** carries four fields per result (`file` as `path:line`, `name`, `score`, `content`), with `content` cut at 200 characters of the chunk body plus a note of how much was left out. Around the results it adds the query, the `total`, a `help` list of next steps and the `stale` object. Those are what a model needs to act on the answer without a second call.
+- **TOON (default)** carries four fields per result (`file` as `path:line`, `name`, `score`, `content`), with `content` cut at 200 characters of the chunk body plus a note of how much was left out. Around the results it adds the query, the `total`, a `help` list of next steps and the `stale` object. Those are what a model needs to act on the answer without a second call.
 - **Plain** prints a numbered list: path and line, name, type, relevance label, score, and a one-line preview of at most 150 characters, which for a function is its signature rather than its body. With a fresh index it prints no staleness line. It is the smallest because it shows the least of each result, not because the encoding is denser.
 
-So plain is a list of where to look, and `--axi` is the start of what is there. The number to quote for `--axi` is its ratio to `--json`, with that caveat.
+So plain is a list of where to look, and TOON is the start of what is there. The number to quote for TOON (default) is its ratio to `--json`, with that caveat.
 
 ## Method
 

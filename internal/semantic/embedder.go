@@ -178,7 +178,7 @@ func (e *Embedder) EmbedBatch(ctx context.Context, texts []string) ([][]float32,
 	}
 
 	if lastErr != nil {
-		return nil, fmt.Errorf("failed to send request: %w", lastErr)
+		return nil, unreachable(e.config.APIURL, false, lastErr)
 	}
 	defer resp.Body.Close()
 

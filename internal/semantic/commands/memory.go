@@ -1306,12 +1306,17 @@ func runMemoryStatsTable(ctx context.Context, tracker semantic.MemoryStatsTracke
 		return fmt.Errorf("failed to retrieve memory stats: %w", err)
 	}
 
-	// Count totals before filtering
-	totalMemories := len(stats)
+	// The totals describe the store, not the retrieval records: a memory that
+	// has never been retrieved has no stats row but is still stored.
+	entries, err := storage.ListMemory(ctx, semantic.MemoryListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to count memories: %w", err)
+	}
+	totalMemories := len(entries)
 	pendingCount := 0
 	promotedCount := 0
-	for _, stat := range stats {
-		if stat.Status == "promoted" {
+	for _, e := range entries {
+		if e.Status == semantic.MemoryStatusPromoted {
 			promotedCount++
 		} else {
 			pendingCount++
@@ -1377,11 +1382,7 @@ func runMemoryStatsTable(ctx context.Context, tracker semantic.MemoryStatsTracke
 				"stale":          axiStalenessNotApplicable(),
 			}
 			if len(filtered) == 0 {
-				storeEmpty, err := zeroResultsMemoryStoreEmpty(ctx, storage, 0)
-				if err != nil {
-					return err
-				}
-				markMemoryStatsZeroResults(payload, storeEmpty, opts)
+				markMemoryStatsZeroResults(payload, totalMemories == 0, opts)
 			}
 			return emitStdout(payload)
 		}
@@ -1450,8 +1451,11 @@ func runMemoryStatsTable(ctx context.Context, tracker semantic.MemoryStatsTracke
 	if len(rows) == 0 {
 		if opts.id != "" || opts.minRetrievals > 0 || opts.status != "" || opts.tagsFilter != "" {
 			fmt.Println("No memories found matching filters.")
-		} else {
+		} else if totalMemories == 0 {
 			fmt.Println("No memories found.")
+		} else {
+			fmt.Printf("Total: %d | Pending: %d | Promoted: %d\n\n", totalMemories, pendingCount, promotedCount)
+			fmt.Println(noRetrievalsMessage)
 		}
 		return nil
 	}
@@ -1463,6 +1467,10 @@ func runMemoryStatsTable(ctx context.Context, tracker semantic.MemoryStatsTracke
 	displayStatsTable(rows)
 	return nil
 }
+
+// noRetrievalsMessage is what memory stats says over a store whose entries
+// have never been retrieved.
+const noRetrievalsMessage = "No retrievals recorded yet, so there are no stats to show. Run `llm-semantic memory search` to retrieve entries."
 
 // emptyMemoryStatsMessage is the sentence memory stats prints over a store
 // with no entries.
@@ -1487,7 +1495,7 @@ func markMemoryStatsZeroResults(payload map[string]any, storeEmpty bool, opts me
 		payload["help"] = []string{"Drop the filters to see every entry's stats"}
 		return
 	}
-	payload["message"] = "No retrievals recorded yet, so there are no stats to show. Run `llm-semantic memory search` to retrieve entries."
+	payload["message"] = noRetrievalsMessage
 	payload["help"] = []string{"Run `llm-semantic memory search <query>` to retrieve entries and record stats"}
 }
 
