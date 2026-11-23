@@ -170,9 +170,12 @@ Supports any OpenAI-compatible embedding API (TEI, Ollama, vLLM, OpenAI, Azure, 
 			// rejectContradictoryFormats installs runs first.
 			resolveOutputMode(cmd)
 
-			// cobra checks flag groups only after this hook, and with no
-			// pointer to --help. Check them here first, so a malformed
+			// cobra checks required flags and flag groups only after this
+			// hook, and with no pointer to --help. Check them here first, so a malformed
 			// invocation says where to look before any config is loaded.
+			if err := requiredFlagsError(cmd); err != nil {
+				return err
+			}
 			if err := cmd.ValidateFlagGroups(); err != nil {
 				return withHelp(fmt.Errorf("%w; run `%s --help` for usage", err, cmd.CommandPath()), helpPointer(cmd))
 			}
@@ -239,29 +242,37 @@ Supports any OpenAI-compatible embedding API (TEI, Ollama, vLLM, OpenAI, Azure, 
 	rootCmd.PersistentFlags().BoolVar(&axiAlias, "axi", false, "Output as TOON (accepted for compatibility; TOON is the default)")
 	GlobalAXIOutput = false
 
-	// Add subcommands
-	rootCmd.AddCommand(searchCmd())
-	rootCmd.AddCommand(searchAliasCmd("code-search", "code"))
-	rootCmd.AddCommand(searchAliasCmd("docs-search", "docs"))
-	rootCmd.AddCommand(searchAliasCmd("memory-search", "memory"))
-	rootCmd.AddCommand(multisearchCmd())
-	rootCmd.AddCommand(indexCmd())
-	rootCmd.AddCommand(indexStatusCmd())
-	rootCmd.AddCommand(indexUpdateCmd())
-	rootCmd.AddCommand(memoryCmd())
-	rootCmd.AddCommand(collectionCmd())
-	rootCmd.AddCommand(callersCmd())
-	rootCmd.AddCommand(refsCmd())
-	rootCmd.AddCommand(setupCmd())
+	rootCmd.AddCommand(unwrappedCommands()...)
 
 	// A malformed invocation names what was wrong and lists what is valid.
-	// Both run before any hook, so nothing reaches an embedder or the index.
+	// All run before any hook, so nothing reaches an embedder or the index.
 	// The flag handler is inherited by every subcommand.
 	rootCmd.SetFlagErrorFunc(flagError)
 	rejectUnknownCommands(rootCmd)
+	explainArgErrors(rootCmd)
 	rejectContradictoryFormats(rootCmd)
 
 	return rootCmd
+}
+
+// unwrappedCommands are the subcommands as declared, before RootCmd installs
+// its argument checks over them.
+func unwrappedCommands() []*cobra.Command {
+	return []*cobra.Command{
+		searchCmd(),
+		searchAliasCmd("code-search", "code"),
+		searchAliasCmd("docs-search", "docs"),
+		searchAliasCmd("memory-search", "memory"),
+		multisearchCmd(),
+		indexCmd(),
+		indexStatusCmd(),
+		indexUpdateCmd(),
+		memoryCmd(),
+		collectionCmd(),
+		callersCmd(),
+		refsCmd(),
+		setupCmd(),
+	}
 }
 
 // getAPIKey returns the API key from flag or environment

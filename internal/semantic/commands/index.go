@@ -57,6 +57,9 @@ func indexCmd() *cobra.Command {
 		Short: "Build semantic index for a codebase",
 		Long: `Build or rebuild the semantic index for a codebase.
 Walks the directory, parses code files, and generates embeddings.`,
+		Example: `  llm-semantic index .
+  llm-semantic index ./src --include '*.go' --exclude-tests
+  llm-semantic index . --force`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			path := "."

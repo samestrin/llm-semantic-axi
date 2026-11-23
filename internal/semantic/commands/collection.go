@@ -44,6 +44,7 @@ Example:
   llm-semantic collection delete --profile memory --force
 
 Without --force the command refuses and exits 1; it never prompts.`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if profile == "" {
 				return fmt.Errorf("--profile is required")

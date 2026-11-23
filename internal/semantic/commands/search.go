@@ -57,6 +57,9 @@ RERANKING: When LLM_SEMANTIC_RERANKER_API_URL is set, reranking is enabled by
 default. This uses a cross-encoder model to re-score results for improved
 precision. Use --no-rerank to disable. Use --rerank-candidates to control
 how many candidates are fetched before reranking (default: max(topK*5, 50)).`,
+		Example: `  llm-semantic search "parse the config file"
+  llm-semantic search "retry with backoff" --top 5 --path internal/
+  llm-semantic search "session token expiry" --hybrid --profiles code,docs`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			query := strings.Join(args, " ")
@@ -503,6 +506,8 @@ func searchAliasCmd(name, profileName string) *cobra.Command {
 This is a convenience alias for: search --profile %s <query>
 
 Returns ranked results based on semantic similarity.`, profileName, profileName),
+		Example: fmt.Sprintf(`  llm-semantic %[1]s "parse the config file"
+  llm-semantic %[1]s "retry with backoff" --top 5 --hybrid`, name),
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Set the profile

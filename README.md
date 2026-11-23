@@ -28,7 +28,7 @@ curl -fsSL https://github.com/samestrin/llm-semantic-axi/releases/latest/downloa
 
 It checks the archive against the release's `SHA256SUMS.txt` before writing anything; a mismatch, a missing checksum or a cut-off download stops the install and leaves the existing binaries untouched. Options, each also read from the environment variable named after it: `--version vX.Y.Z` (`LLM_SEMANTIC_VERSION`) pins a release, `--dir DIR` (`LLM_SEMANTIC_INSTALL_DIR`) changes the install directory, `--base-url URL` (`LLM_SEMANTIC_BASE_URL`) changes where the assets are fetched from, and `--timeout SECS` (`LLM_SEMANTIC_INSTALL_TIMEOUT`) limits each download. Pass options through the pipe with `sh -s --`, for example `| sh -s -- --dir /opt/bin`.
 
-The install directory must be on your `PATH`: `llm-semantic-mcp` finds the CLI through `PATH`, so the MCP server cannot run until it is. The installer warns when it is not. Add this to your shell profile and open a new shell:
+The install directory must be on your `PATH`: `llm-semantic-mcp` finds the CLI through `PATH`, falling back only to `/usr/local/bin/llm-semantic`, so the MCP server cannot run from any other install directory until it is on `PATH`. The installer warns when it is not. Add this to your shell profile and open a new shell:
 
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
@@ -65,7 +65,7 @@ The binaries land in `$(go env GOPATH)/bin`. A `go install` build is not stamped
 git clone https://github.com/samestrin/llm-semantic-axi.git
 cd llm-semantic-axi
 make build          # both binaries in ./build/
-sudo ./install.sh   # or: build and install both to /usr/local/bin
+sudo ./install.sh   # or: build and install both to /usr/local/bin (INSTALL_DIR=<dir> ./install.sh for a directory you can write)
 ```
 
 ### For coding agents
@@ -179,8 +179,8 @@ Flags win over environment variables, and environment variables over defaults. S
 
 | Name | Default | Meaning |
 |---|---|---|
-| `LLM_SEMANTIC_API_URL` / `--api-url` | `http://localhost:8080` | Embedding endpoint (OpenAI-compatible unless `--embedder` says otherwise). |
-| `LLM_SEMANTIC_MODEL` / `--model` | `nomic-embed-text` | Embedding model the endpoint serves. |
+| `LLM_SEMANTIC_API_URL` / `--api-url` | `http://localhost:8080` | Embedding endpoint for `--embedder openai` (any OpenAI-compatible server). `cohere`, `huggingface` and `openrouter` call their hosted APIs and ignore it. |
+| `LLM_SEMANTIC_MODEL` / `--model` | `nomic-embed-text` for `openai` | Embedding model the endpoint serves. Unset, the hosted embedders use their own: `embed-english-v3.0` (cohere), `sentence-transformers/all-MiniLM-L6-v2` (huggingface), `mistralai/codestral-embed-2505` (openrouter). |
 | `LLM_SEMANTIC_API_KEY` / `--api-key` | unset, then `OPENAI_API_KEY` | Key for the default `openai` embedder. |
 | `--embedder` | `openai` | Request shape: `openai`, `cohere`, `huggingface` or `openrouter`. |
 | `COHERE_API_KEY`, `OPENROUTER_API_KEY` | unset | Key for `--embedder cohere` or `openrouter` when `--api-key` is not set. |
@@ -247,7 +247,7 @@ Every timing is in [benchmarks/results-performance.json](benchmarks/results-perf
 
 `llm-semantic-mcp` is an MCP server that runs the CLI with `--axi` for each tool call. It is a fallback for environments that cannot run a CLI; the CLI is the product. TOON encoding goes through [go-axi](https://github.com/samestrin/go-axi), which guards against the raw codec's failure mode: a type it cannot encode does not error, it emits empty output, and a command then silently prints nothing.
 
-The tool was extracted from [samestrin/llm-tools](https://github.com/samestrin/llm-tools), which carried three unrelated tools in one Go module. This binary links sqlite, Qdrant and tree-sitter and is around 38 MB, a cost anyone wanting the small file tool used to pay as well, so it lives here on its own.
+The tool was extracted from [samestrin/llm-tools](https://github.com/samestrin/llm-tools), which carried three unrelated tools in one Go module. This binary links sqlite, Qdrant and tree-sitter and is about 39 MiB (a `-s -w` build for linux/amd64), a cost anyone wanting the small file tool used to pay as well, so it lives here on its own.
 
 ## Limits
 

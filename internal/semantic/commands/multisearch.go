@@ -31,13 +31,10 @@ func multisearchCmd() *cobra.Command {
 		Long: `Execute multiple semantic queries in parallel with intelligent deduplication and multi-match boosting.
 
 Results matching multiple queries receive boosted scores (+0.05 per additional match).
-Duplicate chunks are deduplicated, keeping the highest score.
-
-Examples:
-  llm-semantic multisearch "authentication" "JWT tokens"
+Duplicate chunks are deduplicated, keeping the highest score.`,
+		Example: `  llm-semantic multisearch "authentication" "JWT tokens"
   llm-semantic multisearch "error handling" "logging" --profiles code,docs
-  llm-semantic multisearch "api endpoint" "REST handler" --top 20 --json
-  llm-semantic multisearch "test" "spec" --output by_query`,
+  llm-semantic multisearch "api endpoint" "REST handler" --top 20 --output by_query`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			queries := args

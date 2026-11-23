@@ -1,6 +1,7 @@
 package output
 
 import (
+	"errors"
 	"strings"
 
 	goaxi "github.com/samestrin/go-axi"
@@ -71,6 +72,10 @@ func ExitCodeFor(err error) int {
 	if err == nil {
 		return int(goaxi.ExitOK)
 	}
+	var usage *UsageError
+	if errors.As(err, &usage) {
+		return int(goaxi.ExitUsage)
+	}
 	msg := err.Error()
 	for _, fragments := range usageMarkers {
 		matched := true
@@ -86,6 +91,14 @@ func ExitCodeFor(err error) int {
 	}
 	return int(goaxi.ExitError)
 }
+
+// UsageError marks a malformed invocation whose message is llm-semantic's own
+// wording rather than cobra's, such as a missing argument named by its <name>,
+// so no usage marker matches it. ExitCodeFor classifies it as exit 2.
+type UsageError struct{ Err error }
+
+func (e *UsageError) Error() string { return e.Err.Error() }
+func (e *UsageError) Unwrap() error { return e.Err }
 
 // ReportedError is a failure the command has already printed as its result, as
 // `index` does when files fail: the counts and the errors list are the report,

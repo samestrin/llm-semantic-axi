@@ -59,6 +59,22 @@ func TestExitCodeForUsageErrors(t *testing.T) {
 	}
 }
 
+// TestExitCodeForTypedUsageError defends review round 2 item 1: a translated
+// invocation error ("missing argument <symbol> for llm-semantic callers")
+// carries none of cobra's wording, so no usage marker matches it; the type,
+// wrapped or not, must still classify it as exit 2.
+func TestExitCodeForTypedUsageError(t *testing.T) {
+	err := &UsageError{Err: errors.New("missing argument <symbol> for llm-semantic callers")}
+	for name, e := range map[string]error{"bare": err, "wrapped": fmt.Errorf("running: %w", err)} {
+		if got := ExitCodeFor(e); got != int(goaxi.ExitUsage) {
+			t.Errorf("%s: ExitCodeFor = %d, want %d (ExitUsage)", name, got, int(goaxi.ExitUsage))
+		}
+	}
+	if err.Error() != "missing argument <symbol> for llm-semantic callers" {
+		t.Errorf("UsageError changed the message: %q", err.Error())
+	}
+}
+
 func TestExitCodeForRuntimeErrors(t *testing.T) {
 	// A genuine failure stays exit 1. Widening the usage class until ordinary
 	// errors fall into it would be worse than never having split them: the

@@ -88,6 +88,10 @@ func indexStatusCmd() *cobra.Command {
 		Use:   "index-status",
 		Short: "Show semantic index status",
 		Long:  `Display statistics about the current semantic index.`,
+		Example: `  llm-semantic index-status
+  llm-semantic index-status --index-dir .index/docs
+  llm-semantic index-status --json`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runIndexStatus(cmd.Context(), jsonOutput)
 		},

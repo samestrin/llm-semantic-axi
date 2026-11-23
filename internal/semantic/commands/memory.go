@@ -63,6 +63,7 @@ The question and answer text is embedded for later semantic search.
 
 Example:
   llm-semantic memory store -q "How should auth tokens be handled?" -a "Use JWT with 24h expiry"`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if question == "" || answer == "" {
 				return fmt.Errorf("--question and --answer are required")
@@ -699,6 +700,7 @@ Generates embeddings for each entry and stores them for semantic search.
 
 Example:
   llm-semantic memory import --source ./clarification-tracking.yaml`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runMemoryImport(cmd.Context(), memoryImportOpts{
 				source:     source,
@@ -885,6 +887,7 @@ func memoryListCmd() *cobra.Command {
 
 Example:
   llm-semantic memory list --limit 20 --status pending`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runMemoryList(cmd.Context(), memoryListOpts{
 				limit:      limit,
@@ -1195,6 +1198,7 @@ Examples:
   llm-semantic memory stats --tags auth
   llm-semantic memory stats --id mem-abc123 --history
   llm-semantic memory stats --prune --older-than 30`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runMemoryStats(cmd.Context(), memoryStatsOpts{
 				id:            id,

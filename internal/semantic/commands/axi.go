@@ -167,12 +167,16 @@ func helpPointer(cmd *cobra.Command) string {
 // flagError rejects a malformed flag with what the caller needs to retry: for
 // an unknown flag, every flag cmd accepts, and for any flag error a pointer to
 // --help. Without the list an agent learns only that its flag was wrong, and
-// spends a second call on --help to find the right one.
+// spends a second call on --help to find the right one. A bad or missing value
+// for a known flag is translated by flagValueError instead.
 //
 // It wraps rather than replaces cobra's error, so the message still starts with
 // cobra's wording and output.ExitCodeFor still classifies it as exit 2. It runs
 // during flag parsing, before any hook, embedder or storage is reached.
 func flagError(cmd *cobra.Command, err error) error {
+	if translated := flagValueError(cmd, err); translated != nil {
+		return translated
+	}
 	msg := err.Error()
 	if strings.HasPrefix(msg, "unknown flag: ") || strings.HasPrefix(msg, "unknown shorthand flag: ") {
 		var flags []string
