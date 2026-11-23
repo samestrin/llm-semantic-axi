@@ -40,6 +40,18 @@ func TestBadFlagValuesExitTwoBeforeAnyWork(t *testing.T) {
 		{"index", ".", "--embed-batch-size", "-1"},
 		{"collection", "delete", "--profile", "bogus", "--force"},
 		{"collection", "delete", "--profile", "a;rm -rf x", "--force"},
+		// EST-8336 Low 1: these exited 1 with --hybrid or --recency-boost and
+		// were silently accepted without them.
+		{"search", "x", "--hybrid", "--fusion-k", "-1"},
+		{"search", "x", "--fusion-k", "0"},
+		{"search", "x", "--hybrid", "--fusion-alpha", "7"},
+		{"search", "x", "--fusion-alpha", "-0.1"},
+		{"search", "x", "--recency-boost", "--recency-decay", "-1"},
+		{"search", "x", "--recency-decay", "0"},
+		{"search", "x", "--recency-factor", "-1"},
+		{"code-search", "x", "--hybrid", "--fusion-k", "-1"},
+		{"docs-search", "x", "--fusion-alpha", "7"},
+		{"code-search", "x", "--recency-decay", "-1"},
 	}
 	for _, args := range cases {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
