@@ -36,6 +36,10 @@ var flagValueChecks = map[string]func(f *pflag.Flag) string{
 	"embed-batch-size":  intAtLeast(0),
 	"overlap-lines":     intAtLeast(0),
 	"rerank-candidates": intAtLeast(0),
+	"fusion-k":          intAtLeast(1),
+	"fusion-alpha":      unitInterval,
+	"recency-factor":    floatAtLeast(0),
+	"recency-decay":     floatAbove(0),
 	"question":          nonBlank,
 	"answer":            nonBlank,
 }
@@ -116,6 +120,26 @@ func unitInterval(f *pflag.Flag) string {
 		return ""
 	}
 	return "a number from 0.0 to 1.0"
+}
+
+func floatAtLeast(lo float64) func(*pflag.Flag) string {
+	return func(f *pflag.Flag) string {
+		x, err := strconv.ParseFloat(f.Value.String(), 64)
+		if err == nil && x >= lo {
+			return ""
+		}
+		return fmt.Sprintf("a number, %g or more", lo)
+	}
+}
+
+func floatAbove(lo float64) func(*pflag.Flag) string {
+	return func(f *pflag.Flag) string {
+		x, err := strconv.ParseFloat(f.Value.String(), 64)
+		if err == nil && x > lo {
+			return ""
+		}
+		return fmt.Sprintf("a number greater than %g", lo)
+	}
 }
 
 func nonBlank(f *pflag.Flag) string {
