@@ -103,6 +103,9 @@ func runIndexUpdate(ctx context.Context, path string, opts updateOpts) error {
 		if indexPath == "" {
 			return withHelp(fmt.Errorf("semantic index not found. Run 'llm-semantic index' first"), indexMissingHelp...)
 		}
+		if err := semantic.CheckIndexPathNotSymlink(indexPath); err != nil {
+			return err
+		}
 	}
 
 	// Acquire cross-process lock (non-blocking for incremental update)

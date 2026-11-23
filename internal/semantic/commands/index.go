@@ -210,6 +210,9 @@ func runIndex(ctx context.Context, path string, opts indexOpts) error {
 	indexPath := ""
 	if storageType != "qdrant" {
 		indexPath = resolveIndexPath(absPath)
+		if err := semantic.CheckIndexPathNotSymlink(indexPath); err != nil {
+			return err
+		}
 		indexDir := filepath.Dir(indexPath)
 		if err := os.MkdirAll(indexDir, 0700); err != nil {
 			return fmt.Errorf("failed to create index directory %q: %w", indexDir, err)

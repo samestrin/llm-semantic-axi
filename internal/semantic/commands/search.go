@@ -64,25 +64,8 @@ how many candidates are fetched before reranking (default: max(topK*5, 50)).`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			query := strings.Join(args, " ")
 
-			// Validate hybrid parameters
-			if hybrid {
-				if fusionK <= 0 {
-					return fmt.Errorf("fusion-k must be a positive integer, got: %d", fusionK)
-				}
-				if fusionAlpha < 0.0 || fusionAlpha > 1.0 {
-					return fmt.Errorf("fusion-alpha must be between 0.0 and 1.0, got: %f", fusionAlpha)
-				}
-			}
-
-			// Validate recency parameters
-			if recencyBoost {
-				if recencyFactor < 0 {
-					return fmt.Errorf("recency-factor must be >= 0, got: %f", recencyFactor)
-				}
-				if recencyDecay <= 0 {
-					return fmt.Errorf("recency-decay must be > 0, got: %f", recencyDecay)
-				}
-			}
+			// --fusion-k, --fusion-alpha, --recency-factor and --recency-decay
+			// are range-checked in flagValueChecks, before this runs (exit 2).
 
 			// Validate profile names
 			for _, p := range profiles {
@@ -518,25 +501,8 @@ Returns ranked results based on semantic similarity.`, profileName, profileName)
 				query = strings.Join(args, " ")
 			}
 
-			// Validate hybrid parameters
-			if hybrid {
-				if fusionK <= 0 {
-					return fmt.Errorf("fusion-k must be a positive integer, got: %d", fusionK)
-				}
-				if fusionAlpha < 0.0 || fusionAlpha > 1.0 {
-					return fmt.Errorf("fusion-alpha must be between 0.0 and 1.0, got: %f", fusionAlpha)
-				}
-			}
-
-			// Validate recency parameters
-			if recencyBoost {
-				if recencyFactor < 0 {
-					return fmt.Errorf("recency-factor must be >= 0, got: %f", recencyFactor)
-				}
-				if recencyDecay <= 0 {
-					return fmt.Errorf("recency-decay must be > 0, got: %f", recencyDecay)
-				}
-			}
+			// --fusion-k, --fusion-alpha, --recency-factor and --recency-decay
+			// are range-checked in flagValueChecks, before this runs (exit 2).
 
 			return runSearch(cmd.Context(), query, searchOpts{
 				topK:             topK,

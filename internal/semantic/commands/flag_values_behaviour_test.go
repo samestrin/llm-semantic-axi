@@ -40,6 +40,18 @@ func TestBadFlagValuesExitTwoBeforeAnyWork(t *testing.T) {
 		{"index", ".", "--embed-batch-size", "-1"},
 		{"collection", "delete", "--profile", "bogus", "--force"},
 		{"collection", "delete", "--profile", "a;rm -rf x", "--force"},
+		// EST-8336 Low 1: these exited 1 with --hybrid or --recency-boost and
+		// were silently accepted without them.
+		{"search", "x", "--hybrid", "--fusion-k", "-1"},
+		{"search", "x", "--fusion-k", "0"},
+		{"search", "x", "--hybrid", "--fusion-alpha", "7"},
+		{"search", "x", "--fusion-alpha", "-0.1"},
+		{"search", "x", "--recency-boost", "--recency-decay", "-1"},
+		{"search", "x", "--recency-decay", "0"},
+		{"search", "x", "--recency-factor", "-1"},
+		{"code-search", "x", "--hybrid", "--fusion-k", "-1"},
+		{"docs-search", "x", "--fusion-alpha", "7"},
+		{"code-search", "x", "--recency-decay", "-1"},
 	}
 	for _, args := range cases {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
@@ -114,5 +126,29 @@ func TestIndexDirTildeIsExpanded(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(home, "idx", "semantic.db")); err != nil {
 		t.Errorf("index not written under $HOME/idx: %v", err)
+	}
+}
+
+// TestValidFusionAndRecencyValuesPassTheFlagCheck: the EST-8336 range checks
+// must accept good values too, or a check that refuses everything would ship.
+// Boundary values are included.
+func TestValidFusionAndRecencyValuesPassTheFlagCheck(t *testing.T) {
+	cases := [][]string{
+		{"--fusion-k", "1"}, {"--fusion-k", "60"},
+		{"--fusion-alpha", "0"}, {"--fusion-alpha", "0.7"}, {"--fusion-alpha", "1"},
+		{"--recency-factor", "0"}, {"--recency-factor", "0.5"},
+		{"--recency-decay", "0.5"}, {"--recency-decay", "7"},
+	}
+	for _, flag := range cases {
+		t.Run(strings.Join(flag, " "), func(t *testing.T) {
+			newWorkspace(t)
+			err := executeRoot(t, append([]string{"search", "x"}, flag...)...)
+			if err != nil && strings.Contains(err.Error(), "invalid value") {
+				t.Errorf("a valid %s was refused: %v", strings.Join(flag, " "), err)
+			}
+			if code := output.ExitCodeFor(err); code == 2 {
+				t.Errorf("exit 2 for a valid %s: %v", strings.Join(flag, " "), err)
+			}
+		})
 	}
 }

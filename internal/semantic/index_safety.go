@@ -204,10 +204,17 @@ func gitDirOf(dir string) (string, bool) {
 	return gitDir, true
 }
 
+// rulesIn returns the rules dir adds: its .gitignore, preceded, when dir is
+// the top of a repository nested below p.top, by that repository's
+// info/exclude. Indexing a parent of several repositories (--allow-home) read
+// only the outermost repository's exclude, and sent the others' files.
 func (p *pathPolicy) rulesIn(dir string) []ignoreRule {
 	rules, ok := p.rules[dir]
 	if !ok {
-		rules = parseIgnoreFile(filepath.Join(dir, ".gitignore"), dir)
+		if gitDir, isRepo := gitDirOf(dir); isRepo && dir != p.top {
+			rules = parseIgnoreFile(filepath.Join(gitDir, "info", "exclude"), dir)
+		}
+		rules = append(rules, parseIgnoreFile(filepath.Join(dir, ".gitignore"), dir)...)
 		p.rules[dir] = rules
 	}
 	return rules
@@ -347,4 +354,22 @@ func readIndexFile(path string) ([]byte, error) {
 		return nil, fmt.Errorf("%s is larger than %d bytes", path, MaxIndexFileSize)
 	}
 	return b, nil
+}
+
+// CheckIndexPathNotSymlink refuses an index database whose directory, file or
+// sidecar (-wal, -shm, .lock) is a symlink: a .index linked outside the
+// project sent the database there, and an empty file it pointed at became a
+// database. A path that does not exist yet is fine.
+func CheckIndexPathNotSymlink(dbPath string) error {
+	for _, p := range []string{filepath.Dir(dbPath), dbPath, dbPath + "-wal", dbPath + "-shm", dbPath + ".lock"} {
+		info, err := os.Lstat(p)
+		if err != nil {
+			continue
+		}
+		if info.Mode()&fs.ModeSymlink != 0 {
+			target, _ := os.Readlink(p)
+			return fmt.Errorf("%s is a symlink to %s, refusing to write the index through it; remove the link, or pass --index-dir with a real directory", p, target)
+		}
+	}
+	return nil
 }

@@ -147,11 +147,12 @@ Every command accepts `--help`. A long run of options is in `llm-semantic <comma
 
 Every file `index` and `index-update` read is sent to the embedding API, so they read only what belongs to the project:
 
-- Files and directories ignored by `.gitignore` (at any level, including the repository's above the indexed directory) and `.git/info/exclude` are skipped, as are hidden directories (`.config/`, `.docker/`, ...) below the indexed directory.
+- Files and directories ignored by `.gitignore` (at any level, including the repository's above the indexed directory) and `.git/info/exclude` (each nested repository's too) are skipped, as are hidden directories (`.config/`, `.docker/`, ...) below the indexed directory.
 - Files whose names usually hold credentials are withheld: `credentials*`, `secret*` and `service-account*` data files (`.json`, `.yaml`, `.toml`, `.env`, ...), `.env*`, keys and certificates (`*.pem`, `*.key`, `id_rsa*`, ...), `*.tfstate` and `*.log`.
 - Only regular files are read. A symlink is followed only to a file inside the indexed directory; FIFOs and devices are skipped. Files over 1 MiB, and files with a NUL byte in their first 8000 bytes (binary), are withheld.
 - Withheld files are counted by reason in `files_withheld` (`secret_name`, `outside_root`, `not_regular_file`, `too_large`, `binary`), and `--plain` prints a `Withheld N files` line.
 - `index` refuses your home directory and `/` (exit 2) unless you pass `--allow-home`.
+- The index is not written through a symlink: a `.index` directory, `semantic.db` or its `-wal`, `-shm` or `.lock` file that is a symlink is refused.
 
 ```bash
 # build, then refresh after a commit
@@ -255,7 +256,7 @@ Every timing is in [benchmarks/results-performance.json](benchmarks/results-perf
 
 `index` splits each file into chunks (functions, methods and types through tree-sitter, or `go/ast` for Go; sections for Markdown; text windows for other text), embeds each chunk through the endpoint and stores the vectors with the call edges it found. `search` embeds the query and ranks chunks by similarity, optionally fused with a lexical index (`--hybrid`) and reranked. `callers` and `refs` read the stored edges. With the default SQLite storage they never call the endpoint; with Qdrant they call it once, to learn the embedding dimension before opening the collection.
 
-`llm-semantic-mcp` is an MCP server that runs the CLI with `--axi` for each tool call. It is a fallback for environments that cannot run a CLI; the CLI is the product. TOON encoding goes through [go-axi](https://github.com/samestrin/go-axi), which guards against the raw codec's failure mode: a type it cannot encode does not error, it emits empty output, and a command then silently prints nothing.
+`llm-semantic-mcp` is an MCP server that runs the CLI with `--axi` for each tool call. A tool's path, query, symbol or id is passed after `--`, and a value starting with `-` is refused, so tool input cannot become a CLI option. It is a fallback for environments that cannot run a CLI; the CLI is the product. TOON encoding goes through [go-axi](https://github.com/samestrin/go-axi), which guards against the raw codec's failure mode: a type it cannot encode does not error, it emits empty output, and a command then silently prints nothing.
 
 The tool was extracted from [samestrin/llm-tools](https://github.com/samestrin/llm-tools), which carried three unrelated tools in one Go module. This binary links sqlite, Qdrant and tree-sitter and is about 39 MiB (a `-s -w` build for linux/amd64), a cost anyone wanting the small file tool used to pay as well, so it lives here on its own.
 

@@ -15,7 +15,7 @@ func TestBuildCallersArgs(t *testing.T) {
 		{
 			name: "symbol only",
 			args: map[string]interface{}{"symbol": "ResolveRefs"},
-			want: []string{"callers", "ResolveRefs"},
+			want: []string{"callers", "--", "ResolveRefs"},
 		},
 		{
 			name: "symbol with backend selection",
@@ -24,7 +24,7 @@ func TestBuildCallersArgs(t *testing.T) {
 				"storage":    "qdrant",
 				"collection": "code",
 			},
-			want: []string{"callers", "ResolveRefs", "--storage", "qdrant", "--collection", "code"},
+			want: []string{"callers", "--storage", "qdrant", "--collection", "code", "--", "ResolveRefs"},
 		},
 	}
 
