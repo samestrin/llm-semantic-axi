@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -48,6 +49,7 @@ func memoryStoreCmd() *cobra.Command {
 		tags       string
 		source     string
 		filePath   string
+		force      bool
 		sprints    string
 		files      string
 		jsonOutput bool
@@ -71,6 +73,7 @@ Example:
 				tags:       tags,
 				source:     source,
 				filePath:   filePath,
+				force:      force,
 				sprints:    sprints,
 				files:      files,
 				jsonOutput: jsonOutput,
@@ -85,6 +88,7 @@ Example:
 	cmd.Flags().StringVarP(&tags, "tags", "t", "", "Comma-separated context tags")
 	cmd.Flags().StringVarP(&source, "source", "s", "manual", "Origin source")
 	cmd.Flags().StringVarP(&filePath, "file-path", "f", "", "Write memory as markdown file at this path")
+	cmd.Flags().BoolVar(&force, "force", false, "Replace an existing --file-path file")
 	cmd.Flags().StringVar(&sprints, "sprints", "", "Comma-separated sprint references (e.g., 'sprint-42,sprint-43')")
 	cmd.Flags().StringVar(&files, "files", "", "Comma-separated file references (e.g., 'src/auth.ts,src/db.go')")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
@@ -103,6 +107,7 @@ type memoryStoreOpts struct {
 	tags       string
 	source     string
 	filePath   string
+	force      bool
 	sprints    string
 	files      string
 	jsonOutput bool
@@ -110,7 +115,38 @@ type memoryStoreOpts struct {
 	full       bool
 }
 
+// checkMemoryFilePath refuses a --file-path that is a symlink (even with
+// --force) or an existing file without --force. `memory store -f` overwrote
+// an existing file and wrote through a symlink without asking.
+func checkMemoryFilePath(path string, force bool) error {
+	info, err := os.Lstat(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("cannot check --file-path %s: %w", path, err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		target, _ := os.Readlink(path)
+		return fmt.Errorf("--file-path %s is a symlink to %s, refusing to write through it", path, target)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("--file-path %s exists and is not a regular file, refusing to write it", path)
+	}
+	if !force {
+		return withHelp(fmt.Errorf("--file-path %s already exists, refusing to overwrite it", path),
+			"Pass --force to replace it, or choose another --file-path")
+	}
+	return nil
+}
+
 func runMemoryStore(ctx context.Context, opts memoryStoreOpts) error {
+	if opts.filePath != "" {
+		if err := checkMemoryFilePath(opts.filePath, opts.force); err != nil {
+			return err
+		}
+	}
+
 	// Find index path (only needed for sqlite)
 	indexPath := ""
 	if storageType == "" || storageType == "sqlite" {
@@ -175,6 +211,11 @@ func runMemoryStore(ctx context.Context, opts memoryStoreOpts) error {
 			if err := os.MkdirAll(dir, 0755); err != nil {
 				return fmt.Errorf("failed to create directory for memory file: %w", err)
 			}
+		}
+		// Checked again here, after the embedding call, so a symlink swapped in
+		// meanwhile is not followed.
+		if err := checkMemoryFilePath(opts.filePath, opts.force); err != nil {
+			return err
 		}
 		if err := os.WriteFile(opts.filePath, []byte(entry.MemoryFileContent()), 0644); err != nil {
 			return fmt.Errorf("failed to write memory file: %w", err)
@@ -749,11 +790,40 @@ type ClarificationFile struct {
 // maxImportSourceSize caps the clarification YAML memory import reads.
 const maxImportSourceSize = 16 << 20
 
-func runMemoryImport(ctx context.Context, opts memoryImportOpts) error {
-	// Read and parse YAML
-	data, err := os.ReadFile(opts.source)
+// readImportSource reads a memory import source that is a regular file no
+// larger than maxImportSourceSize.
+func readImportSource(path string) ([]byte, error) {
+	f, err := os.Open(path)
 	if err != nil {
-		return fmt.Errorf("failed to read source file: %w", err)
+		return nil, fmt.Errorf("failed to read source file: %w", err)
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, fmt.Errorf("failed to read source file: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("--source %s is not a regular file", path)
+	}
+	if info.Size() > maxImportSourceSize {
+		return nil, fmt.Errorf("--source %s is larger than %d bytes", path, maxImportSourceSize)
+	}
+	data, err := io.ReadAll(io.LimitReader(f, maxImportSourceSize+1))
+	if err != nil {
+		return nil, fmt.Errorf("failed to read source file: %w", err)
+	}
+	if len(data) > maxImportSourceSize {
+		return nil, fmt.Errorf("--source %s is larger than %d bytes", path, maxImportSourceSize)
+	}
+	return data, nil
+}
+
+func runMemoryImport(ctx context.Context, opts memoryImportOpts) error {
+	// Read and parse YAML. Only a regular file up to the cap is read:
+	// --source /dev/zero hung reading forever.
+	data, err := readImportSource(opts.source)
+	if err != nil {
+		return err
 	}
 
 	var clarFile ClarificationFile
