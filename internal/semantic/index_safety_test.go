@@ -385,3 +385,34 @@ func TestIndexHonoursWorktreeExclude(t *testing.T) {
 		t.Error("a file the worktree's info/exclude names reached the embedding API")
 	}
 }
+
+// TestIndexHonoursNestedRepoExclude: indexing a parent directory (as with
+// --allow-home) read only the outermost repository's .git/info/exclude, so a
+// file a nested repository excluded was sent (EST-8336 Low 2). Each nested
+// repository's info/exclude and .gitignore apply below it, and nowhere else.
+func TestIndexHonoursNestedRepoExclude(t *testing.T) {
+	root := t.TempDir()
+	writeTree(t, root, map[string]string{
+		"top.txt":                     "kept",
+		"proj/.git/HEAD":              "ref: refs/heads/main\n",
+		"proj/.git/info/exclude":      "private.txt\n",
+		"proj/.gitignore":             "ignored.txt\n",
+		"proj/main.txt":               "kept",
+		"proj/private.txt":            "LEAK-excluded",
+		"proj/sub/private.txt":        "LEAK-excluded-deeper",
+		"proj/ignored.txt":            "LEAK-ignored",
+		"other/private.txt":           "kept: proj's exclude does not reach here",
+		"deep/repo/.git/HEAD":         "ref: refs/heads/main\n",
+		"deep/repo/.git/info/exclude": "/notes.txt\n",
+		"deep/repo/notes.txt":         "LEAK-anchored",
+		"deep/repo/keep/notes.txt":    "kept: the rule is anchored to the nested repo",
+	})
+
+	_, rec, storage := runSafetyIndex(t, root)
+
+	assertIndexed(t, indexedRel(t, storage, root),
+		"deep/repo/keep/notes.txt", "other/private.txt", "proj/main.txt", "top.txt")
+	if rec.sent("LEAK") {
+		t.Error("a file a nested repository excludes reached the embedding API")
+	}
+}
