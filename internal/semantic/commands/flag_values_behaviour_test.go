@@ -48,7 +48,7 @@ func TestBadFlagValuesExitTwoBeforeAnyWork(t *testing.T) {
 			fe := newFakeEmbedder(t)
 			useEmbedder(t, fe)
 
-			err := executeRoot(t, args...)
+			err := executeRoot(t, append(args, "--api-url", fe.URL)...)
 
 			if err == nil {
 				t.Fatal("accepted")
@@ -106,7 +106,7 @@ func TestIndexDirTildeIsExpanded(t *testing.T) {
 	fe := newFakeEmbedder(t)
 	useEmbedder(t, fe)
 
-	if err := executeRoot(t, "index", ".", "--index-dir", "~/idx", "--skip-calibration"); err != nil {
+	if err := executeRoot(t, "index", ".", "--index-dir", "~/idx", "--skip-calibration", "--api-url", fe.URL); err != nil {
 		t.Fatalf("index: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "~")); !os.IsNotExist(err) {

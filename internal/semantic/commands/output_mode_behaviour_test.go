@@ -31,12 +31,17 @@ func commandArgs(c *cobra.Command) []string {
 }
 
 // requiredFlagArgs supplies every flag c marks required, so the invocation
-// reaches the format check instead of stopping at a missing flag.
+// reaches the format check instead of stopping at a missing flag. A --profile
+// must name a real profile since its value is checked before RunE (EST-8278).
 func requiredFlagArgs(c *cobra.Command) []string {
 	var args []string
 	c.Flags().VisitAll(func(f *pflag.Flag) {
 		if _, ok := f.Annotations[cobra.BashCompOneRequiredFlag]; ok {
-			args = append(args, "--"+f.Name, "x")
+			value := "x"
+			if f.Name == "profile" {
+				value = "code"
+			}
+			args = append(args, "--"+f.Name, value)
 		}
 	})
 	return args
