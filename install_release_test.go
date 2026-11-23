@@ -427,3 +427,44 @@ func TestReleaseWorkflowPublishesInstallerArchives(t *testing.T) {
 		}
 	}
 }
+
+// TestInstallRelease_HelpPrintsUsageWhenPiped defends EST-8171 item 5: --help
+// printed lines 2-19 of "$0", which included a stray `set -eu`, and printed
+// nothing at all under the documented `curl ... | sh` install, where $0 is
+// `sh`. The usage text must be embedded, identical both ways, and end before
+// the script's code.
+func TestInstallRelease_HelpPrintsUsageWhenPiped(t *testing.T) {
+	sh, err := exec.LookPath("sh")
+	if err != nil {
+		t.Skip("no sh")
+	}
+	script, err := os.ReadFile("install-release.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	fromFile, err := exec.Command(sh, "install-release.sh", "--help").CombinedOutput()
+	if err != nil {
+		t.Fatalf("--help from the file: %v\n%s", err, fromFile)
+	}
+	piped := exec.Command(sh, "-s", "--", "--help")
+	piped.Stdin = bytes.NewReader(script)
+	fromPipe, err := piped.CombinedOutput()
+	if err != nil {
+		t.Fatalf("--help piped: %v\n%s", err, fromPipe)
+	}
+
+	for name, out := range map[string]string{"file": string(fromFile), "pipe": string(fromPipe)} {
+		for _, want := range []string{"--version vX.Y.Z", "--base-url URL", "--dir DIR", "--timeout SECS", "SHA256SUMS.txt"} {
+			if !strings.Contains(out, want) {
+				t.Errorf("%s --help lacks %q:\n%s", name, want, out)
+			}
+		}
+		if strings.Contains(out, "set -eu") {
+			t.Errorf("%s --help prints the script's code:\n%s", name, out)
+		}
+	}
+	if string(fromFile) != string(fromPipe) {
+		t.Errorf("--help differs between file and pipe:\n%s\n---\n%s", fromFile, fromPipe)
+	}
+}

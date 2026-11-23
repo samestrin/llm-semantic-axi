@@ -1,22 +1,30 @@
 #!/bin/sh
-# Download installer for llm-semantic and llm-semantic-mcp.
-#
-# Installs both binaries from a GitHub release into ~/.local/bin. It needs no
-# sudo, no clone and no Go: only sh, curl or wget, tar and sha256sum or shasum.
-# To build from source instead, use install.sh in a checkout.
-#
-#   curl -fsSL https://github.com/samestrin/llm-semantic-axi/releases/latest/download/install-release.sh | sh
-#
-# Options (each also read from the environment variable named after it):
-#   --version vX.Y.Z  LLM_SEMANTIC_VERSION          release to install (default: latest)
-#   --base-url URL    LLM_SEMANTIC_BASE_URL         where the release assets live
-#   --dir DIR         LLM_SEMANTIC_INSTALL_DIR      install directory (default: ~/.local/bin)
-#   --timeout SECS    LLM_SEMANTIC_INSTALL_TIMEOUT  per-download limit (default: 600)
-#
-# The archive is checked against the release's SHA256SUMS.txt before anything
-# is written, and a mismatch, a missing checksum or a cut-off download stops
-# the install with the existing binaries untouched.
+# Download installer for llm-semantic and llm-semantic-mcp. The usage text
+# below is what --help prints; it is embedded rather than read back from "$0",
+# because under `curl ... | sh` $0 is the shell, not this file.
 set -eu
+
+usage() {
+    cat <<'USAGE'
+Download installer for llm-semantic and llm-semantic-mcp.
+
+Installs both binaries from a GitHub release into ~/.local/bin. It needs no
+sudo, no clone and no Go: only sh, curl or wget, tar and sha256sum or shasum.
+To build from source instead, use install.sh in a checkout.
+
+  curl -fsSL https://github.com/samestrin/llm-semantic-axi/releases/latest/download/install-release.sh | sh
+
+Options (each also read from the environment variable named after it):
+  --version vX.Y.Z  LLM_SEMANTIC_VERSION          release to install (default: latest)
+  --base-url URL    LLM_SEMANTIC_BASE_URL         where the release assets live
+  --dir DIR         LLM_SEMANTIC_INSTALL_DIR      install directory (default: ~/.local/bin)
+  --timeout SECS    LLM_SEMANTIC_INSTALL_TIMEOUT  per-download limit (default: 600)
+
+The archive is checked against the release's SHA256SUMS.txt before anything
+is written, and a mismatch, a missing checksum or a cut-off download stops
+the install with the existing binaries untouched.
+USAGE
+}
 
 REPO_URL="https://github.com/samestrin/llm-semantic-axi"
 VERSION="${LLM_SEMANTIC_VERSION:-}"
@@ -35,7 +43,7 @@ while [ $# -gt 0 ]; do
         --base-url) [ $# -ge 2 ] || die "--base-url needs a value"; BASE_URL="$2"; shift 2 ;;
         --dir) [ $# -ge 2 ] || die "--dir needs a value"; INSTALL_DIR="$2"; shift 2 ;;
         --timeout) [ $# -ge 2 ] || die "--timeout needs a value"; TIMEOUT="$2"; shift 2 ;;
-        -h | --help) sed -n '2,19p' "$0" 2>/dev/null | sed 's/^# \{0,1\}//'; exit 0 ;;
+        -h | --help) usage; exit 0 ;;
         *) die "unknown option: $1" ;;
     esac
 done
