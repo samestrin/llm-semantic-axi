@@ -20,6 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The README says `setup --dry-run` prints `would_write`, the TOON value; it said `would write`. `benchmarks/results-tokens.md` calls the TOON mode "TOON (default)" in its prose, as its table does.
 - The README Demo section and `docs/demo/README.md` say the committed GIF is still the v1.2.0 render, which types `--axi` and shows v1.2.0's `callers` rows; the demo README no longer asks for a re-render before a tag that has already been cut.
 - The README Performance section and `benchmarks/results-performance.*` are re-measured with `make bench-perf-write` on a build of the `v2.0.0` tag, so they are stamped `v2.0.0`. They were stamped `v1.2.0-15-g658dd66`, a pre-squash commit that is not in the history, though the 2.0.0 entry said they were measured on that release.
+- The README Quick start `index` and `callers` output is re-captured from this release's tree (325 files, 3,713 chunks); it was from `8f8e090`, before the v2.0.0 tag.
 - The 2.0.0 entry below no longer carries the bullet saying the Quick start matched the v1.2.0 binary, which its own last bullet contradicted.
 - `docs/axi-catalog-entry.yaml` adds upstream CONTRIBUTING's step to clone the parent repo or set `origin` back to it before `no-mistakes init --fork-url`, lists `skills/llm-semantic/SKILL.md` among the reviewed components, and says `--axi` conflicts with the other format flags.
 
