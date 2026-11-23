@@ -204,10 +204,17 @@ func gitDirOf(dir string) (string, bool) {
 	return gitDir, true
 }
 
+// rulesIn returns the rules dir adds: its .gitignore, preceded, when dir is
+// the top of a repository nested below p.top, by that repository's
+// info/exclude. Indexing a parent of several repositories (--allow-home) read
+// only the outermost repository's exclude, and sent the others' files.
 func (p *pathPolicy) rulesIn(dir string) []ignoreRule {
 	rules, ok := p.rules[dir]
 	if !ok {
-		rules = parseIgnoreFile(filepath.Join(dir, ".gitignore"), dir)
+		if gitDir, isRepo := gitDirOf(dir); isRepo && dir != p.top {
+			rules = parseIgnoreFile(filepath.Join(gitDir, "info", "exclude"), dir)
+		}
+		rules = append(rules, parseIgnoreFile(filepath.Join(dir, ".gitignore"), dir)...)
 		p.rules[dir] = rules
 	}
 	return rules
