@@ -65,9 +65,6 @@ Example:
   llm-semantic memory store -q "How should auth tokens be handled?" -a "Use JWT with 24h expiry"`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if question == "" || answer == "" {
-				return fmt.Errorf("--question and --answer are required")
-			}
 			return runMemoryStore(cmd.Context(), memoryStoreOpts{
 				question:   question,
 				answer:     answer,

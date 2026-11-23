@@ -20,7 +20,7 @@ type EmbedderUnreachableError struct {
 }
 
 func (e *EmbedderUnreachableError) Error() string {
-	return fmt.Sprintf("cannot reach the embedding API at %s (%s)", e.URL, rootCause(e.Err))
+	return fmt.Sprintf("cannot reach the embedding API at %s (%s)", RedactURL(e.URL), rootCause(e.Err))
 }
 
 func (e *EmbedderUnreachableError) Unwrap() error { return e.Err }
@@ -28,14 +28,15 @@ func (e *EmbedderUnreachableError) Unwrap() error { return e.Err }
 // AXIHelp satisfies output.AXIHelper, so the next step reaches TOON output
 // wherever in the chain this error sits.
 func (e *EmbedderUnreachableError) AXIHelp() []string {
+	shown := RedactURL(e.URL)
 	if e.Remote {
 		return []string{
-			fmt.Sprintf("Check that %s is reachable from this machine and that `--embedder` names the provider you meant", e.URL),
+			fmt.Sprintf("Check that %s is reachable from this machine and that `--embedder` names the provider you meant", shown),
 			"Or use a local OpenAI-compatible embedder: `--embedder openai --api-url <url>` (or set `LLM_SEMANTIC_API_URL`)",
 		}
 	}
 	return []string{
-		fmt.Sprintf("Start the embedding API at %s, or set `--api-url` / `LLM_SEMANTIC_API_URL` to one that is running", e.URL),
+		fmt.Sprintf("Start the embedding API at %s, or set `--api-url` / `LLM_SEMANTIC_API_URL` to one that is running", shown),
 		"Indexing and searching need an OpenAI-compatible /v1/embeddings endpoint; `callers`, `refs` and `index-status` work without one on the default SQLite storage",
 	}
 }
@@ -44,7 +45,7 @@ func (e *EmbedderUnreachableError) AXIHelp() []string {
 // request was stopped by the caller, not refused by the endpoint.
 func unreachable(url string, remote bool, err error) error {
 	if errors.Is(err, context.Canceled) {
-		return fmt.Errorf("failed to send request: %w", err)
+		return fmt.Errorf("failed to send request: %w", redactURLError(err))
 	}
 	return &EmbedderUnreachableError{URL: url, Remote: remote, Err: err}
 }

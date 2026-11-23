@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -50,6 +51,7 @@ func indexCmd() *cobra.Command {
 		embedBatchSize  int
 		overlapLines    int
 		noParentContext bool
+		allowHome       bool
 	)
 
 	cmd := &cobra.Command{
@@ -65,6 +67,10 @@ Walks the directory, parses code files, and generates embeddings.`,
 			path := "."
 			if len(args) > 0 {
 				path = args[0]
+			}
+			path, err := expandHome(path)
+			if err != nil {
+				return err
 			}
 
 			// Fall back to the profile's configured scope so a rebuild covers
@@ -88,6 +94,14 @@ Walks the directory, parses code files, and generates embeddings.`,
 
 			if len(matches) == 0 && len(excludes) > 0 {
 				return fmt.Errorf("all matched paths were excluded by exclude patterns")
+			}
+
+			if !allowHome {
+				for _, match := range matches {
+					if err := refuseBroadRoot(cmd, match); err != nil {
+						return err
+					}
+				}
 			}
 
 			// Index each matched path
@@ -127,8 +141,46 @@ Walks the directory, parses code files, and generates embeddings.`,
 	cmd.Flags().IntVar(&embedBatchSize, "embed-batch-size", 0, "Number of chunks to embed per API call across files (0 = per-file batching)")
 	cmd.Flags().IntVar(&overlapLines, "overlap-lines", 3, "Lines of overlap between adjacent chunks (0 = disabled)")
 	cmd.Flags().BoolVar(&noParentContext, "no-parent-context", false, "Disable parent context (package/class) in embedding text")
+	cmd.Flags().BoolVar(&allowHome, "allow-home", false, "Allow indexing your home directory or / (refused by default)")
 
 	return cmd
+}
+
+// refuseBroadRoot refuses to index the home directory or the filesystem root.
+// A bare `index` run from $HOME walked every dotfile and project on the
+// machine and sent them to the embedding API.
+func refuseBroadRoot(cmd *cobra.Command, path string) error {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return nil // runIndex reports it
+	}
+	what := ""
+	if home, err := os.UserHomeDir(); err == nil && home != "" && samePath(abs, home) {
+		what = fmt.Sprintf("your home directory (%s)", home)
+	} else if filepath.Dir(abs) == abs {
+		what = fmt.Sprintf("the filesystem root (%s)", abs)
+	}
+	if what == "" {
+		return nil
+	}
+	return usageError(cmd, fmt.Sprintf("refusing to index %s: it holds credentials and every project on the machine; index a project directory instead, or pass --allow-home if you mean it", what),
+		"Example: `llm-semantic index ./my-project`")
+}
+
+// printWithheld reports the files index or index-update did not read, by
+// reason, so a skipped file is never silent.
+func printWithheld(withheld map[string]int) {
+	if len(withheld) == 0 {
+		return
+	}
+	total := 0
+	reasons := make([]string, 0, len(withheld))
+	for reason, n := range withheld {
+		total += n
+		reasons = append(reasons, fmt.Sprintf("%d %s", n, reason))
+	}
+	sort.Strings(reasons)
+	fmt.Printf("Withheld %d files, not read or sent: %s\n", total, strings.Join(reasons, ", "))
 }
 
 type indexOpts struct {
@@ -412,6 +464,7 @@ func runIndex(ctx context.Context, path string, opts indexOpts) error {
 	if result.FilesSkipped > 0 {
 		fmt.Printf("Skipped %d files with errors\n", result.FilesSkipped)
 	}
+	printWithheld(result.FilesWithheld)
 	printFallback(result.FilesFallback, result.FallbackFiles, result.FallbackChunkerFailedFiles)
 	if len(result.Errors) > 0 {
 		fmt.Println("Errors:")

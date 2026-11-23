@@ -179,6 +179,14 @@ Supports any OpenAI-compatible embedding API (TEI, Ollama, vLLM, OpenAI, Azure, 
 			if err := cmd.ValidateFlagGroups(); err != nil {
 				return withHelp(fmt.Errorf("%w; run `%s --help` for usage", err, cmd.CommandPath()), helpPointer(cmd))
 			}
+			if err := checkFlagValues(cmd); err != nil {
+				return err
+			}
+			expanded, err := expandHome(indexDir)
+			if err != nil {
+				return err
+			}
+			indexDir = expanded
 
 			// Validate config path early (reject whitespace-only paths)
 			// If user explicitly set --config but with only whitespace, report error

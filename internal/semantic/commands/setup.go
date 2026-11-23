@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/samestrin/llm-semantic-axi/v2/pkg/output"
 	"github.com/spf13/cobra"
 )
 
@@ -72,7 +73,7 @@ Run ` + "`llm-semantic`" + ` with no arguments to see whether this directory has
 - Read the ` + "`status`" + ` field of an empty ` + "`callers`" + ` or ` + "`refs`" + ` answer. ` + "`symbol_not_indexed`" + ` means no chunk carries the name; ` + "`not_indexed_for_edges`" + ` means the symbol is indexed only in languages with no call edges (` + "`--plain`" + ` says ` + "`symbol not indexed`" + ` and ` + "`not indexed for edges`" + `). Neither means no caller exists.
 - Even in those five languages some calls are not recorded: calls through another object (` + "`obj.foo()`" + `, ` + "`a.b.foo()`" + `), ` + "`super.foo()`" + `, and Rust path calls (` + "`Type::f()`" + `, ` + "`Self::f()`" + `) and macros. An empty answer for a function reached only that way is not proof. https://github.com/samestrin/llm-semantic-axi/blob/main/docs/languages.md lists what each language records.
 - An index built before a language's edges were recorded has none for it. Rebuild with ` + "`llm-semantic index --force`" + `; ` + "`index-update`" + ` does not re-chunk files that have not changed.
-- ` + "`stale.state: stale`" + ` on a ` + "`search`" + `, ` + "`callers`" + ` or ` + "`refs`" + ` answer means the index is behind the working tree; run ` + "`llm-semantic index-update`" + `. ` + "`fresh`" + ` means it is current; ` + "`unknown`" + ` and ` + "`not_applicable`" + ` mean it could not be checked.
+- ` + "`stale.state: stale`" + ` on a ` + "`search`" + `, ` + "`callers`" + ` or ` + "`refs`" + ` answer means the index is behind the working tree: ` + "`commits_behind`" + ` commits since it was built, or ` + "`files_changed`" + ` uncommitted and untracked files in the repository. Run ` + "`llm-semantic index-update --no-git`" + `, which rescans every file; plain ` + "`index-update`" + ` applies only the last commit's changes. Uncommitted files keep the state ` + "`stale`" + ` until they are committed, even once indexed. ` + "`fresh`" + ` means it is current; ` + "`unknown`" + ` and ` + "`not_applicable`" + ` mean it could not be checked.
 
 ## Output and exit codes
 
@@ -100,8 +101,9 @@ func setupCmd() *cobra.Command {
 All three by default; --target narrows (repeatable). The hooks run
 "llm-semantic index-status || true" when PATH finds llm-semantic, otherwise
 this binary's absolute path; rerun setup after moving the binary to repair
-them. Only files under the current directory are written. Safe to run again;
-never prompts.`,
+them. Only files under the current directory are written: a path that is a
+symlink out of it, or a settings file that is not a single JSON object, is
+refused, and so is the home directory. Safe to run again; never prompts.`,
 		Example: `  llm-semantic setup
   llm-semantic setup --target claude --target codex
   llm-semantic setup --dry-run`,
@@ -215,8 +217,15 @@ func runSetup(w io.Writer, dir string, opts setupOptions) error {
 		}
 	}
 
+	if err := refuseHomeDir(dir); err != nil {
+		return err
+	}
+
 	var actions []setupAction
 	plan := func(rel string, planner func(path string) (setupAction, error)) error {
+		if err := checkInsideDir(dir, rel); err != nil {
+			return err
+		}
 		a, err := planner(filepath.Join(dir, rel))
 		if err != nil {
 			return err
@@ -281,6 +290,75 @@ func runSetup(w io.Writer, dir string, opts setupOptions) error {
 	return nil
 }
 
+// refuseHomeDir refuses to run setup in the home directory, where the project
+// files it writes are the global ~/.claude and ~/.codex configuration that
+// every project on the machine loads.
+func refuseHomeDir(dir string) error {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return nil
+	}
+	if samePath(dir, home) {
+		return &output.UsageError{Err: fmt.Errorf("refusing to run setup in your home directory (%s): it would change the global ~/.claude and ~/.codex configuration of every project; cd into a project and rerun", home)}
+	}
+	return nil
+}
+
+// samePath reports whether a and b name the same directory once symlinks are
+// resolved.
+func samePath(a, b string) bool {
+	ra, errA := filepath.EvalSymlinks(a)
+	rb, errB := filepath.EvalSymlinks(b)
+	if errA != nil || errB != nil {
+		return filepath.Clean(a) == filepath.Clean(b)
+	}
+	return ra == rb
+}
+
+// checkInsideDir refuses rel when one of its existing components is a symlink
+// that resolves outside dir: a .claude linked elsewhere would send the write
+// there, against the promise that only files under dir are written.
+func checkInsideDir(dir, rel string) error {
+	root, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return err
+	}
+	cur := dir
+	for _, part := range strings.Split(rel, string(filepath.Separator)) {
+		cur = filepath.Join(cur, part)
+		info, err := os.Lstat(cur)
+		if os.IsNotExist(err) {
+			return nil // MkdirAll creates the rest inside dir
+		}
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink == 0 {
+			continue
+		}
+		resolved, err := filepath.EvalSymlinks(cur)
+		if err != nil {
+			if os.IsNotExist(err) {
+				// A dangling link would still be followed by the write.
+				target, _ := os.Readlink(cur)
+				return fmt.Errorf("%s is a symlink to %s, which does not exist, refusing to write through it", cur, target)
+			}
+			return err
+		}
+		if !isWithin(root, resolved) {
+			return fmt.Errorf("%s is a symlink to %s, outside %s, refusing to write through it", cur, resolved, dir)
+		}
+	}
+	return nil
+}
+
+// isWithin reports whether path is root or below it; both must be clean and
+// symlink-free.
+func isWithin(root, path string) bool {
+	r, err := filepath.Rel(root, path)
+	return err == nil && r != ".." && !strings.HasPrefix(r, ".."+string(filepath.Separator)) && !filepath.IsAbs(r)
+}
+
 // planFixedFile plans a file setup owns outright: rewritten whenever its bytes
 // differ from content.
 func planFixedFile(path string, content []byte) (setupAction, error) {
@@ -306,6 +384,11 @@ func planHooksJSON(path, command string) (setupAction, error) {
 		dec.UseNumber()
 		if err := dec.Decode(&root); err != nil {
 			return setupAction{}, fmt.Errorf("%s is not a JSON object, refusing to overwrite: %w", path, err)
+		}
+		// Decode stops after the first value; rewriting from it would drop
+		// whatever followed.
+		if _, err := dec.Token(); err != io.EOF {
+			return setupAction{}, fmt.Errorf("%s is not a single JSON object (more follows the first value), refusing to overwrite; fix the file and rerun setup", path)
 		}
 		if root == nil { // the JSON value null
 			return setupAction{}, fmt.Errorf("%s is null, not a JSON object, refusing to overwrite", path)

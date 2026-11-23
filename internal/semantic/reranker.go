@@ -111,7 +111,10 @@ func (r *Reranker) Rerank(ctx context.Context, query string, documents []string)
 	}
 
 	// Build HTTP request
-	url := r.config.APIURL + "/v1/rerank"
+	url, err := joinURL(r.config.APIURL, "/v1/rerank")
+	if err != nil {
+		return nil, err
+	}
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(reqBody))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -151,7 +154,7 @@ func (r *Reranker) Rerank(ctx context.Context, query string, documents []string)
 	}
 
 	if lastErr != nil {
-		return nil, fmt.Errorf("failed to send request: %w", lastErr)
+		return nil, fmt.Errorf("failed to send request: %w", redactURLError(lastErr))
 	}
 	defer resp.Body.Close()
 

@@ -72,7 +72,7 @@ sudo ./install.sh   # or: build and install both to /usr/local/bin (INSTALL_DIR=
 
 Two ways to tell an agent the tool exists:
 
-- `llm-semantic setup`, run in a project, registers the tool with three agents, each at session start. Claude Code: a SessionStart hook merged into `.claude/settings.json` (other keys are kept) and the Agent Skill at `.claude/skills/llm-semantic/SKILL.md`. Codex: a SessionStart hook merged into `.codex/hooks.json`, and `[features] hooks = true` merged into `.codex/config.toml` (other keys are kept). OpenCode: a plugin at `.opencode/plugins/llm-semantic.ts` that runs on `session.created`. `--target claude`, `codex` or `opencode` (repeatable) registers only those. Each hook runs `llm-semantic index-status || true`, so a session starts with the index status and a project with no index starts without a hook error; when `llm-semantic` is not on `PATH` the hook names this binary's absolute path, and re-running `setup` after moving the binary repairs it. `setup` prints each path as `wrote`, `unchanged` or, with `--dry-run`, `would_write`. It is safe to re-run, never prompts, and writes only under the current directory.
+- `llm-semantic setup`, run in a project, registers the tool with three agents, each at session start. Claude Code: a SessionStart hook merged into `.claude/settings.json` (other keys are kept) and the Agent Skill at `.claude/skills/llm-semantic/SKILL.md`. Codex: a SessionStart hook merged into `.codex/hooks.json`, and `[features] hooks = true` merged into `.codex/config.toml` (other keys are kept). OpenCode: a plugin at `.opencode/plugins/llm-semantic.ts` that runs on `session.created`. `--target claude`, `codex` or `opencode` (repeatable) registers only those. Each hook runs `llm-semantic index-status || true`, so a session starts with the index status and a project with no index starts without a hook error; when `llm-semantic` is not on `PATH` the hook names this binary's absolute path, and re-running `setup` after moving the binary repairs it. `setup` prints each path as `wrote`, `unchanged` or, with `--dry-run`, `would_write`. It is safe to re-run, never prompts, and writes only under the current directory: it refuses a path that is a symlink out of the directory, a settings file it cannot fully parse (it writes nothing then), and to run in your home directory, where the files would be your global agent configuration.
 - `npx skills add samestrin/llm-semantic-axi --skill llm-semantic` installs the same skill, [`skills/llm-semantic/SKILL.md`](skills/llm-semantic/SKILL.md), through the `skills` CLI for any agent it supports. It adds no hook.
 
 ### Upgrade
@@ -107,22 +107,22 @@ Output of `index` and `callers` as text (trimmed, paths shortened); without `--p
 ```text
 $ llm-semantic index . --plain
 Indexing .../llm-semantic-axi...
-  [100/325 files] 950 chunks...
-  [200/325 files] 2141 chunks...
-  [300/325 files] 3436 chunks...
-  [325/325 files] 3713 chunks...
+  [100/336 files] 972 chunks...
+  [200/336 files] 2103 chunks...
+  [300/336 files] 3426 chunks...
+  [336/336 files] 3822 chunks...
 
 Running initial calibration...
-Indexed 325 files, created 3713 chunks
+Indexed 336 files, created 3822 chunks
 
 $ llm-semantic callers EnrichForEmbedding --plain
 5 caller(s) of EnrichForEmbedding
 
   .../internal/semantic/embed_enrichment_test.go:8  TestEnrichForEmbedding
   .../internal/semantic/embed_enrichment_test.go:152  TestEnrichForEmbedding_EmptyContent
-  .../internal/semantic/index_manager.go:384  indexWithCrossFileBatching
-  .../internal/semantic/index_manager.go:703  processFileWithDiff
-  .../internal/semantic/index_manager.go:1269  prepareFile
+  .../internal/semantic/index_manager.go:393  indexWithCrossFileBatching
+  .../internal/semantic/index_manager.go:712  processFileWithDiff
+  .../internal/semantic/index_manager.go:1318  prepareFile
 ```
 
 ## Usage
@@ -130,7 +130,7 @@ $ llm-semantic callers EnrichForEmbedding --plain
 | Command | What it does |
 |---|---|
 | `llm-semantic` | With no arguments, shows the index status for this directory. With no index it prints `status: not_indexed` and the next step, and exits 0. |
-| `index [path]` | Builds the index for a directory. `--force` re-indexes every file. Exits 1 if any file failed, listing what was indexed and what failed. |
+| `index [path]` | Builds the index for a directory. `--force` re-indexes every file. Exits 1 if any file failed, listing what was indexed and what failed. See [What `index` reads](#what-index-reads). |
 | `index-update [path]` | Re-indexes the files changed since a git ref (`--since`, default `HEAD~1`), or every changed file with `--no-git`. Exits 1 if any file failed, as `index` does. |
 | `index-status` | Shows files, chunks, calibration and text-window files. Exits 1 when there is no index. |
 | `search <query>` | Finds code by meaning. `code-search`, `docs-search` and `memory-search` are the same search on one profile. |
@@ -142,6 +142,16 @@ $ llm-semantic callers EnrichForEmbedding --plain
 | `setup` | Registers the tool with Claude Code, Codex and OpenCode in this project (see Install). |
 
 Every command accepts `--help`. A long run of options is in `llm-semantic <command> --help`.
+
+### What `index` reads
+
+Every file `index` and `index-update` read is sent to the embedding API, so they read only what belongs to the project:
+
+- Files and directories ignored by `.gitignore` (at any level, including the repository's above the indexed directory) and `.git/info/exclude` are skipped, as are hidden directories (`.config/`, `.docker/`, ...) below the indexed directory.
+- Files whose names usually hold credentials are withheld: `credentials*`, `secret*` and `service-account*` data files (`.json`, `.yaml`, `.toml`, `.env`, ...), `.env*`, keys and certificates (`*.pem`, `*.key`, `id_rsa*`, ...), `*.tfstate` and `*.log`.
+- Only regular files are read. A symlink is followed only to a file inside the indexed directory; FIFOs and devices are skipped. Files over 1 MiB, and files with a NUL byte in their first 8000 bytes (binary), are withheld.
+- Withheld files are counted by reason in `files_withheld` (`secret_name`, `outside_root`, `not_regular_file`, `too_large`, `binary`), and `--plain` prints a `Withheld N files` line.
+- `index` refuses your home directory and `/` (exit 2) unless you pass `--allow-home`.
 
 ```bash
 # build, then refresh after a commit
@@ -179,7 +189,7 @@ Flags win over environment variables, and environment variables over defaults. S
 
 | Name | Default | Meaning |
 |---|---|---|
-| `LLM_SEMANTIC_API_URL` / `--api-url` | `http://localhost:8080` | Embedding endpoint for `--embedder openai` (any OpenAI-compatible server). `cohere`, `huggingface` and `openrouter` call their hosted APIs and ignore it. |
+| `LLM_SEMANTIC_API_URL` / `--api-url` | `http://localhost:8080` | Embedding endpoint for `--embedder openai` (any OpenAI-compatible server). `cohere`, `huggingface` and `openrouter` call their hosted APIs and ignore it. Credentials in the URL (`user:pass@` or a query such as `?api-key=`) are sent but never printed: messages show only the scheme, host and path. |
 | `LLM_SEMANTIC_MODEL` / `--model` | `nomic-embed-text` for `openai` | Embedding model the endpoint serves. Unset, the hosted embedders use their own: `embed-english-v3.0` (cohere), `sentence-transformers/all-MiniLM-L6-v2` (huggingface), `mistralai/codestral-embed-2505` (openrouter). |
 | `LLM_SEMANTIC_API_KEY` / `--api-key` | unset, then `OPENAI_API_KEY` | Key for the default `openai` embedder. |
 | `--embedder` | `openai` | Request shape: `openai`, `cohere`, `huggingface` or `openrouter`. |
@@ -189,7 +199,7 @@ Flags win over environment variables, and environment variables over defaults. S
 | `LLM_SEMANTIC_RERANKER_API_URL` | unset | Reranker endpoint. When set, searches rerank unless `--no-rerank` is given. |
 | `LLM_SEMANTIC_RERANKER_MODEL` | `Qwen/Qwen3-Reranker-0.6B` | Reranker model. |
 | `--storage` | `sqlite` | `sqlite` keeps the index in `.index/semantic.db` with no server; `qdrant` uses a Qdrant instance. |
-| `--index-dir` | `.index` | Directory of the sqlite index. |
+| `--index-dir` | `.index` | Directory of the sqlite index. A leading `~/` is expanded even when quoted. |
 | `QDRANT_API_URL` | unset | Qdrant URL; required with `--storage qdrant`. |
 | `QDRANT_API_KEY` | unset | Qdrant key; required unless `QDRANT_INSECURE` is `true`. |
 | `QDRANT_INSECURE` | unset | `true` allows Qdrant with no key, for a local or trusted network. |
@@ -220,7 +230,7 @@ Search-family output also says how far the index is behind the working tree (`fr
 |---|---|
 | `0` | Success, including a definitive empty answer: no match, a symbol not indexed, or a bare run with no index. |
 | `1` | The command failed: no index for `index-status`, an unreachable endpoint, an `index` or `index-update` run in which any file failed (even if others were indexed), or a destructive command refused without `--force` or `--yes`. Every error goes to stdout in the active format: a TOON or JSON object with `error: true`, or `Error: ...` under `--plain`. A failed `index` or `index-update` prints its usual counts and `errors` list with `error: true` and a `message` in the same TOON or JSON document; `--plain` prints the summary followed by the `Error: ...` line. stderr carries only diagnostics. |
-| `2` | Usage error: an unknown flag or command, a missing argument, or contradictory format flags. The message names what was wrong; for an unknown flag or command it lists the valid choices. |
+| `2` | Usage error: an unknown flag or command, a missing argument, a bad flag value (such as `--top -1`, `--threshold 5` or an unknown `--profile` or `--embedder`), or contradictory format flags. The message names what was wrong; for an unknown flag or command it lists the valid choices. Nothing is created or sent first. |
 
 `llm-semantic -v`, `-V` and `--version` print the bare version and exit 0, and so do the same flags on `llm-semantic-mcp`.
 

@@ -303,7 +303,8 @@ func buildSearchArgs(args map[string]interface{}) []string {
 	if query, ok := args["query"].(string); ok && query != "" {
 		cmdArgs = append(cmdArgs, query)
 	}
-	if topK, ok := getInt(args, "top_k"); ok {
+	// The CLI rejects --top below 1; a non-positive top_k means its default.
+	if topK, ok := getInt(args, "top_k"); ok && topK > 0 {
 		cmdArgs = append(cmdArgs, "--top", strconv.Itoa(topK))
 	}
 	if threshold, ok := getThreshold(args); ok {
@@ -398,7 +399,8 @@ func buildMultisearchArgs(args map[string]interface{}) []string {
 		cmdArgs = append(cmdArgs, queries...)
 	}
 
-	if topK, ok := getInt(args, "top_k"); ok {
+	// The CLI rejects --top below 1; a non-positive top_k means its default.
+	if topK, ok := getInt(args, "top_k"); ok && topK > 0 {
 		cmdArgs = append(cmdArgs, "--top", strconv.Itoa(topK))
 	}
 	if threshold, ok := getThreshold(args); ok {
@@ -652,7 +654,8 @@ func buildMemorySearchArgs(args map[string]interface{}) []string {
 	if query, ok := args["query"].(string); ok && query != "" {
 		cmdArgs = append(cmdArgs, query)
 	}
-	if topK, ok := getInt(args, "top_k"); ok {
+	// The CLI rejects --top below 1; a non-positive top_k means its default.
+	if topK, ok := getInt(args, "top_k"); ok && topK > 0 {
 		cmdArgs = append(cmdArgs, "--top", strconv.Itoa(topK))
 	}
 	if threshold, ok := getThreshold(args); ok {
