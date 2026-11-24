@@ -17,10 +17,10 @@
 #      a fork needs no-mistakes v1.30.1 or newer. It runs the pipeline and
 #      opens the PR.
 #
-# Tag-commit note: `reviewed_revision` is 3cad1c0, the commit the v2.0.0 tag
-# carries (`git rev-parse v2.0.0^{commit}`), not a branch head. Repo PRs are
+# Tag-commit note: `reviewed_revision` is f021e85, the commit the v2.0.1 tag
+# carries (`git rev-parse v2.0.1^{commit}`), not a branch head. Repo PRs are
 # squash-merged, so a branch commit can vanish; a tag cannot. Every file:line
-# below and every `$B` probe was re-checked at 3cad1c0. If a later release
+# below and every `$B` probe was re-checked at f021e85. If a later release
 # moves the pin, re-run the checks listed here at its tag and replace
 # `reviewed_revision` with that tag's commit.
 #
@@ -28,53 +28,58 @@
 # root; `$B` is `go build -o $B ./cmd/llm-semantic`, run in an empty
 # directory):
 #   1. TOON default: internal/semantic/commands/axi.go:39-44 (resolveOutputMode:
-#      TOON unless --json or --plain); internal/semantic/commands/root.go:233-239
+#      TOON unless --json or --plain); internal/semantic/commands/root.go:244-250
 #      (--json, --plain, and --axi accepted as a no-op);
-#      internal/semantic/mcpserver/handlers.go:159 (MCP appends --axi, which
-#      changes nothing); `$B` prints TOON, `$B --plain` prints text, `$B --json`
-#      prints JSON, `$B --plain --json` exits 2.
-#   2. Rows and truncation: internal/semantic/commands/search.go:338
-#      (axiSearchRows: file, name, score, content) and search.go:324-332
+#      internal/semantic/mcpserver/handlers.go:162 (MCP adds --axi, which
+#      changes nothing) and handlers.go:232-258 (withPositionals puts tool
+#      input after `--`; validatePositional refuses a value starting with
+#      `-`); `$B` prints TOON, `$B --plain` prints text, `$B --json` prints
+#      JSON, `$B --plain --json` exits 2.
+#   2. Rows and truncation: internal/semantic/commands/search.go:326
+#      (axiSearchRows: file, name, score, content) and search.go:312-320
 #      (axiContentLimit = 200, "… (N more chars, use --full for all)");
 #      internal/semantic/commands/refs.go:285 (writeCallersJSON: default TOON
 #      row file as path:line, name, ref) and refs.go:412 (writeRefsJSON:
 #      file as path:line, ref, resolved, type; external rows omit file);
-#      internal/semantic/commands/memory.go:1026 (axiMemoryListRows: id,
-#      question, status, answer cut with axiCut) and memory.go:1497
+#      internal/semantic/commands/memory.go:1104 (axiMemoryListRows: id,
+#      question, status, answer cut with axiCut) and memory.go:1584
 #      (axiMemoryStatsRows: id, question, retrieval_count, avg_score).
-#   3. Totals and empty states: search.go:291 (axiResultList carries `total`),
-#      search.go:592-600 (index_empty vs no_match),
+#   3. Totals and empty states: search.go:279 (axiResultList carries `total`),
+#      search.go:580-588 (index_empty vs no_match),
 #      internal/semantic/commands/refs.go:199 ("not indexed for edges") and
 #      refs.go:310,451 (callers/refs TOON payloads state `total`);
-#      internal/semantic/commands/memory.go:1011,1476
+#      internal/semantic/commands/memory.go:1089,1563
 #      (markMemoryListZeroResults/markMemoryStatsZeroResults: store_empty vs
 #      no_match, with a message and an empty result list, never null).
 #   4. Errors and exit codes: pkg/output/formatter.go:342-395 (PrintError
 #      writes to the formatter's writer, stdout, in every mode: TOON, JSON, or
-#      `Error: ...` under --plain); pkg/output/exit.go:84,87 (2 for usage
-#      errors, 1 otherwise) and exit.go:60 (format conflicts are usage errors);
+#      `Error: ...` under --plain); pkg/output/exit.go:76-77,89,92 (2 for a
+#      typed usage error, such as a bad flag value, or a usage message; 1
+#      otherwise) and exit.go:61 (format conflicts are usage errors);
 #      `$B index-status 2>/dev/null` prints the TOON error and exits 1;
 #      `$B --bogus` names the flag, lists the valid ones and exits 2; test
 #      TestMain_ErrorsGoToStdoutInTheActiveFormat. `index` and `index-update`
-#      exit 1 when any file failed: internal/semantic/commands/index.go:438
+#      exit 1 when any file failed: internal/semantic/commands/index.go:499
 #      (incompleteError) and cmd/llm-semantic/main.go:38 (a result that is
 #      its own failure report is not printed twice); test
 #      TestMain_IndexWithEveryFileFailingExitsOneWithOneDocument.
-#   5. No prompts: internal/semantic/commands/collection.go:82 and
-#      internal/semantic/commands/memory.go:1661 (refuse without --force /
+#   5. No prompts: internal/semantic/commands/collection.go:83 and
+#      internal/semantic/commands/memory.go:1748 (refuse without --force /
 #      --yes); test TestCollectionDeleteWithoutForceRefusesAndNeverPrompts.
-#   6. setup: internal/semantic/commands/setup.go:212-228 (the files per
-#      target), setup.go:27 (hook command `index-status || true`),
-#      setup.go:279-313 (SessionStart in .claude/settings.json and
-#      .codex/hooks.json), setup.go:380-410 (planCodexConfig writes
-#      `[features] hooks = true` in .codex/config.toml at :410),
-#      setup.go:455-467 (OpenCode plugin on session.created);
-#      `$B setup --dry-run` lists the five files; tests in
-#      setup_targets_behaviour_test.go.
+#   6. setup: internal/semantic/commands/setup.go:241-257 (the files per
+#      target), setup.go:28 (hook command `index-status || true`),
+#      setup.go:377-416 (SessionStart in .claude/settings.json and
+#      .codex/hooks.json), setup.go:483-513 (planCodexConfig writes
+#      `[features] hooks = true` in .codex/config.toml at :513),
+#      setup.go:558-570 (OpenCode plugin on session.created), setup.go:296-305
+#      (refuseHomeDir, exit 2) and setup.go:321-353 (checkInsideDir refuses a
+#      symlink out of the project, exit 1); `$B setup --dry-run` lists the
+#      five files; tests in setup_targets_behaviour_test.go and
+#      setup_safety_test.go.
 #   7. Bare run: internal/semantic/commands/root.go:98-134 (not_indexed and
 #      the next step); `$B` in an empty directory exits 0 with
 #      `status: not_indexed` and a `help` list.
-#   8. --json schema: search.go:261-262 and :352 (outputJSON prints the bare
+#   8. --json schema: search.go:249-250 and :355 (outputJSON prints the bare
 #      result array, no total, no help); refs.go:312,453 (callers/refs --json
 #      keep `count`); test TestSearchJSONAndPlainHaveNoHelp.
 #   9. Call-edge languages: the only ExtractRefs implementations are
@@ -92,7 +97,7 @@
   description: "Semantic code search over a local embedding index, with `callers` and `refs` call-edge lookup for Go, JavaScript, TypeScript, Python and Rust."
   admission:
     status: exception
-    reviewed_revision: 3cad1c001ef528b53c300ec8cc178bb3ab5a7020
+    reviewed_revision: f021e852e6aefa06cd129eab26f3460a6935e415
     reviewed_components:
       - README.md
       - skills/llm-semantic/SKILL.md
@@ -117,12 +122,12 @@
       - internal/semantic/treesitter/chunker_python.go
       - internal/semantic/treesitter/chunker_rust.go
     source_observations:
-      - "TOON is the default output: every command prints TOON unless --json or --plain replaces it (internal/semantic/commands/axi.go, resolveOutputMode). --axi is still accepted as an alias for TOON; contradictory format flags, such as --plain --json or --axi with --json or --plain, exit 2. TOON is encoded through go-axi (pkg/output/axi.go), and the MCP server runs the CLI in TOON (internal/semantic/mcpserver/handlers.go)."
+      - "TOON is the default output: every command prints TOON unless --json or --plain replaces it (internal/semantic/commands/axi.go, resolveOutputMode). --axi is still accepted as an alias for TOON; contradictory format flags, such as --plain --json or --axi with --json or --plain, exit 2. TOON is encoded through go-axi (pkg/output/axi.go), and the MCP server runs the CLI in TOON, passing each tool's path, query, symbol or id after `--` and refusing one that starts with `-`, so tool input cannot become a CLI option (internal/semantic/mcpserver/handlers.go)."
       - "A default search row carries four fields (file as path:line, name, score, content), and content over 200 characters is cut with a note of how many characters were left out and --full for the rest (internal/semantic/commands/search.go, axiSearchRows and axiCut). Default callers rows carry three fields (file as path:line, name, ref) and refs rows four (file as path:line, ref, resolved, type, external references omitting file), with --full restoring every field (internal/semantic/commands/refs.go, writeCallersJSON and writeRefsJSON). memory list rows carry id, question, status and the cut answer (as does the answer memory store echoes back), and memory stats rows id, question, retrieval_count, avg_score, with --full restoring every field (internal/semantic/commands/memory.go, axiMemoryListRows and axiMemoryStatsRows)."
       - "A default search result list states its total, and an empty answer carries status index_empty when the index has no chunks or no_match otherwise (search.go, axiResultList and markZeroResults). callers and refs state their total in the default TOON output and say 'not indexed for edges' instead of returning a bare empty list (internal/semantic/commands/refs.go). memory list and memory stats state a total and carry status store_empty with a message over an empty store, no_match when a filter excludes every entry or nothing has been retrieved yet (internal/semantic/commands/memory.go, markMemoryListZeroResults and markMemoryStatsZeroResults)."
       - "Errors go to stdout in the active format: a TOON or JSON object with error: true, or `Error: ...` under --plain (pkg/output/formatter.go, PrintError); stderr carries only diagnostics. Malformed invocations exit 2: an unknown flag or command names it and lists the valid choices; a missing or extra argument, a missing required flag or a bad flag value names it and shows the right form; contradictory format flags name the conflicting flags; other failures exit 1 (pkg/output/exit.go). index and index-update exit 1 when any file failed, printing the counts and the errors list in one document with error: true (internal/semantic/commands/index.go, incompleteError). Output of `llm-semantic --bogus` and `llm-semantic index-status 2>/dev/null` in an empty directory shows both."
       - "No command prompts: collection delete without --force and memory stats --prune without --yes refuse with an error naming the flag and exit 1 (internal/semantic/commands/collection.go, memory.go)."
-      - "setup registers a SessionStart hook with Claude Code (.claude/settings.json) and Codex (.codex/hooks.json, with [features] hooks = true in .codex/config.toml), and an OpenCode plugin (.opencode/plugins/llm-semantic.ts) on session.created; each runs `llm-semantic index-status || true`, so a session starts with the directory's index status. It also writes the Agent Skill to .claude/skills/llm-semantic/. --target (repeatable) narrows to the named agents; only files under the current directory are written (internal/semantic/commands/setup.go; `llm-semantic setup --dry-run` lists the five files)."
+      - "setup registers a SessionStart hook with Claude Code (.claude/settings.json) and Codex (.codex/hooks.json, with [features] hooks = true in .codex/config.toml), and an OpenCode plugin (.opencode/plugins/llm-semantic.ts) on session.created; each runs `llm-semantic index-status || true`, so a session starts with the directory's index status. It also writes the Agent Skill to .claude/skills/llm-semantic/. --target (repeatable) narrows to the named agents; only files under the current directory are written: a .claude, .codex or .opencode path that is a symlink out of it is refused (exit 1), and so is the home directory (exit 2) (internal/semantic/commands/setup.go; `llm-semantic setup --dry-run` lists the five files)."
       - "A bare `llm-semantic` run shows live data: the executable path and the index status of the current directory; unindexed, it prints status not_indexed with `llm-semantic index .` as the next step and exits 0 (internal/semantic/commands/root.go)."
       - "--json keeps its pre-AXI schema so existing scripts keep working: a bare result array with full, untruncated fields and no total, status or help (search.go, outputJSON); callers and refs keep their object with count and full fields (refs.go). It is printed only when --json is passed."
       - "Only the Go, JavaScript, TypeScript, Python and Rust chunkers implement ExtractRefs (internal/semantic/refs_go.go, treesitter/refs_javascript.go, treesitter/chunker_python.go, treesitter/chunker_rust.go), so callers and refs have call edges for those five languages only."
