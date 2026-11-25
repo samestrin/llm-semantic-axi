@@ -93,7 +93,7 @@
 - name: llm-semantic-axi
   url: https://github.com/samestrin/llm-semantic-axi
   author: samestrin
-  domain: Semantic code search
+  domain: Code navigation / Semantic search
   description: "Semantic code search over a local embedding index, with `callers` and `refs` call-edge lookup for Go, JavaScript, TypeScript, Python and Rust."
   admission:
     status: exception
