@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 
 - The AXI catalog entry's `reviewed_revision` is re-pinned to `f021e85`, the commit the `v2.0.1` tag carries. Every `file:line` it cites is moved to where that code sits at the tag, and every probe was re-run on a build of it; it now also cites the MCP server passing tool input after `--` and `setup` refusing the home directory and symlinks out of the project. `docs/axi-audit.md` says when it was re-checked against `v2.0.1` and notes beside rows 1 and 6 and findings 6c and 6d what that release changed.
+- The AXI catalog entry's `domain` is `Code navigation / Semantic search`, matching the entry submitted to axi.md (kunchenguid/axi#291).
 
 ## [2.0.1] - 2026-11-23
 
