@@ -476,6 +476,110 @@ func TestSearch_RerankerErrorHonoursCallerTopK(t *testing.T) {
 	}
 }
 
+// TestSearch_RerankerErrorHonoursCallerThreshold defends the caller's embedding-score
+// cutoff on the reranker fallback path. Reranking deliberately disables that cutoff
+// while over-fetching candidates; a failed reranker must restore it before returning.
+func TestSearch_RerankerErrorHonoursCallerThreshold(t *testing.T) {
+	storage := prefilterFixture(t)
+	// Every fixture chunk scores below 0.99 against this query vector.
+	embedder := &tableEmbedder{fallback: []float32{0.9, 0.5, 0.1, 0}}
+	reranker := &stubReranker{err: errors.New("reranker down")}
+	searcher := NewSearcherWithReranker(storage, embedder, reranker)
+
+	results, err := searcher.Search(context.Background(), "anything", SearchOptions{
+		TopK: 3, Rerank: true, Threshold: 0.99,
+	})
+	if err != nil {
+		t.Fatalf("Search() should not surface a reranker failure, got %v", err)
+	}
+	if reranker.calls != 1 {
+		t.Fatalf("reranker called %d times, want 1 (the error path must be exercised)", reranker.calls)
+	}
+	for _, result := range results {
+		if result.Score < 0.99 {
+			t.Errorf("fallback returned chunk %s below the caller's threshold: score = %v, want >= 0.99", result.Chunk.ID, result.Score)
+		}
+	}
+}
+
+// TestSearch_RerankerErrorKeepsResultsAboveCallerThreshold prevents the fallback
+// filter from silently discarding every hit: a result above the cutoff must survive
+// in its original embedding order while only the lower-scoring chunks are removed.
+func TestSearch_RerankerErrorKeepsResultsAboveCallerThreshold(t *testing.T) {
+	storage := prefilterFixture(t)
+	// Chunk a scores 0.870; chunks b and c score below the 0.5 threshold.
+	embedder := &tableEmbedder{fallback: []float32{0.9, 0.5, 0.1, 0}}
+	reranker := &stubReranker{err: errors.New("reranker down")}
+	searcher := NewSearcherWithReranker(storage, embedder, reranker)
+
+	results, err := searcher.Search(context.Background(), "anything", SearchOptions{
+		TopK: 3, Rerank: true, Threshold: 0.5,
+	})
+	if err != nil {
+		t.Fatalf("Search() should not surface a reranker failure, got %v", err)
+	}
+	if reranker.calls != 1 {
+		t.Fatalf("reranker called %d times, want 1 (the error path must be exercised)", reranker.calls)
+	}
+	if len(results) != 1 || results[0].Chunk.ID != "a" {
+		t.Fatalf("got %v, want only above-threshold chunk a in embedding order", ids(results))
+	}
+	if results[0].Score < 0.5 {
+		t.Errorf("kept chunk a score = %v, want >= 0.5", results[0].Score)
+	}
+}
+
+// TestPrefilterSearch_RerankerErrorHonoursCallerThreshold defends the same fallback
+// contract in the two-stage search path, after lexical matching has selected candidates.
+func TestPrefilterSearch_RerankerErrorHonoursCallerThreshold(t *testing.T) {
+	storage := prefilterFixture(t)
+	// "func" matches every fixture chunk lexically; all their scores are below 0.99.
+	embedder := &tableEmbedder{fallback: []float32{0.9, 0.5, 0.1, 0}}
+	reranker := &stubReranker{err: errors.New("reranker down")}
+	searcher := NewSearcherWithReranker(storage, embedder, reranker)
+
+	results, err := searcher.PrefilterSearch(context.Background(), "func", PrefilterSearchOptions{
+		SearchOptions: SearchOptions{TopK: 3, Rerank: true, Threshold: 0.99},
+	})
+	if err != nil {
+		t.Fatalf("PrefilterSearch() should not surface a reranker failure, got %v", err)
+	}
+	if reranker.calls != 1 {
+		t.Fatalf("reranker called %d times, want 1 (the error path must be exercised)", reranker.calls)
+	}
+	for _, result := range results {
+		if result.Score < 0.99 {
+			t.Errorf("fallback returned chunk %s below the caller's threshold: score = %v, want >= 0.99", result.Chunk.ID, result.Score)
+		}
+	}
+}
+
+// TestPrefilterSearch_RerankerErrorKeepsResultsAboveCallerThreshold defends the keep
+// side of the two-stage fallback filter, so a failed reranker cannot erase a valid hit.
+func TestPrefilterSearch_RerankerErrorKeepsResultsAboveCallerThreshold(t *testing.T) {
+	storage := prefilterFixture(t)
+	// "func" matches every chunk; a scores 0.870 and b/c score below threshold 0.5.
+	embedder := &tableEmbedder{fallback: []float32{0.9, 0.5, 0.1, 0}}
+	reranker := &stubReranker{err: errors.New("reranker down")}
+	searcher := NewSearcherWithReranker(storage, embedder, reranker)
+
+	results, err := searcher.PrefilterSearch(context.Background(), "func", PrefilterSearchOptions{
+		SearchOptions: SearchOptions{TopK: 3, Rerank: true, Threshold: 0.5},
+	})
+	if err != nil {
+		t.Fatalf("PrefilterSearch() should not surface a reranker failure, got %v", err)
+	}
+	if reranker.calls != 1 {
+		t.Fatalf("reranker called %d times, want 1 (the error path must be exercised)", reranker.calls)
+	}
+	if len(results) != 1 || results[0].Chunk.ID != "a" {
+		t.Fatalf("got %v, want only above-threshold chunk a in embedding order", ids(results))
+	}
+	if results[0].Score < 0.5 {
+		t.Errorf("kept chunk a score = %v, want >= 0.5", results[0].Score)
+	}
+}
+
 // TestSearch_RerankerErrorFallsBackToEmbeddingScores pins the resilience path: a reranker
 // failure is logged and the embedding-scored results are returned, not an error.
 func TestSearch_RerankerErrorFallsBackToEmbeddingScores(t *testing.T) {

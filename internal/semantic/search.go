@@ -104,6 +104,17 @@ func (s *Searcher) Search(ctx context.Context, query string, opts SearchOptions)
 		if err != nil {
 			// Log reranking error but fall back to embedding-only results
 			slog.Warn("reranking failed, using embedding scores", "error", err)
+			// The candidate search disabled the caller's embedding threshold for
+			// reranking, so restore it before returning the fallback results.
+			if opts.Threshold > 0 {
+				filtered := results[:0]
+				for _, result := range results {
+					if result.Score >= opts.Threshold {
+						filtered = append(filtered, result)
+					}
+				}
+				results = filtered
+			}
 		}
 	}
 
@@ -354,6 +365,17 @@ func (s *Searcher) PrefilterSearch(ctx context.Context, query string, opts Prefi
 		results, err = s.applyReranking(ctx, query, results, searchOpts)
 		if err != nil {
 			slog.Warn("reranking failed, using embedding scores", "error", err)
+			// The candidate search disabled the caller's embedding threshold for
+			// reranking, so restore it before returning the fallback results.
+			if opts.Threshold > 0 {
+				filtered := results[:0]
+				for _, result := range results {
+					if result.Score >= opts.Threshold {
+						filtered = append(filtered, result)
+					}
+				}
+				results = filtered
+			}
 		}
 	}
 
