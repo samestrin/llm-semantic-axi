@@ -219,7 +219,7 @@ Flags win over environment variables, and environment variables over defaults. S
 |---|---|
 | none | TOON, the token-dense AXI format to give a model: at most four fields per result, content cut at 200 characters with `--full` for the rest, a `total`, a `status` for empty answers and a `help` list of next steps. |
 | `--plain` | Human-readable text. |
-| `--json` | JSON. Keeps its pre-AXI schema (full fields, no total) so existing scripts keep working. A search with no results prints `null` when the store returns nothing, or `[]` when reranking or `--hybrid` fusion removes every result (`--min` always prints `[]` when empty), so treat both as empty. |
+| `--json` | JSON. Keeps its pre-AXI schema (full fields, no total) so existing scripts keep working. A search with no results prints `null` when the store returns nothing, or `[]` when reranking or `--hybrid` fusion removes every result (`--min` always prints `[]` when empty), so treat both as empty. A failed reranker prints `reranker failed: ...` on a separate stderr line, so stdout stays a bare JSON array. |
 | `--min` | A minimal TOON or JSON payload. Not valid with `--plain`. |
 | `--axi` | Accepted so v1 invocations keep working; TOON is already the default, so it changes nothing. |
 
