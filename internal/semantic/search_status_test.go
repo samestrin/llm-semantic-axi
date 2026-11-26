@@ -111,3 +111,34 @@ func TestPrefilterSearchWithStatus_HealthyRerankReportsNothing(t *testing.T) {
 		t.Errorf("rerank error = %v, want nil for a reranker that succeeded", rerankErr)
 	}
 }
+
+// TestPrefilterSearchWithStatus_LexicalErrorKeepsRerankerFailure defends the
+// prefilter's other fall back to a plain search, taken when the lexical stage
+// errors: an unbalanced quote is an FTS5 syntax error. The reranker status
+// from that inner search must reach the caller too (EST-8769 review).
+func TestPrefilterSearchWithStatus_LexicalErrorKeepsRerankerFailure(t *testing.T) {
+	storage := prefilterFixture(t)
+	if _, err := storage.LexicalSearch(context.Background(), `func"`, LexicalSearchOptions{TopK: 5}); err == nil {
+		t.Fatal("the fixture's lexical search accepted an unbalanced quote; this test no longer reaches the lexical-error fallback")
+	}
+	embedder := &tableEmbedder{fallback: []float32{0.9, 0.5, 0.1, 0}}
+	rerankErr := errors.New("reranker down")
+	reranker := &stubReranker{err: rerankErr}
+	searcher := NewSearcherWithReranker(storage, embedder, reranker)
+
+	results, gotRerankErr, err := searcher.PrefilterSearchWithStatus(context.Background(), `func"`, PrefilterSearchOptions{
+		SearchOptions: SearchOptions{TopK: 3, Rerank: true},
+	})
+	if err != nil {
+		t.Fatalf("PrefilterSearchWithStatus() err = %v, want the plain-search fallback", err)
+	}
+	if reranker.calls != 1 {
+		t.Fatalf("reranker called %d times, want 1 (the fallback must reach the reranker)", reranker.calls)
+	}
+	if len(results) == 0 {
+		t.Error("the plain-search fallback returned no results")
+	}
+	if !errors.Is(gotRerankErr, rerankErr) {
+		t.Errorf("rerank error = %v, want %v from the lexical-error fallback", gotRerankErr, rerankErr)
+	}
+}
