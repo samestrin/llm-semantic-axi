@@ -173,3 +173,21 @@ func TestSearchPrefilterStatesRerankerFailure(t *testing.T) {
 		t.Errorf("--prefilter TOON carries no reranker_failed status:\n%s", out)
 	}
 }
+
+// TestSearchRerankerFailureOutranksNoMatch: when the fallback's threshold
+// leaves nothing, no_match would blame the query; the reranker failure is the
+// reason the answer is not a reranked one, so it is the status.
+func TestSearchRerankerFailureOutranksNoMatch(t *testing.T) {
+	indexedWorkspace(t)
+	useReranker(t, true)
+	withAXI(t)
+
+	out, _ := runRerankedSearch(t, searchOpts{threshold: 0.99})
+
+	if !strings.Contains(out, "status: reranker_failed\n") {
+		t.Errorf("an empty fallback carries no reranker_failed status:\n%s", out)
+	}
+	if !strings.Contains(out, "total: 0\n") || !strings.Contains(out, "No results found") {
+		t.Errorf("the empty fallback no longer says it matched nothing:\n%s", out)
+	}
+}

@@ -187,8 +187,11 @@ func runSearch(ctx context.Context, query string, opts searchOpts) error {
 		return fmt.Errorf("--rerank specified but no reranker configured (set LLM_SEMANTIC_RERANKER_API_URL)")
 	}
 
-	// Perform search (hybrid or dense-only)
+	// Perform search (hybrid or dense-only). rerankErr is a reranker that
+	// failed: the results are its embedding-score fallback, and the answer
+	// says so in every output mode.
 	var results []semantic.SearchResult
+	var rerankErr error
 	searchOpts := semantic.SearchOptions{
 		TopK:             opts.topK,
 		Threshold:        opts.threshold,
@@ -207,12 +210,12 @@ func runSearch(ctx context.Context, query string, opts searchOpts) error {
 			FusionAlpha:   opts.fusionAlpha,
 		})
 	} else if opts.prefilter {
-		results, err = searcher.PrefilterSearch(ctx, query, semantic.PrefilterSearchOptions{
+		results, rerankErr, err = searcher.PrefilterSearchWithStatus(ctx, query, semantic.PrefilterSearchOptions{
 			SearchOptions: searchOpts,
 			PrefilterTopK: opts.prefilterTopK,
 		})
 	} else {
-		results, err = searcher.Search(ctx, query, searchOpts)
+		results, rerankErr, err = searcher.SearchWithStatus(ctx, query, searchOpts)
 	}
 	if err != nil {
 		return fmt.Errorf("search failed: %w", err)
@@ -243,9 +246,13 @@ func runSearch(ctx context.Context, query string, opts searchOpts) error {
 			if len(results) == 0 {
 				markZeroResults(payload, indexEmpty)
 			}
+			if rerankErr != nil {
+				markRerankFailed(payload, rerankErr)
+			}
 			payload["stale"] = axiStaleness(stale)
 			return emitStdout(payload)
 		}
+		printRerankFailedLine(rerankErr, true)
 		printStalenessLine(stale, true)
 		return outputJSON(results, opts.minOutput)
 	}
@@ -254,8 +261,42 @@ func runSearch(ctx context.Context, query string, opts searchOpts) error {
 	} else if err := outputText(query, results); err != nil {
 		return err
 	}
+	printRerankFailedLine(rerankErr, false)
 	printStalenessLine(stale, false)
 	return nil
+}
+
+// rerankFailedLine is the one line plain text and stderr print for a reranker
+// that failed, with its error flattened onto that line.
+func rerankFailedLine(rerankErr error) string {
+	return fmt.Sprintf("reranker failed: %s; results are ranked by embedding score only.",
+		strings.Join(strings.Fields(rerankErr.Error()), " "))
+}
+
+// printRerankFailedLine states a failed reranker beside the results: on stderr
+// for --json, which stays a bare array (board decision 2026-10-31), on stdout
+// for plain text. A reranker that succeeded, or never ran, prints nothing.
+func printRerankFailedLine(rerankErr error, toStderr bool) {
+	if rerankErr == nil {
+		return
+	}
+	if toStderr {
+		fmt.Fprintln(os.Stderr, rerankFailedLine(rerankErr))
+		return
+	}
+	fmt.Println(rerankFailedLine(rerankErr))
+}
+
+// markRerankFailed gives a --axi answer whose reranker failed the
+// reranker_failed status, over no_match, and puts the cause first in help[].
+// The results are still returned: they are the embedding-score fallback.
+func markRerankFailed(payload map[string]any, rerankErr error) {
+	payload["status"] = "reranker_failed"
+	help, _ := payload["help"].([]string)
+	payload["help"] = append([]string{
+		fmt.Sprintf("The reranker failed (%s), so results are ranked by embedding score only; check LLM_SEMANTIC_RERANKER_API_URL or pass `--no-rerank`",
+			strings.Join(strings.Fields(rerankErr.Error()), " ")),
+	}, help...)
 }
 
 // resultCount reads "1 result" or "N results".

@@ -51,22 +51,32 @@ func (s *Searcher) HasReranker() bool {
 	return s.reranker != nil
 }
 
-// Search performs semantic search using the query text
+// Search performs semantic search using the query text. A reranker failure
+// falls back to embedding scores silently; SearchWithStatus reports it.
 func (s *Searcher) Search(ctx context.Context, query string, opts SearchOptions) ([]SearchResult, error) {
+	results, _, err := s.SearchWithStatus(ctx, query, opts)
+	return results, err
+}
+
+// SearchWithStatus is Search plus the reranker's failure. When reranking was
+// requested and the reranker errored, the results are the embedding-score
+// fallback and rerankErr says why; a caller must not present them as reranked.
+// err is the search's own failure, and no results come with it.
+func (s *Searcher) SearchWithStatus(ctx context.Context, query string, opts SearchOptions) (results []SearchResult, rerankErr error, err error) {
 	if query == "" {
-		return nil, errors.New("query cannot be empty")
+		return nil, nil, errors.New("query cannot be empty")
 	}
 	if opts.Threshold < 0 || opts.Threshold > 1 {
-		return nil, errors.New("threshold must be between 0.0 and 1.0")
+		return nil, nil, errors.New("threshold must be between 0.0 and 1.0")
 	}
 	if opts.TopK < 0 {
-		return nil, errors.New("topK must be non-negative")
+		return nil, nil, errors.New("topK must be non-negative")
 	}
 
 	// Generate embedding for query
 	queryEmbedding, err := s.embedder.Embed(ctx, query)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Determine if reranking is enabled
@@ -93,17 +103,17 @@ func (s *Searcher) Search(ctx context.Context, query string, opts SearchOptions)
 	}
 
 	// Search storage
-	results, err := s.storage.Search(ctx, queryEmbedding, searchOpts)
+	results, err = s.storage.Search(ctx, queryEmbedding, searchOpts)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Apply reranking if enabled
 	if shouldRerank && len(results) > 0 {
-		results, err = s.applyReranking(ctx, query, results, searchOpts)
-		if err != nil {
-			// Log reranking error but fall back to embedding-only results
-			slog.Warn("reranking failed, using embedding scores", "error", err)
+		results, rerankErr = s.applyReranking(ctx, query, results, searchOpts)
+		if rerankErr != nil {
+			// Fall back to embedding-only results; rerankErr tells the caller.
+			slog.Warn("reranking failed, using embedding scores", "error", rerankErr)
 			// The candidate search disabled the caller's embedding threshold for
 			// reranking, so restore it before returning the fallback results.
 			if opts.Threshold > 0 {
@@ -127,7 +137,7 @@ func (s *Searcher) Search(ctx context.Context, query string, opts SearchOptions)
 	// Apply relevance labels
 	s.applyRelevanceLabels(ctx, results)
 
-	return results, nil
+	return results, rerankErr, nil
 }
 
 // applyReranking reranks results using the cross-encoder and updates scores
@@ -272,20 +282,28 @@ type PrefilterSearchOptions struct {
 // reducing the vector search space while maintaining semantic relevance.
 // Returns an error if the storage doesn't support lexical search.
 func (s *Searcher) PrefilterSearch(ctx context.Context, query string, opts PrefilterSearchOptions) ([]SearchResult, error) {
+	results, _, err := s.PrefilterSearchWithStatus(ctx, query, opts)
+	return results, err
+}
+
+// PrefilterSearchWithStatus is PrefilterSearch plus the reranker's failure,
+// with the same contract as SearchWithStatus, including on its fallback to a
+// plain search.
+func (s *Searcher) PrefilterSearchWithStatus(ctx context.Context, query string, opts PrefilterSearchOptions) (results []SearchResult, rerankErr error, err error) {
 	if query == "" {
-		return nil, errors.New("query cannot be empty")
+		return nil, nil, errors.New("query cannot be empty")
 	}
 	if opts.Threshold < 0 || opts.Threshold > 1 {
-		return nil, errors.New("threshold must be between 0.0 and 1.0")
+		return nil, nil, errors.New("threshold must be between 0.0 and 1.0")
 	}
 	if opts.TopK < 0 {
-		return nil, errors.New("topK must be non-negative")
+		return nil, nil, errors.New("topK must be non-negative")
 	}
 
 	// Check if storage supports lexical search
 	lexicalSearcher, ok := s.storage.(LexicalSearcher)
 	if !ok {
-		return nil, errors.New("prefilter search requires storage with lexical search support")
+		return nil, nil, errors.New("prefilter search requires storage with lexical search support")
 	}
 
 	// Set defaults for prefilter candidates
@@ -308,13 +326,13 @@ func (s *Searcher) PrefilterSearch(ctx context.Context, query string, opts Prefi
 	if err != nil {
 		// Log and fall back to regular search
 		slog.Warn("lexical prefilter failed, falling back to regular search", "error", err)
-		return s.Search(ctx, query, opts.SearchOptions)
+		return s.SearchWithStatus(ctx, query, opts.SearchOptions)
 	}
 
 	// If no lexical matches, fall back to regular search
 	if len(lexicalResults) == 0 {
 		slog.Debug("no lexical matches for prefilter, falling back to regular search")
-		return s.Search(ctx, query, opts.SearchOptions)
+		return s.SearchWithStatus(ctx, query, opts.SearchOptions)
 	}
 
 	// Extract chunk IDs from lexical results
@@ -332,7 +350,7 @@ func (s *Searcher) PrefilterSearch(ctx context.Context, query string, opts Prefi
 	// Generate embedding for query
 	queryEmbedding, err := s.embedder.Embed(ctx, query)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Determine if reranking is enabled
@@ -355,16 +373,16 @@ func (s *Searcher) PrefilterSearch(ctx context.Context, query string, opts Prefi
 	}
 
 	// Search storage with chunk ID filter
-	results, err := s.storage.Search(ctx, queryEmbedding, searchOpts)
+	results, err = s.storage.Search(ctx, queryEmbedding, searchOpts)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Apply reranking if enabled
 	if shouldRerank && len(results) > 0 {
-		results, err = s.applyReranking(ctx, query, results, searchOpts)
-		if err != nil {
-			slog.Warn("reranking failed, using embedding scores", "error", err)
+		results, rerankErr = s.applyReranking(ctx, query, results, searchOpts)
+		if rerankErr != nil {
+			slog.Warn("reranking failed, using embedding scores", "error", rerankErr)
 			// The candidate search disabled the caller's embedding threshold for
 			// reranking, so restore it before returning the fallback results.
 			if opts.Threshold > 0 {
@@ -388,7 +406,7 @@ func (s *Searcher) PrefilterSearch(ctx context.Context, query string, opts Prefi
 	// Apply relevance labels
 	s.applyRelevanceLabels(ctx, results)
 
-	return results, nil
+	return results, rerankErr, nil
 }
 
 // SearchMultiple performs search with multiple query terms and combines results
