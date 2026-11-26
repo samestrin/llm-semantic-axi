@@ -11,6 +11,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The AXI catalog entry's `reviewed_revision` is re-pinned to `f021e85`, the commit the `v2.0.1` tag carries. Every `file:line` it cites is moved to where that code sits at the tag, and every probe was re-run on a build of it; it now also cites the MCP server passing tool input after `--` and `setup` refusing the home directory and symlinks out of the project. `docs/axi-audit.md` says when it was re-checked against `v2.0.1` and notes beside rows 1 and 6 and findings 6c and 6d what that release changed.
 - The AXI catalog entry's `domain` is `Code navigation / Semantic search`, matching the entry submitted to axi.md (kunchenguid/axi#291).
 
+### Fixed
+
+- A failed reranker is now stated beside the fallback results: TOON reports `status: reranker_failed` and a `help` entry, and `--plain` prints a separate `reranker failed: ...` line. `--json` prints that line to stderr while stdout stays a bare array; the caller's `--threshold` still filters the embedding-ranked results, and the search exits 0 because results exist.
+
 ## [2.0.1] - 2026-11-23
 
 ### Security
