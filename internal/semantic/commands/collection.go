@@ -54,6 +54,11 @@ Without --force the command refuses and exits 1; it never prompts.`,
 			// reported an empty domain while the chunks sat in .index/docs.
 			profile = deleteProfile
 			resolveProfileIndexDir(cmd)
+			// The root hook also chose the code profile's storage backend.
+			storageType = resolveStorageType(cmd)
+			if err := validateStorageType(storageType); err != nil {
+				return fmt.Errorf("config storage setting: %w", err)
+			}
 			return runCollectionDelete(cmd.Context(), collectionDeleteOpts{
 				domain:     deleteProfile, // domain = profile internally
 				force:      force,
