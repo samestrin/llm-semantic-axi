@@ -611,6 +611,32 @@ func TestServer_StartupBannerPrintsAStampedVersionOnce(t *testing.T) {
 		t.Errorf("startup banner = %q, want v1.2.0 once", stderr)
 	}
 }
+
+// TestPrintVersion_PrintsTheStampVerbatim pins owner decision EST-9193 Q5
+// (epic 39 T3, debt row a364fb931ec526b7): the version output is the stamp
+// verbatim, with its trailing newline and nothing added or trimmed. The
+// process-level test above compares against the unstamped "dev", where a
+// leading-v trim is invisible; this drives printVersion with a release-style
+// stamp so a trim (like startedBanner's) or an added "v" fails here.
+func TestPrintVersion_PrintsTheStampVerbatim(t *testing.T) {
+	original := serverVersion
+	t.Cleanup(func() { serverVersion = original })
+	for _, stamp := range []string{"v1.2.0", "1.2.0"} {
+		for _, flag := range []string{"-v", "-V", "--version"} {
+			t.Run(stamp+"/"+flag, func(t *testing.T) {
+				serverVersion = stamp
+				var out bytes.Buffer
+				if !printVersion([]string{flag}, &out) {
+					t.Fatalf("printVersion did not handle %s", flag)
+				}
+				if out.String() != stamp+"\n" {
+					t.Errorf("stdout = %q, want the stamp verbatim %q", out.String(), stamp+"\n")
+				}
+			})
+		}
+	}
+}
+
 func TestPrintVersion_IgnoresOtherArguments(t *testing.T) {
 	// Without a version flag the server must start as before.
 	var out bytes.Buffer
