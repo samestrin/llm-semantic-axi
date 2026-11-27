@@ -62,11 +62,14 @@ func getDefaultModel() string {
 // rerankerAPIURLEnvVar is the environment variable that enables reranking.
 // Every help string and error that names it builds from this constant, so the
 // name a user reads is always the name getDefaultRerankerAPIURL reads.
+// TestRerankerEnvNameMatchesWhatTheCodeReads pins the constant to that read.
 const rerankerAPIURLEnvVar = "LLM_SEMANTIC_RERANKER_API_URL"
 
-// getDefaultRerankerAPIURL returns the reranker API URL from environment
+// getDefaultRerankerAPIURL returns the reranker API URL from environment.
+// The read stays a literal: the README env-var check (sourceEnvVars) only
+// sees literal os.Getenv names and rejects indirect reads.
 func getDefaultRerankerAPIURL() string {
-	return os.Getenv(rerankerAPIURLEnvVar)
+	return os.Getenv("LLM_SEMANTIC_RERANKER_API_URL")
 }
 
 // getDefaultRerankerModel returns the reranker model from environment or default
