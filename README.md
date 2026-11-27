@@ -16,7 +16,7 @@ The session runs `--version`, a `search` and a `callers` query against a release
 - Following a call chain by hand costs an agent many reads. `callers` and `refs` answer from call edges recorded at index time, with no language server, for Go, JavaScript, TypeScript, Python and Rust.
 - Tool output is paid for in tokens. The default output is TOON, a token-dense format built to the [AXI](https://axi.md) principles, with at most four fields per result, long content cut and a stated total. `--plain` prints text for a person instead.
 - An empty answer is easy to misread as "none exist". Every command says which kind of empty it is: no match, an empty index, a symbol not indexed, a language with no recorded call edges, or an index that is behind the working tree.
-- Code, docs and stored decisions are different questions. Profiles (`code`, `docs`, `memory`, `sprints`) keep each in its own index when each points at its own `--index-dir` (sqlite) or collection (Qdrant), so a docs question is not answered from source.
+- Code, docs and stored decisions are different questions. Profiles (`code`, `docs`, `memory`, `sprints`) keep each in its own index — `.index` for `code`, `.index/<profile>` for the rest with the default sqlite store, and a matching collection with Qdrant — so a docs question is not answered from source.
 
 ## Install
 
@@ -138,7 +138,7 @@ $ llm-semantic callers EnrichForEmbedding --plain
 | `callers <symbol>` | Lists what calls a symbol, from recorded call edges. `--full` restores every field of each row. |
 | `refs <symbol>` | Lists what a symbol calls, imports and uses. `--full` restores every field of each row. |
 | `memory <store\|search\|list\|delete\|promote\|stats\|import>` | Stores and searches question and answer pairs (decisions, clarifications). |
-| `collection delete` | Deletes every chunk in one profile. Requires `--force`. |
+| `collection delete --profile <name>` | Deletes every chunk in one profile, from that profile's own index. Requires `--force`. |
 | `setup` | Registers the tool with Claude Code, Codex and OpenCode in this project (see Install). |
 
 Every command accepts `--help`. A long run of options is in `llm-semantic <command> --help`.
@@ -174,15 +174,17 @@ llm-semantic refs EnrichForEmbedding
 llm-semantic memory store --question "Which store backs the index?" --answer "sqlite by default; qdrant for large corpora"
 llm-semantic memory search "index storage"
 
-# a separate index for docs
-llm-semantic index docs/ --index-dir .index/docs
-llm-semantic docs-search "how stale is the index" --index-dir .index/docs
+# a separate index for docs; --profile docs defaults to .index/docs
+llm-semantic index docs/ --profile docs
+llm-semantic docs-search "how stale is the index" --profile docs
 
 # preview what setup would write
 llm-semantic setup --dry-run
 ```
 
-`--profile` names the index being addressed: `code` (the default), `docs`, `memory` or `sprints`. A profile is separate only when it points somewhere separate. With the default sqlite store, give each profile its own `--index-dir`. With `--storage qdrant`, a profile's collection comes from `--collection`, the config file's `<profile>_collection`, or the last part of a non-default `--index-dir`; otherwise every profile shares one collection. The config file also gives each profile its own include and exclude scope.
+`--profile` names the index being addressed: `code` (the default), `docs`, `memory` or `sprints`. With the default sqlite store, `code` uses `.index` and every other profile uses `.index/<profile>` (`.index/docs`, `.index/memory`, ...), so `index docs/ --profile docs` after `index .` fills the docs index instead of skipping every file as unchanged. Two things turn that default off: an explicit `--index-dir` (even `--index-dir .index`) and a config file, auto-discovered or given with `--config`. An explicit path is used as given, and with a config but no `--index-dir` every profile stays at `.index`; either way, pointing two profiles at one directory makes them share an index. With `--storage qdrant`, a profile's collection comes from `--collection`, the config file's `<profile>_collection`, or the last part of a non-default index path (under the default, the profile name); otherwise every profile shares the `llm_semantic` collection. The config file also gives each profile its own include and exclude scope.
+
+`collection delete --profile <name>` deletes from that profile's own index — `.index/<profile>` by default, or the explicit `--index-dir`/config path — not from `.index` unless `--index-dir .index` says so. With no index for the profile it fails, naming the missing directory, instead of printing `No chunks found` for another profile's index. A file whose chunks are all deleted also loses its incremental-index record, so `index-status` stops listing it and the next `index` or `index-update` indexes it again; a file that still has chunks under another profile keeps its record and stays skipped there.
 
 ## Configuration
 
@@ -200,7 +202,7 @@ Flags win over environment variables, and environment variables over defaults. S
 | `LLM_SEMANTIC_RERANKER_API_URL` | unset | Reranker endpoint. When set, searches rerank unless `--no-rerank` is given. |
 | `LLM_SEMANTIC_RERANKER_MODEL` | `Qwen/Qwen3-Reranker-0.6B` | Reranker model. |
 | `--storage` | `sqlite` | `sqlite` keeps the index in `.index/semantic.db` with no server; `qdrant` uses a Qdrant instance. |
-| `--index-dir` | `.index` | Directory of the sqlite index. A leading `~/` is expanded even when quoted. |
+| `--index-dir` | `.index` for `code`, `.index/<profile>` for any other profile | Directory of the sqlite index. Set here or in a config file, it wins for every profile; a leading `~/` is expanded even when quoted. |
 | `QDRANT_API_URL` | unset | Qdrant URL; required with `--storage qdrant`. |
 | `QDRANT_API_KEY` | unset | Qdrant key; required unless `QDRANT_INSECURE` is `true`. |
 | `QDRANT_INSECURE` | unset | `true` allows Qdrant with no key, for a local or trusted network. |
