@@ -3,12 +3,15 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
 
 	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic/commands"
 	"github.com/samestrin/llm-semantic-axi/v2/pkg/output"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
 
 // Both are stamped at build time with -X main.version / -X main.commit, so the
@@ -20,16 +23,17 @@ var (
 )
 
 func main() {
-	// Only a lone -v/-V/--version asks for the version. Anywhere else -v is a
-	// subcommand flag (`index -v` is --verbose), so it is matched on the sole
-	// argument rather than registered on the root, where cobra's own -v would
-	// collide with that.
-	if len(os.Args) == 2 && isVersionFlag(os.Args[1]) {
+	rootCmd := commands.RootCmd()
+
+	// -v/-V/--version asks for the version when no subcommand is named, even
+	// beside the persistent flags (`--axi -v`). The flag is deliberately not
+	// registered on the root: on a subcommand -v is --verbose (`index -v`),
+	// and a root shorthand would collide with that. The stamp prints verbatim
+	// whatever the format flags say (owner decision 2026-11-27, EST-9193 Q5).
+	if versionRequested(rootCmd, os.Args[1:]) {
 		fmt.Println(version)
 		return
 	}
-
-	rootCmd := commands.RootCmd()
 
 	if err := rootCmd.Execute(); err != nil {
 		// The command printed its own failure report; a second document on
@@ -62,8 +66,32 @@ func main() {
 	}
 }
 
-func isVersionFlag(a string) bool {
-	return a == "-v" || a == "-V" || a == "--version"
+// versionRequested reports whether args ask for the version: a -v/-V/--version
+// with only persistent flags beside it and no subcommand or positional argument.
+// It parses against the root's own persistent flags, so a valued flag's value
+// (`--config index`) is never mistaken for a subcommand and a persistent flag
+// added later is accepted without editing this function. Any parse failure
+// returns false: the real Execute() must report the malformed invocation, not
+// this probe. The probe shares the root's flag variables, which is safe because
+// Execute() re-parses the same arguments whenever the probe says no.
+func versionRequested(root *cobra.Command, args []string) bool {
+	probe := make([]string, len(args))
+	for i, a := range args {
+		if a == "-V" {
+			// pflag allows one shorthand per flag; -V aliases --version here.
+			a = "--version"
+		}
+		probe[i] = a
+	}
+	fs := pflag.NewFlagSet("version-probe", pflag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	fs.AddFlagSet(root.PersistentFlags())
+	var requested bool
+	fs.BoolVarP(&requested, "version", "v", false, "")
+	if err := fs.Parse(probe); err != nil {
+		return false
+	}
+	return requested && fs.NArg() == 0
 }
 
 // argsRequest reports whether the arguments ask for the boolean flag --name,
