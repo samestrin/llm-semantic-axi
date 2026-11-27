@@ -28,10 +28,10 @@ Commands:
 
 func collectionDeleteCmd() *cobra.Command {
 	var (
-		profile    string
-		force      bool
-		jsonOutput bool
-		minOutput  bool
+		deleteProfile string
+		force         bool
+		jsonOutput    bool
+		minOutput     bool
 	)
 
 	cmd := &cobra.Command{
@@ -46,11 +46,16 @@ Example:
 Without --force the command refuses and exits 1; it never prompts.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if profile == "" {
+			if deleteProfile == "" {
 				return fmt.Errorf("--profile is required")
 			}
+			// This --profile shadows the root one, so the root hook never
+			// gave it the profile's index: a docs delete opened .index and
+			// reported an empty domain while the chunks sat in .index/docs.
+			profile = deleteProfile
+			resolveProfileIndexDir(cmd)
 			return runCollectionDelete(cmd.Context(), collectionDeleteOpts{
-				domain:     profile, // domain = profile internally
+				domain:     deleteProfile, // domain = profile internally
 				force:      force,
 				jsonOutput: jsonOutput,
 				minOutput:  minOutput,
@@ -58,7 +63,7 @@ Without --force the command refuses and exits 1; it never prompts.`,
 		},
 	}
 
-	cmd.Flags().StringVar(&profile, "profile", "", "Profile to delete (code, docs, memory, sprints)")
+	cmd.Flags().StringVar(&deleteProfile, "profile", "", "Profile to delete (code, docs, memory, sprints)")
 	cmd.Flags().BoolVar(&force, "force", false, "Confirm the delete (required; the command never prompts)")
 	cmd.Flags().BoolVar(&jsonOutput, "json", false, "Output as JSON")
 	cmd.Flags().BoolVar(&minOutput, "min", false, "Minimal output format")
@@ -89,6 +94,12 @@ func runCollectionDelete(ctx context.Context, opts collectionDeleteOpts) error {
 	indexPath := ""
 	if storageType == "" || storageType == "sqlite" {
 		indexPath = findIndexPath()
+		if indexPath == "" && indexDirFromProfile {
+			return withHelp(
+				fmt.Errorf("no index for profile '%s' at %s: nothing was deleted", opts.domain, indexDir),
+				fmt.Sprintf("Run `llm-semantic index <path> --profile %s` to build it", opts.domain),
+			)
+		}
 		if indexPath == "" {
 			return withHelp(fmt.Errorf("semantic index not found. Run 'llm-semantic index' first"), indexMissingHelp...)
 		}
