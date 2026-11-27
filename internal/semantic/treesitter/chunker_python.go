@@ -162,7 +162,7 @@ func (c *PythonChunker) walkRefs(node *gotreesitter.Node, content []byte, owners
 				if name != "" && innermostChunk(windows, nodeLine(child)) == "" {
 					*refs = append(*refs, semantic.ChunkRef{ChunkID: owners[0].ID, RefType: semantic.RefCalls, RefName: name})
 				}
-			} else if name != "" && bareName(name) != chunkName(owners, id) {
+			} else if name != "" && !isRecursion(owners, id, name) {
 				*refs = append(*refs, semantic.ChunkRef{ChunkID: id, RefType: semantic.RefCalls, RefName: name})
 			}
 
@@ -182,8 +182,27 @@ func (c *PythonChunker) walkRefs(node *gotreesitter.Node, content []byte, owners
 	})
 }
 
-// bareName drops a self. or cls. receiver, so f() and self.f() compare equal
-// to the chunk named f: recursion is one rule, whichever way it is spelled.
+// isRecursion reports whether a call recorded as name, made from the chunk
+// with this ID, is that chunk calling itself, which writes no edge. One rule
+// holds in every language that writes call edges, GoChunker's included:
+// f() inside function f is recursion, and so is a receiver call such as
+// self.f(), cls.f() or this.f() inside f. A bare f() inside method f is not:
+// no language calls a method by its bare name, so it calls the free function
+// f and keeps its edge.
+func isRecursion(chunks []semantic.Chunk, id, name string) bool {
+	for _, ch := range chunks {
+		if ch.ID != id {
+			continue
+		}
+		if strings.IndexByte(name, '.') >= 0 {
+			return bareName(name) == ch.Name
+		}
+		return name == ch.Name && ch.Type != semantic.ChunkMethod
+	}
+	return false
+}
+
+// bareName drops a self., cls. or this. receiver from a call name.
 func bareName(name string) string {
 	if i := strings.IndexByte(name, '.'); i >= 0 {
 		return name[i+1:]
@@ -240,13 +259,3 @@ func (c *PythonChunker) importNames(stmt *gotreesitter.Node, content []byte) []s
 
 // nodeLine returns the 1-based line a node starts on.
 func nodeLine(n *gotreesitter.Node) int { return int(n.StartPoint().Row) + 1 }
-
-// chunkName returns the name of the chunk with this ID.
-func chunkName(chunks []semantic.Chunk, id string) string {
-	for _, ch := range chunks {
-		if ch.ID == id {
-			return ch.Name
-		}
-	}
-	return ""
-}

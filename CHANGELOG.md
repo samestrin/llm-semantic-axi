@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- Recursion is one rule in Go, Python, Rust, JavaScript and TypeScript, so one program gives the same `callers` answer in each. `f()` inside function `f`, and a receiver call such as `this.f()`, `self.f()`, `cls.f()` or Go's `r.f()` inside method `f`, write no self-edge; before, JavaScript and TypeScript recorded `f calls f` and `f calls this.f`, and Go recorded `f calls r.f`. A bare `f()` inside method `f` calls the free function `f` and now keeps its edge; Go, Python and Rust dropped it, so `callers f` missed that caller. An index built before this change needs `index --force`.
 - A failed reranker is now stated beside the fallback results: TOON reports `status: reranker_failed` and a `help` entry, and `--plain` prints a separate `reranker failed: ...` line. `--json` prints that line to stderr while stdout stays a bare array; the caller's `--threshold` still filters the embedding-ranked results, and the search exits 0 because results exist.
 
 ## [2.0.1] - 2026-11-23

@@ -233,7 +233,7 @@ func (c *RustChunker) walkRefs(node *gotreesitter.Node, content []byte, owners, 
 			if strings.HasPrefix(name, "self.") && !containerHasMethod(owners, id, bareName(name)) {
 				name = ""
 			}
-			if name != "" && isFunctionChunk(owners, id) && bareName(name) != chunkName(owners, id) {
+			if name != "" && isFunctionChunk(owners, id) && !isRecursion(owners, id, name) {
 				*refs = append(*refs, semantic.ChunkRef{ChunkID: id, RefType: semantic.RefCalls, RefName: name})
 			}
 
