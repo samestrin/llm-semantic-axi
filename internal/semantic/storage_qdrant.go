@@ -242,24 +242,44 @@ func (s *QdrantStorage) contractPoint(version int64) *qdrant.PointStruct {
 	}
 }
 
-// ensureContractVersion stamps the collection with the storage contract
-// version, or fails when it is stamped with a different one. A collection with
-// no marker predates it and is version 1, so it is stamped.
-func (s *QdrantStorage) ensureContractVersion(ctx context.Context) error {
-	points, err := s.client.Get(ctx, &qdrant.GetPoints{
-		CollectionName: s.collectionName,
+// CheckStorageContract reads the storage_contract point of collection and
+// fails when it records a contract version other than StorageContractVersion,
+// naming both. It never writes: a collection with no marker predates it, is
+// version 1 by definition, and passes without being stamped. It is for
+// external readers such as atcr; llm-semantic itself stamps on open.
+func CheckStorageContract(ctx context.Context, client *qdrant.Client, collection string) error {
+	_, err := checkStorageContract(ctx, client, collection)
+	return err
+}
+
+// checkStorageContract is CheckStorageContract that also reports whether the
+// marker exists, so ensureContractVersion knows whether to stamp.
+func checkStorageContract(ctx context.Context, client *qdrant.Client, collection string) (marked bool, err error) {
+	points, err := client.Get(ctx, &qdrant.GetPoints{
+		CollectionName: collection,
 		Ids:            []*qdrant.PointId{qdrant.NewID(contractID())},
 		WithPayload:    qdrant.NewWithPayload(true),
 	})
 	if err != nil {
-		return fmt.Errorf("failed to read storage contract version: %w", err)
+		return false, fmt.Errorf("failed to read storage contract version: %w", err)
 	}
-	if len(points) > 0 {
-		if got := points[0].Payload["contract_version"].GetIntegerValue(); got != StorageContractVersion {
-			return fmt.Errorf("collection %q has storage contract version %d, but this llm-semantic reads version %d; re-index with --force or use a matching release",
-				s.collectionName, got, StorageContractVersion)
-		}
-		return nil
+	if len(points) == 0 {
+		return false, nil
+	}
+	if got := points[0].Payload["contract_version"].GetIntegerValue(); got != StorageContractVersion {
+		return true, fmt.Errorf("collection %q has storage contract version %d, but this llm-semantic reads version %d; re-index with --force or use a matching release",
+			collection, got, StorageContractVersion)
+	}
+	return true, nil
+}
+
+// ensureContractVersion stamps the collection with the storage contract
+// version, or fails when it is stamped with a different one. A collection with
+// no marker predates it and is version 1, so it is stamped.
+func (s *QdrantStorage) ensureContractVersion(ctx context.Context) error {
+	marked, err := checkStorageContract(ctx, s.client, s.collectionName)
+	if err != nil || marked {
+		return err
 	}
 	if _, err := s.client.Upsert(ctx, &qdrant.UpsertPoints{
 		CollectionName: s.collectionName,
