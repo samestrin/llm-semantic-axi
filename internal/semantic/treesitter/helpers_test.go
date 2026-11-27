@@ -216,14 +216,15 @@ func TestJSChunker_ArrowFunctionTypeFollowsTheEnclosingScope(t *testing.T) {
 func TestJSChunker_NonFunctionConstIsNotAChunk(t *testing.T) {
 	// extractArrowFunctions is reached for every `const`/`let`. Only the ones
 	// whose value is a function may become chunks, or an index of a config file
-	// fills up with string literals.
+	// fills up with string literals. The whole-file `<module>` chunk (epic 40
+	// T1) is the only chunk such a file gets.
 	src := []byte("const PORT = 8080;\nconst NAMES = ['a', 'b'];\n")
 	chunks, err := NewJSChunker().Chunk("config.js", src)
 	if err != nil {
 		t.Fatalf("Chunk failed: %v", err)
 	}
-	if len(chunks) != 0 {
-		t.Errorf("got %d chunks for value-only declarations, want 0: %v", len(chunks), chunks)
+	if len(chunks) != 1 || chunks[0].Name != moduleChunkName {
+		t.Errorf("got %d chunks for value-only declarations, want only <module>: %v", len(chunks), chunks)
 	}
 }
 

@@ -23,8 +23,10 @@ func (c tsChunk) String() string {
 }
 
 // tsSampleChunks is every chunk testdata/typescript/sample.ts must produce,
-// with the lines it spans in that file.
+// with the lines it spans in that file. The file parses cleanly, so it also
+// gets the whole-file `<module>` chunk.
 var tsSampleChunks = []tsChunk{
+	{"<module>", semantic.ChunkFile, 1, 72},
 	{"UserDTO", semantic.ChunkInterface, 3, 7},
 	{"UserRole", semantic.ChunkStruct, 9, 9},
 	{"UserController", semantic.ChunkStruct, 11, 27},
@@ -47,6 +49,7 @@ var tsSampleChunks = []tsChunk{
 
 // tsxComponentChunks is the same for testdata/typescript/component.tsx.
 var tsxComponentChunks = []tsChunk{
+	{"<module>", semantic.ChunkFile, 1, 31},
 	{"ButtonProps", semantic.ChunkInterface, 3, 6},
 	{"Variant", semantic.ChunkStruct, 8, 8},
 	{"Button", semantic.ChunkFunction, 10, 16},
@@ -113,7 +116,8 @@ func TestTypeScriptChunker_SampleNamesAndLineRanges(t *testing.T) {
 	}
 	assertTSChunks(t, chunks, tsSampleChunks)
 	for _, c := range chunks {
-		if c.Language != "ts" || c.ID == "" || c.Content == "" || c.Signature == "" {
+		// `<module>` is the whole file and has no first line to sign it with.
+		if c.Language != "ts" || c.ID == "" || c.Content == "" || (c.Signature == "" && c.Name != moduleChunkName) {
 			t.Errorf("chunk %q is not storable: language %q, id %q, %d bytes content, signature %q",
 				c.Name, c.Language, c.ID, len(c.Content), c.Signature)
 		}
@@ -166,15 +170,19 @@ func TestTypeScriptChunker_ModuleExtensionsUseTheTypeScriptGrammar(t *testing.T)
 
 func TestTypeScriptChunker_EmptySourceYieldsNoChunks(t *testing.T) {
 	// Declaration-only and empty files are normal input for a bulk indexer.
-	for _, src := range []string{"", "const PORT = 8080;\n", "import x from 'y';\n"} {
+	// An empty file yields nothing; a declaration-only one yields no
+	// declaration chunk, only the whole-file `<module>` chunk (epic 40 T1).
+	for src, want := range map[string][]tsChunk{
+		"":                     nil,
+		"const PORT = 8080;\n": {{"<module>", semantic.ChunkFile, 1, 1}},
+		"import x from 'y';\n": {{"<module>", semantic.ChunkFile, 1, 1}},
+	} {
 		for _, path := range []string{"a.ts", "a.tsx"} {
 			chunks, err := NewTypeScriptChunker().Chunk(path, []byte(src))
 			if err != nil {
 				t.Errorf("Chunk(%s, %q) returned error: %v", path, src, err)
 			}
-			if len(chunks) != 0 {
-				t.Errorf("Chunk(%s, %q) = %v, want none", path, src, chunks)
-			}
+			assertTSChunks(t, chunks, want)
 		}
 	}
 }
@@ -191,15 +199,15 @@ func TestTypeScriptChunker_ChunksDeclarationsInsideNamespaces(t *testing.T) {
 	}{
 		"namespace": {
 			"namespace X {\n  export function f() {}\n}\n",
-			[]tsChunk{{"f", semantic.ChunkFunction, 2, 2}},
+			[]tsChunk{{"<module>", semantic.ChunkFile, 1, 3}, {"f", semantic.ChunkFunction, 2, 2}},
 		},
 		"nested namespace": {
 			"namespace A.B {\n  export class C {\n    m() {}\n  }\n}\n",
-			[]tsChunk{{"C", semantic.ChunkStruct, 2, 4}, {"m", semantic.ChunkMethod, 3, 3}},
+			[]tsChunk{{"<module>", semantic.ChunkFile, 1, 5}, {"C", semantic.ChunkStruct, 2, 4}, {"m", semantic.ChunkMethod, 3, 3}},
 		},
 		"declare module": {
 			"declare module \"m\" {\n  export function g(): void;\n}\n",
-			[]tsChunk{{"g", semantic.ChunkFunction, 2, 2}},
+			[]tsChunk{{"<module>", semantic.ChunkFile, 1, 3}, {"g", semantic.ChunkFunction, 2, 2}},
 		},
 	}
 	for name, c := range cases {
