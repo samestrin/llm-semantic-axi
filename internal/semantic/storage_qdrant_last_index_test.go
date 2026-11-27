@@ -449,7 +449,7 @@ func TestQdrantStorage_ClearKeepsContractVersion(t *testing.T) {
 // read-only call made none.
 func writeCounts(fq *fakeQdrant) map[string]int {
 	out := map[string]int{}
-	for _, rpc := range []string{"Upsert", "DeletePoints", "SetPayload", "Create", "Delete"} {
+	for _, rpc := range []string{"Upsert", "DeletePoints", "SetPayload", "CreateFieldIndex", "CreateCollection", "DeleteCollection"} {
 		out[rpc] = fq.callCount(rpc)
 	}
 	return out
@@ -484,10 +484,19 @@ func TestCheckStorageContract_UnmarkedPassesWithoutStamping(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
+	fq.seedChunkPoints("check_legacy", 3)
+	points := fq.pointCount("check_legacy")
 	before := writeCounts(fq)
 
 	if err := CheckStorageContract(context.Background(), storage.client, "check_legacy"); err != nil {
 		t.Fatalf("CheckStorageContract on an unmarked collection: %v", err)
+	}
+	// A dropped collection has no marker either, so prove it survived intact.
+	if !fq.hasCollection("check_legacy") {
+		t.Fatal("CheckStorageContract removed the collection")
+	}
+	if got := fq.pointCount("check_legacy"); got != points {
+		t.Errorf("point count = %d after the check, want %d unchanged", got, points)
 	}
 	if fq.payloadOf("check_legacy", contractID()) != nil {
 		t.Error("CheckStorageContract stamped an unmarked collection")
