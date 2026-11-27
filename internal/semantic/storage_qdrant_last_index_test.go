@@ -2,6 +2,9 @@ package semantic
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -439,5 +442,113 @@ func TestQdrantStorage_ClearKeepsContractVersion(t *testing.T) {
 	}
 	if fq.payloadOf("contract_clear", contractID()) == nil {
 		t.Error("Clear left the collection without a contract version")
+	}
+}
+
+// writeCounts snapshots the fake's write RPC counts, so a test can assert a
+// read-only call made none.
+func writeCounts(fq *fakeQdrant) map[string]int {
+	out := map[string]int{}
+	for _, rpc := range []string{"Upsert", "DeletePoints", "SetPayload", "CreateFieldIndex", "CreateCollection", "DeleteCollection"} {
+		out[rpc] = fq.callCount(rpc)
+	}
+	return out
+}
+
+// TestCheckStorageContract_MatchingMarkerPasses defends the exported check
+// external readers such as atcr call: a collection stamped with this
+// version passes, and checking it writes nothing.
+func TestCheckStorageContract_MatchingMarkerPasses(t *testing.T) {
+	storage, fq := newFakeQdrantStorage(t, "check_match", 4)
+	before := writeCounts(fq)
+
+	if err := CheckStorageContract(context.Background(), storage.client, "check_match"); err != nil {
+		t.Fatalf("CheckStorageContract on a matching marker: %v", err)
+	}
+	if after := writeCounts(fq); !reflect.DeepEqual(before, after) {
+		t.Errorf("CheckStorageContract wrote: write calls %v -> %v", before, after)
+	}
+	if got := fq.payloadOf("check_match", contractID())["contract_version"].GetIntegerValue(); got != StorageContractVersion {
+		t.Errorf("stored contract_version = %d, want %d unchanged", got, StorageContractVersion)
+	}
+}
+
+// TestCheckStorageContract_UnmarkedPassesWithoutStamping defends the
+// read-only promise: a legacy collection with no marker is version 1 and
+// passes, but the check must not stamp it the way opening it for write does.
+func TestCheckStorageContract_UnmarkedPassesWithoutStamping(t *testing.T) {
+	storage, fq := newFakeQdrantStorage(t, "check_legacy", 4)
+	if _, err := storage.client.Delete(context.Background(), &qdrant.DeletePoints{
+		CollectionName: "check_legacy",
+		Points:         qdrant.NewPointsSelector(qdrant.NewID(contractID())),
+	}); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	fq.seedChunkPoints("check_legacy", 3)
+	points := fq.pointCount("check_legacy")
+	before := writeCounts(fq)
+
+	if err := CheckStorageContract(context.Background(), storage.client, "check_legacy"); err != nil {
+		t.Fatalf("CheckStorageContract on an unmarked collection: %v", err)
+	}
+	// A dropped collection has no marker either, so prove it survived intact.
+	if !fq.hasCollection("check_legacy") {
+		t.Fatal("CheckStorageContract removed the collection")
+	}
+	if got := fq.pointCount("check_legacy"); got != points {
+		t.Errorf("point count = %d after the check, want %d unchanged", got, points)
+	}
+	if fq.payloadOf("check_legacy", contractID()) != nil {
+		t.Error("CheckStorageContract stamped an unmarked collection")
+	}
+	if after := writeCounts(fq); !reflect.DeepEqual(before, after) {
+		t.Errorf("CheckStorageContract wrote: write calls %v -> %v", before, after)
+	}
+}
+
+// TestCheckStorageContract_MismatchNamesBothVersions defends the clear error
+// for an external reader: a collection stamped with another version fails,
+// the error names the stored and the expected version, and the stored marker
+// is left as it was.
+func TestCheckStorageContract_MismatchNamesBothVersions(t *testing.T) {
+	storage, fq := newFakeQdrantStorage(t, "check_mismatch", 4)
+	other := int64(StorageContractVersion + 41)
+	if _, err := storage.client.Upsert(context.Background(), &qdrant.UpsertPoints{
+		CollectionName: "check_mismatch",
+		Points:         []*qdrant.PointStruct{storage.contractPoint(other)},
+	}); err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+	before := writeCounts(fq)
+
+	err := CheckStorageContract(context.Background(), storage.client, "check_mismatch")
+	if err == nil {
+		t.Fatal("CheckStorageContract accepted a collection stamped with another contract version")
+	}
+	for _, want := range []string{
+		fmt.Sprintf("version %d", other),
+		fmt.Sprintf("version %d", StorageContractVersion),
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error = %q, want it to name %q", err, want)
+		}
+	}
+	if got := fq.payloadOf("check_mismatch", contractID())["contract_version"].GetIntegerValue(); got != other {
+		t.Errorf("stored contract_version = %d after the check, want %d unchanged", got, other)
+	}
+	if after := writeCounts(fq); !reflect.DeepEqual(before, after) {
+		t.Errorf("CheckStorageContract wrote: write calls %v -> %v", before, after)
+	}
+}
+
+// TestCheckStorageContract_ReadFailureIsAnError defends against a check that
+// reports a pass it never made: when the marker cannot be read, the caller
+// gets an error, not nil.
+func TestCheckStorageContract_ReadFailureIsAnError(t *testing.T) {
+	storage, fq := newFakeQdrantStorage(t, "check_readfail", 4)
+	fq.setFailure("GetPoints", errors.New("boom"))
+
+	if err := CheckStorageContract(context.Background(), storage.client, "check_readfail"); err == nil {
+		t.Fatal("CheckStorageContract returned nil when the marker could not be read")
 	}
 }

@@ -149,6 +149,13 @@ Records the `contract_version` of this document that wrote the collection. Writt
 | `type` | string — always `"storage_contract"` |
 | `contract_version` | int — the version in this document's title |
 
+**Checking the version as a reader.** A reader must not stamp a collection: only the writer does that. `CheckStorageContract` is the read-only check. It reads the marker by ID and returns an error naming the stored version and `StorageContractVersion` when they differ. It passes a collection that has no marker without writing one, because that collection is version 1. It returns an error, never a pass, when the marker cannot be read. `CheckStorageContract` lives in an `internal` package, so a tool outside this module, such as `atcr`, cannot import it and has to apply the same rule itself:
+
+1. Retrieve the point with ID `stringToUUID("storage_contract")`, with its payload. Over REST that is `POST /collections/{collection}/points` with `{"ids": ["<that UUID>"], "with_payload": true}`.
+2. No point: version 1. Do not write one.
+3. A point whose `contract_version` differs from the version the reader was written against: stop and name both versions. Do not read the collection as if its layout were the one you know.
+4. The request failed: report the failure. Do not treat it as no marker.
+
 ## Filter rule: how to select chunks
 
 **Chunks are exactly the points that carry a `chunk_id` payload key.** Only `chunkToPoint` writes `chunk_id`; none of the other six kinds do. The read path relies on the same key: `payloadToChunk` prefers `chunk_id` from the payload over the point UUID.
