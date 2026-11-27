@@ -151,3 +151,30 @@ func TestCollectionDeleteProfileUsesTheProfileStorageFromConfig(t *testing.T) {
 		t.Errorf("storageType = %q, want qdrant", storageType)
 	}
 }
+
+// TestCollectionDeleteProfileRejectsABadConfiguredStorage defends the
+// re-validation in the delete: the root hook checks only the code profile's
+// backend, so `docs_storage: redis` reaches the delete unchecked. It must be
+// refused as a config error before anything is sent to the embedding API,
+// not turned into a probe and a storage failure further down.
+func TestCollectionDeleteProfileRejectsABadConfiguredStorage(t *testing.T) {
+	fe := profileWorkspace(t)
+	writeFile(t, filepath.Join(".planning", ".config", "config.yaml"), "semantic:\n  code_storage: sqlite\n  docs_storage: redis\n")
+
+	out, err := runRootErr(t, "collection", "delete", "--profile", "docs", "--force", "--plain", "--api-url", fe.URL)
+
+	if err == nil {
+		t.Fatalf("a delete with docs_storage: redis exited 0:\n%s", out)
+	}
+	for _, want := range []string{"config storage setting", `"redis"`, "sqlite", "qdrant"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error = %v, want it to contain %s", err, want)
+		}
+	}
+	fe.mu.Lock()
+	calls := fe.calls
+	fe.mu.Unlock()
+	if calls != 0 {
+		t.Errorf("the embedding API was called %d time(s) before the bad backend was refused", calls)
+	}
+}
