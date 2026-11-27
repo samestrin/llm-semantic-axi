@@ -49,6 +49,10 @@ Written by `SetFileHashWithFallback`, which `SetFileHash` calls.
 | `content_hash` | string — hash of the file's content at index time |
 | `fallback_reason` | string — why the file was chunked as text windows: `"parse_failed"` or `"chunker_failed"`. Written only for a file that fell back; absent otherwise, and in points written before it was recorded. Written by `SetFileHashWithFallback`, read by `ListFallbackFiles` and, for one file, `GetFallbackReason`. Added after version 1; additive, so the version is unchanged |
 
+A domain delete (`DeleteByDomain`) removes a path's `file_hash` point only when the path has no chunk points left in any domain, and keeps it while another domain still holds chunks for that path. A surviving point would make `ListIndexedFiles` report the file as indexed and `Update` skip it as unchanged, so it could never be indexed again. SQLite removes the same rows under the same rule, in the deleting transaction.
+
+`DeleteByFilePath` returns the number of chunk points removed and does not count the `file_hash` point, which it deletes with them; that matches SQLite's chunk count, so `ChunksRemoved` is not over-reported by one per file on this backend.
+
 ### 3. The `calibration_metadata` point (singleton)
 
 Written by `SetCalibrationMetadata`; restored across collection clears by `Clear`.

@@ -38,3 +38,29 @@ func TestPublicDocsHaveNoInternalWording(t *testing.T) {
 		}
 	}
 }
+
+// TestReadmeStatesProfileIndexDefault defends the rule resolveProfileIndexDir
+// applies: with no config and no explicit --index-dir, a non-code profile uses
+// .index/<profile> and `code` keeps .index. The README said the opposite once
+// ("give each profile its own --index-dir"), which left users sharing .index,
+// so a docs search answered from code chunks. The wording carries the rule, so
+// it is checked with the behaviour tests that pin the resolver.
+func TestReadmeStatesProfileIndexDefault(t *testing.T) {
+	readme := readPublicDoc(t, "README.md")
+
+	para := paragraphStartingWith(readme, "`--profile` names the index being addressed:")
+	if para == "" {
+		t.Fatal("README.md lost the paragraph naming what --profile addresses")
+	}
+	for _, want := range []string{".index/<profile>", "--index-dir", "config"} {
+		if !strings.Contains(para, want) {
+			t.Errorf("README.md --profile paragraph no longer names %q, so the default index per profile is unstated", want)
+		}
+	}
+	if strings.Contains(para, "give each profile its own `--index-dir`") {
+		t.Error("README.md tells users to pass --index-dir for every profile; a non-code profile already defaults to .index/<profile>")
+	}
+	if !strings.Contains(readme, "`collection delete --profile <name>` deletes from that profile's own index") {
+		t.Error("README.md no longer says collection delete acts on the profile's own index, which is the false-empty delete this documents")
+	}
+}
