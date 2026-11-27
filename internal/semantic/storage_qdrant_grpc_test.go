@@ -515,6 +515,70 @@ func TestQdrantStorage_DeleteByFilePathHashOnly(t *testing.T) {
 	}
 }
 
+// TestQdrantStorage_DeleteByFilePathCountFailure pins that a failed point
+// count surfaces as an error and nothing is deleted.
+func TestQdrantStorage_DeleteByFilePathCountFailure(t *testing.T) {
+	storage, fq := newFakeQdrantStorage(t, "bypath_totalcountfail", 4)
+	ctx := context.Background()
+
+	if err := storage.Create(ctx, Chunk{ID: "c1", FilePath: "/a.go", Type: ChunkFunction, Language: "go"}, []float32{1, 0, 0, 0}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	fq.setFailure("Count", status.Error(codes.Unavailable, "count down"))
+	before := fq.callCount("DeletePoints")
+	if _, err := storage.DeleteByFilePath(ctx, "/a.go"); err == nil {
+		t.Fatal("DeleteByFilePath succeeded despite the failed count; want the failure surfaced")
+	}
+	if got := fq.callCount("DeletePoints"); got != before {
+		t.Error("DeleteByFilePath issued a delete after the count failed")
+	}
+}
+
+// TestQdrantStorage_DeleteByFilePathDeleteFailure pins that a failed delete
+// surfaces as an error rather than a reported removal count.
+func TestQdrantStorage_DeleteByFilePathDeleteFailure(t *testing.T) {
+	storage, fq := newFakeQdrantStorage(t, "bypath_delfail", 4)
+	ctx := context.Background()
+
+	if err := storage.Create(ctx, Chunk{ID: "c1", FilePath: "/a.go", Type: ChunkFunction, Language: "go"}, []float32{1, 0, 0, 0}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	fq.setFailure("DeletePoints", status.Error(codes.Unavailable, "delete down"))
+	if _, err := storage.DeleteByFilePath(ctx, "/a.go"); err == nil {
+		t.Fatal("DeleteByFilePath succeeded despite the failed delete; want the failure surfaced")
+	}
+	if _, err := storage.Read(ctx, "c1"); err != nil {
+		t.Errorf("chunk gone after a failed delete: %v", err)
+	}
+}
+
+// TestQdrantStorage_DeleteByFilePathCountChunksFailure pins that a failed
+// chunk count surfaces as an error and nothing is deleted: returning the
+// total instead would report success with a wrong count.
+func TestQdrantStorage_DeleteByFilePathCountChunksFailure(t *testing.T) {
+	storage, fq := newFakeQdrantStorage(t, "bypath_countfail", 4)
+	ctx := context.Background()
+
+	if err := storage.Create(ctx, Chunk{ID: "c1", FilePath: "/a.go", Type: ChunkFunction, Language: "go"}, []float32{1, 0, 0, 0}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	// The total count succeeds; the chunk-only count fails.
+	fq.setFailureAfter("Count", 1, status.Error(codes.Unavailable, "count down"))
+	before := fq.callCount("DeletePoints")
+	if _, err := storage.DeleteByFilePath(ctx, "/a.go"); err == nil {
+		t.Fatal("DeleteByFilePath succeeded despite the failed chunk count; want the failure surfaced")
+	}
+	if got := fq.callCount("DeletePoints"); got != before {
+		t.Error("DeleteByFilePath issued a delete after the chunk count failed")
+	}
+	if _, err := storage.Read(ctx, "c1"); err != nil {
+		t.Errorf("chunk gone after a failed count: %v", err)
+	}
+}
+
 // TestQdrantStorage_ListPaginatesScroll pins that List keeps scrolling past
 // the 256-point page size instead of returning only the first page.
 func TestQdrantStorage_ListPaginatesScroll(t *testing.T) {
