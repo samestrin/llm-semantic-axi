@@ -497,3 +497,41 @@ func TestSetupGeneratedFilesMatchPinnedFixtures(t *testing.T) {
 		t.Errorf("plugin command = %q", cmds)
 	}
 }
+
+// TestOpencodePluginBoundsHookWait defends debt row ee5b33ce8818d9f4: the
+// OpenCode plugin ran the hook through sh -c with no bound, so a hanging
+// index-status held the session.created handler open forever (Claude and
+// Codex hooks have a host timeout). Bun's ShellPromise has no .timeout, so
+// the wait is bounded with Promise.race against a timer that settles as an
+// empty status, which the existing !status.trim() guard turns into a skipped
+// prompt. The race does not kill the shell child; the generated file's
+// header must say so, or a reader assumes the command was cancelled.
+func TestOpencodePluginBoundsHookWait(t *testing.T) {
+	src := string(opencodePluginContent(setupHookCommand))
+
+	// The $ call itself must sit inside the race, not beside it.
+	raceRE := regexp.MustCompile("(?s)await Promise\\.race\\(\\[\\s*\\$`sh -c \\$\\{command\\}`\\.cwd\\(directory\\)\\.nothrow\\(\\)\\.quiet\\(\\)\\.text\\(\\),\\s*new Promise<string>\\(\\(resolve\\) => setTimeout\\(\\(\\) => resolve\\(\"\"\\), \\d+\\)\\),?\\s*\\]\\)")
+	if !raceRE.MatchString(src) {
+		t.Errorf("plugin does not race the $ call against a timer settling as an empty status:\n%s", src)
+	}
+	// The old unbounded await must be gone.
+	if strings.Contains(src, "const status = await $`") {
+		t.Error("plugin still awaits the $ call with no bound")
+	}
+	// The empty-status guard that turns a timeout into a skipped prompt.
+	if !strings.Contains(src, `if (!status.trim()) return`) {
+		t.Error("plugin lost the empty-status guard, so a timeout would prompt with an empty status")
+	}
+	// The header must state the limit: the race bounds the wait but does
+	// not kill the shell child.
+	header := src[:strings.Index(src, "\nimport ")]
+	if !strings.Contains(header, "does not kill") {
+		t.Errorf("plugin header does not say the race leaves the shell child running:\n%s", header)
+	}
+	// The pinned fixture must carry the same bound (a change to what setup
+	// writes must change the fixture too, in the same review).
+	want := string(fixture(t, "opencode-"+opencodePinnedVersion, "llm-semantic.ts"))
+	if src != want {
+		t.Errorf("generated plugin differs from the pinned fixture:\ngot:\n%s\nwant:\n%s", src, want)
+	}
+}
