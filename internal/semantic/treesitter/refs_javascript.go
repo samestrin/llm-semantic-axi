@@ -30,7 +30,8 @@ func (c *TypeScriptChunker) ExtractRefs(path string, content []byte, chunks []se
 // extractJSRefs records calls and imports. It records no uses_type: in
 // JavaScript and TypeScript a member access is a value lookup, not a type
 // use. Each call goes to the innermost chunk holding its line only, so a class
-// does not "call" what its methods call. Recursion writes no edge, by the rule
+// does not "call" what its methods call. A construction (`new Foo()`) is a
+// call to its constructor. Recursion writes no edge, by the rule
 // isRecursion states for every language. Text windows the fallback put in for
 // code that did not parse get no edges, since the tree there is not reliable.
 // Imports go to the first chunk, as Go's do, whatever form records them:
@@ -63,18 +64,33 @@ func extractJSRefs(lang *gotreesitter.Language, content []byte, chunks []semanti
 			if name := jsImportName(GetNodeText(GetChildByFieldName(n, "source", lang), content)); name != "" {
 				refs = append(refs, semantic.ChunkRef{ChunkID: parsed[0].ID, RefType: semantic.RefImports, RefName: name})
 			}
-		case "call_expression":
-			fn := GetChildByFieldName(n, "function", lang)
-			if isModuleLoad(fn, lang, content) {
-				// require("x") and import("./x") load a module; they are not
-				// calls to a chunk named require or import. Only a static
-				// module path can be named; anything else records nothing.
-				if name := jsImportName(jsStaticModuleArg(n, lang, content)); name != "" {
-					refs = append(refs, semantic.ChunkRef{ChunkID: parsed[0].ID, RefType: semantic.RefImports, RefName: name})
+		case "call_expression", "new_expression":
+			var name string
+			if n.Type(lang) == "new_expression" {
+				// `new Foo()` constructs Foo, with or without the argument
+				// list (`new Foo` constructs too), so it is a caller of Foo.
+				// Only a bare identifier is named (owner answer, EST-8928
+				// Q3): `new a.Foo()` and `new this.Foo()` stay unrecorded,
+				// since the resolver links on the text after the last dot
+				// and nothing ties the receiver to a chunk of that name.
+				ctor := GetChildByFieldName(n, "constructor", lang)
+				if ctor != nil && ctor.Type(lang) == "identifier" {
+					name = GetNodeText(ctor, content)
 				}
-				break
+			} else {
+				fn := GetChildByFieldName(n, "function", lang)
+				if isModuleLoad(fn, lang, content) {
+					// require("x") and import("./x") load a module; they are not
+					// calls to a chunk named require or import. Only a static
+					// module path can be named; anything else records nothing.
+					if name := jsImportName(jsStaticModuleArg(n, lang, content)); name != "" {
+						refs = append(refs, semantic.ChunkRef{ChunkID: parsed[0].ID, RefType: semantic.RefImports, RefName: name})
+					}
+					break
+				}
+				name = jsCallName(fn, lang, content)
 			}
-			if name := jsCallName(fn, lang, content); name != "" {
+			if name != "" {
 				if id := innermostChunk(parsed, int(n.StartPoint().Row)+1); id != "" && !isRecursion(parsed, id, name) {
 					refs = append(refs, semantic.ChunkRef{ChunkID: id, RefType: semantic.RefCalls, RefName: name})
 				}
