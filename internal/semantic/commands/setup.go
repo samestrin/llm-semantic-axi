@@ -20,11 +20,12 @@ import (
 )
 
 // setupHookArgs follows the binary in every hook setup writes. It asks for
-// index-status and tolerates its exit code: a bare `llm-semantic` exits
-// non-zero in a directory with no index (by design, so a missing index is
-// never silent), and Claude Code renders that as a hook error in every
-// un-indexed project. `|| true` keeps the status text on the session output
-// while letting the session start cleanly.
+// index-status and tolerates its exit code: `index-status` exits 1 in a
+// directory with no index (by design, so a missing index is never silent),
+// and Claude Code renders that as a hook error in every un-indexed project.
+// `|| true` keeps the status text on the session output while letting the
+// session start cleanly. (A bare `llm-semantic` is not the hook: since epic
+// 24 it exits 0 with status `not_indexed`.)
 const setupHookArgs = " index-status || true"
 
 // setupHookCommand is the hook when PATH finds llm-semantic.
@@ -561,6 +562,9 @@ func opencodePluginContent(command string) []byte {
 	return []byte(strings.Join([]string{
 		"// Managed by `llm-semantic setup` for OpenCode " + opencodePinnedVersion + " (@opencode-ai/plugin " + opencodePinnedVersion + ").",
 		"// Rerun `llm-semantic setup` to update this file; edits here are overwritten.",
+		"// The hook wait is bounded by Promise.race with a 5s timer that settles as an",
+		"// empty status, so a hanging command skips the prompt. The race bounds the wait",
+		"// but does not kill the shell child, which keeps running until it exits on its own.",
 		`import type { Plugin } from "@opencode-ai/plugin"`,
 		"",
 		"const command = " + string(lit),
@@ -568,7 +572,10 @@ func opencodePluginContent(command string) []byte {
 		"export const LlmSemantic: Plugin = async ({ $, client, directory }) => ({",
 		"  event: async ({ event }) => {",
 		`    if (event.type !== "session.created" || event.properties.info.parentID) return`,
-		"    const status = await $`sh -c ${command}`.cwd(directory).nothrow().quiet().text()",
+		"    const status = await Promise.race([",
+		"      $`sh -c ${command}`.cwd(directory).nothrow().quiet().text(),",
+		`      new Promise<string>((resolve) => setTimeout(() => resolve(""), 5000)),`,
+		"    ])",
 		"    if (!status.trim()) return",
 		"    await client.session.prompt({",
 		"      path: { id: event.properties.info.id },",
