@@ -10,6 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - The AXI catalog entry's `reviewed_revision` is re-pinned to `f021e85`, the commit the `v2.0.1` tag carries. Every `file:line` it cites is moved to where that code sits at the tag, and every probe was re-run on a build of it; it now also cites the MCP server passing tool input after `--` and `setup` refusing the home directory and symlinks out of the project. `docs/axi-audit.md` says when it was re-checked against `v2.0.1` and notes beside rows 1 and 6 and findings 6c and 6d what that release changed.
 - The AXI catalog entry's `domain` is `Code navigation / Semantic search`, matching the entry submitted to axi.md (kunchenguid/axi#291).
+- `docs/languages.md` now states the remaining JavaScript and TypeScript gaps: calls at module level and through another object record no edge, and only a bare constructor name is recorded. It also states the shared recursion rule: functions and methods record no self-edge, while a bare `f()` inside method `f` keeps its edge to the free function.
 
 ### Fixed
 
