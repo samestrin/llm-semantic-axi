@@ -203,6 +203,131 @@ class Box {
 	}
 }
 
+// Defends debt row 8f24ba4c20057d5a (epic 37 T2): `require("x")` was recorded
+// as `calls require`, so `callers require` listed every CommonJS file. Each
+// require with a static module path is an `imports` edge instead, named like
+// any other import, and `require` never appears as a callee. Imports go to
+// the first chunk, as static imports and Go's do.
+func TestJSRefs_RequireRecordsImportsNotCalls(t *testing.T) {
+	src := readTestFile(t, "javascript", "commonjs.cjs")
+	assertRows(t, refRows(t, "commonjs.cjs", string(src)),
+		"loadConfig imports fs",
+		"loadConfig imports io",
+		"loadConfig imports a",
+	)
+}
+
+// Defends debt row 4806efa8cea3005f (epic 37 T2): dynamic `import("./m.js")`
+// wrote no edge at all, so a code-split module never appeared in `refs`. A
+// static argument records an `imports` edge; the surrounding call chain
+// (`.then(m => m.go())`) still records nothing it cannot name.
+func TestJSRefs_DynamicImportRecordsImports(t *testing.T) {
+	src := readTestFile(t, "javascript", "dynamic-import.js")
+	assertRows(t, refRows(t, "dynamic-import.js", string(src)),
+		"boot imports m",
+		"boot imports react",
+	)
+}
+
+// Defends debt row 1c0963ce2274ce91 (epic 37 T2): re-exports (`export ...
+// from`) wrote no `imports` edge, so a facade module showed no dependency on
+// what it re-exports. Every export_statement with a source records one,
+// including `export *`, `export * as ns` and TS `export type`.
+func TestTSRefs_ReExportsRecordImports(t *testing.T) {
+	src := readTestFile(t, "typescript", "reexports.ts")
+	assertRows(t, refRows(t, "reexports.ts", string(src)),
+		"facade imports a",
+		"facade imports b",
+		"facade imports c",
+		"facade imports pkg",
+		"facade imports types",
+		"facade calls a",
+	)
+}
+
+// Defends debt row 83e7bda1fece283c (epic 37 T2): a dotted file name such as
+// `./a.test` was kept as `a.test`, and the resolver matches on the text after
+// the last dot, so it looked for a chunk named `test`. The name is the last
+// path segment up to its first dot, so `./a.test` is `a` and `./b.test.js`
+// is `b`, in every import form.
+func TestJSRefs_DottedImportSuffixIsStripped(t *testing.T) {
+	src := `import "./a.test";
+import "./b.test.js";
+
+function f() {
+    require("./c.spec.ts");
+    import("./d.test.mjs");
+}
+`
+	for _, path := range []string{"n.js", "n.ts"} {
+		t.Run(path, func(t *testing.T) {
+			assertRows(t, refRows(t, path, src),
+				"f imports a",
+				"f imports b",
+				"f imports c",
+				"f imports d",
+			)
+		})
+	}
+}
+
+// Defends against an invented edge (epic 37 T2): a require or dynamic import
+// whose module cannot be known statically (a variable, no argument, several
+// arguments, a template with a substitution) records nothing, and neither
+// does a `require` reached through an object. None of them may fall back to
+// `calls require` or `calls import`.
+func TestJSRefs_NonStaticModuleLoadsRecordNothing(t *testing.T) {
+	src := `function f() {
+    require(x);
+    require();
+    require("a", "b");
+    obj.require("x");
+    import(expr);
+    import();
+    import("a", "b");
+    import(` + "`./m${n}.js`" + `);
+    require(` + "`./m${n}.js`" + `);
+}
+`
+	for _, path := range []string{"q.js", "q.ts"} {
+		t.Run(path, func(t *testing.T) {
+			assertRows(t, refRows(t, path, src))
+		})
+	}
+}
+
+// Defends the substitution-free template case of epic 37 T2: a template
+// literal with no `${...}` is a static module path, so `import()` and
+// `require()` record it like a quoted string.
+func TestJSRefs_PlainTemplateModuleLoadsRecordImports(t *testing.T) {
+	src := "function f() {\n    require(`./util/io.js`);\n    import(`./m.test`);\n}\n"
+	assertRows(t, refRows(t, "tpl.js", src),
+		"f imports io",
+		"f imports m",
+	)
+}
+
+// Defends the jsImportName guards (epic 37 T2): the cut at the first dot must
+// keep a non-empty prefix, so a dotfile keeps its name, and a source with no
+// dot or no path is unchanged.
+func TestJSImportName(t *testing.T) {
+	cases := map[string]string{
+		"\"./util/io.js\"": "io",
+		"'./a.test'":       "a",
+		"'./b.test.js'":    "b",
+		"\"react\"":        "react",
+		"lodash/debounce":  "debounce",
+		"@scope/pkg":       "pkg",
+		"'./.hidden'":      ".hidden",
+		"\"\"":             "",
+	}
+	for source, want := range cases {
+		if got := jsImportName(source); got != want {
+			t.Errorf("jsImportName(%q) = %q, want %q", source, got, want)
+		}
+	}
+}
+
 // Defends the fallback: calls in lines the parser could not parse are not
 // attributed to the text windows standing in for them, so a broken file
 // yields edges only for the code that parsed.
