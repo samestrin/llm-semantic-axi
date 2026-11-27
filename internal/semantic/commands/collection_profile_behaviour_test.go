@@ -126,3 +126,28 @@ func TestCollectionDeleteProfileNamesTheQdrantCollection(t *testing.T) {
 		t.Errorf("collection = %q, want docs", got)
 	}
 }
+
+// TestCollectionDeleteProfileUsesTheProfileStorageFromConfig defends the
+// Reviewer's finding on EST-9003: the root hook resolved the storage backend
+// for the code profile, because the delete's --profile shadows the root one.
+// With `docs_storage: qdrant` the delete opened sqlite, printed "No chunks
+// found for domain 'docs'" and exited 0 while the docs chunks sat in Qdrant.
+// No QDRANT_API_URL is set, so reaching Qdrant fails before any network.
+func TestCollectionDeleteProfileUsesTheProfileStorageFromConfig(t *testing.T) {
+	fe := profileWorkspace(t)
+	t.Setenv("QDRANT_API_URL", "")
+	runRoot(t, "index", ".", "--skip-calibration", "--plain", "--api-url", fe.URL)
+	writeFile(t, filepath.Join(".planning", ".config", "config.yaml"), "semantic:\n  code_storage: sqlite\n  docs_storage: qdrant\n")
+
+	out, err := runRootErr(t, "collection", "delete", "--profile", "docs", "--force", "--plain", "--api-url", fe.URL)
+
+	if err == nil || !strings.Contains(err.Error(), "failed to open storage") {
+		t.Fatalf("err = %v, want the docs profile's Qdrant storage to be opened\n%s", err, out)
+	}
+	if strings.Contains(out, "No chunks found") {
+		t.Errorf("the delete reported an empty domain from the wrong backend:\n%s", out)
+	}
+	if storageType != "qdrant" {
+		t.Errorf("storageType = %q, want qdrant", storageType)
+	}
+}
