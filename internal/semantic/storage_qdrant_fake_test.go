@@ -838,6 +838,13 @@ func matchFieldCondition(fc *qdrant.FieldCondition, p *fakePoint) bool {
 	switch m := fc.GetMatch().GetMatchValue().(type) {
 	case *qdrant.Match_Keyword:
 		return val.GetStringValue() == m.Keyword
+	case *qdrant.Match_Keywords:
+		for _, kw := range m.Keywords.GetStrings() {
+			if val.GetStringValue() == kw {
+				return true
+			}
+		}
+		return false
 	case *qdrant.Match_Text:
 		return strings.Contains(val.GetStringValue(), m.Text)
 	case *qdrant.Match_Integer:
