@@ -17,7 +17,7 @@ import (
 // exposes: each --rerank usage string must carry the full variable name, and
 // no help text may name the short, nonexistent RERANKER_API_URL.
 func TestEveryRerankHelpNamesTheRealEnvVar(t *testing.T) {
-	const want = "LLM_SEMANTIC_RERANKER_API_URL"
+	want := rerankerAPIURLEnvVar
 	rerankFlags := 0
 	var walk func(*cobra.Command)
 	walk = func(cmd *cobra.Command) {
@@ -49,11 +49,15 @@ func TestEveryRerankHelpNamesTheRealEnvVar(t *testing.T) {
 	}
 }
 
-// TestRerankerEnvNameMatchesWhatTheCodeReads pins the name the help promises
-// to the variable getDefaultRerankerAPIURL actually reads, so help built from
-// the shared constant is only green while the constant is the real name.
+// TestRerankerEnvNameMatchesWhatTheCodeReads pins the shared constant to the
+// real variable name and pins getDefaultRerankerAPIURL to the constant, so
+// help built from the constant is only green while the constant is the name
+// the code actually reads.
 func TestRerankerEnvNameMatchesWhatTheCodeReads(t *testing.T) {
-	const want = "LLM_SEMANTIC_RERANKER_API_URL"
+	if rerankerAPIURLEnvVar != "LLM_SEMANTIC_RERANKER_API_URL" {
+		t.Fatalf("rerankerAPIURLEnvVar = %q, want LLM_SEMANTIC_RERANKER_API_URL", rerankerAPIURLEnvVar)
+	}
+	want := rerankerAPIURLEnvVar
 	t.Setenv(want, "http://reranker.example.invalid")
 	if got := getDefaultRerankerAPIURL(); got != "http://reranker.example.invalid" {
 		t.Fatalf("getDefaultRerankerAPIURL() = %q with %s set; the help names a variable the code does not read", got, want)
