@@ -53,7 +53,7 @@ lexical search purely as a filter.
 With --profiles, searches across multiple collections (e.g., code,docs) and
 merges results sorted by score. Each result includes its source profile.
 
-RERANKING: When LLM_SEMANTIC_RERANKER_API_URL is set, reranking is enabled by
+RERANKING: When ` + rerankerAPIURLEnvVar + ` is set, reranking is enabled by
 default. This uses a cross-encoder model to re-score results for improved
 precision. Use --no-rerank to disable. Use --rerank-candidates to control
 how many candidates are fetched before reranking (default: max(topK*5, 50)).`,
@@ -121,7 +121,7 @@ how many candidates are fetched before reranking (default: max(topK*5, 50)).`,
 	cmd.Flags().Float64Var(&recencyFactor, "recency-factor", 0.5, "Recency boost factor (max boost = 1+factor)")
 	cmd.Flags().Float64Var(&recencyDecay, "recency-decay", 7, "Recency half-life in days (higher = slower decay)")
 	cmd.Flags().StringSliceVar(&profiles, "profiles", nil, "Profiles to search across (comma-separated, e.g., code,docs)")
-	cmd.Flags().BoolVar(&rerank, "rerank", false, "Enable reranking (auto-enabled when LLM_SEMANTIC_RERANKER_API_URL is set)")
+	cmd.Flags().BoolVar(&rerank, "rerank", false, fmt.Sprintf("Enable reranking (auto-enabled when %s is set)", rerankerAPIURLEnvVar))
 	cmd.Flags().IntVar(&rerankCandidates, "rerank-candidates", 0, "Number of candidates to fetch for reranking (default: max(topK*5, 50))")
 	cmd.Flags().Float64Var(&rerankThreshold, "rerank-threshold", 0.0, "Minimum reranker score (0.0-1.0)")
 	cmd.Flags().BoolVar(&noRerank, "no-rerank", false, "Disable reranking even when reranker is configured")
@@ -184,7 +184,7 @@ func runSearch(ctx context.Context, query string, opts searchOpts) error {
 	enableRerank := reranker != nil && !opts.noRerank
 	// Explicit --rerank flag can also enable it (though reranker must still be configured)
 	if opts.rerank && reranker == nil {
-		return fmt.Errorf("--rerank specified but no reranker configured (set LLM_SEMANTIC_RERANKER_API_URL)")
+		return fmt.Errorf("--rerank specified but no reranker configured (set %s)", rerankerAPIURLEnvVar)
 	}
 
 	// Perform search (hybrid or dense-only). rerankErr is a reranker that
@@ -294,8 +294,8 @@ func markRerankFailed(payload map[string]any, rerankErr error) {
 	payload["status"] = "reranker_failed"
 	help, _ := payload["help"].([]string)
 	payload["help"] = append([]string{
-		fmt.Sprintf("The reranker failed (%s), so results are ranked by embedding score only; check LLM_SEMANTIC_RERANKER_API_URL or pass `--no-rerank`",
-			strings.Join(strings.Fields(rerankErr.Error()), " ")),
+		fmt.Sprintf("The reranker failed (%s), so results are ranked by embedding score only; check %s or pass `--no-rerank`",
+			strings.Join(strings.Fields(rerankErr.Error()), " "), rerankerAPIURLEnvVar),
 	}, help...)
 }
 
@@ -589,7 +589,7 @@ Returns ranked results based on semantic similarity.`, profileName, profileName)
 	cmd.Flags().BoolVar(&recencyBoost, "recency-boost", false, "Boost recently modified files")
 	cmd.Flags().Float64Var(&recencyFactor, "recency-factor", 0.5, "Recency boost strength (0.0-1.0)")
 	cmd.Flags().Float64Var(&recencyDecay, "recency-decay", 7.0, "Recency half-life in days")
-	cmd.Flags().BoolVar(&rerank, "rerank", false, "Enable reranking (auto-enabled if RERANKER_API_URL set)")
+	cmd.Flags().BoolVar(&rerank, "rerank", false, fmt.Sprintf("Enable reranking (auto-enabled when %s is set)", rerankerAPIURLEnvVar))
 	cmd.Flags().IntVar(&rerankCandidates, "rerank-candidates", 0, "Candidates to fetch for reranking (default: max(topK*5, 50))")
 	cmd.Flags().Float64Var(&rerankThreshold, "rerank-threshold", 0.0, "Minimum reranker score threshold")
 	cmd.Flags().BoolVar(&noRerank, "no-rerank", false, "Disable reranking even if configured")
