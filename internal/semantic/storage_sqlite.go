@@ -645,7 +645,28 @@ func (s *SQLiteStorage) DeleteByDomain(ctx context.Context, domain string) (int,
 		return 0, ErrStorageClosed
 	}
 
-	result, err := s.db.ExecContext(ctx, `DELETE FROM chunks WHERE COALESCE(domain, 'code') = ?`, domain)
+	// A file whose chunks were all in this domain has none left, so its hash
+	// row goes too, in the same transaction: a surviving row makes
+	// index-status list the file as indexed and makes Update skip it as
+	// unchanged, so it could never be indexed again. A path that still has
+	// chunks in another domain keeps its row.
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, `
+		DELETE FROM file_hashes
+		WHERE file_path IN (SELECT file_path FROM chunks WHERE COALESCE(domain, 'code') = ?)
+		  AND NOT EXISTS (
+			SELECT 1 FROM chunks c
+			WHERE c.file_path = file_hashes.file_path AND COALESCE(c.domain, 'code') <> ?
+		  )`, domain, domain); err != nil {
+		return 0, fmt.Errorf("failed to delete file hashes by domain: %w", err)
+	}
+
+	result, err := tx.ExecContext(ctx, `DELETE FROM chunks WHERE COALESCE(domain, 'code') = ?`, domain)
 	if err != nil {
 		return 0, fmt.Errorf("failed to delete chunks by domain: %w", err)
 	}
@@ -653,6 +674,10 @@ func (s *SQLiteStorage) DeleteByDomain(ctx context.Context, domain string) (int,
 	rows, err := result.RowsAffected()
 	if err != nil {
 		return 0, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("failed to commit delete by domain: %w", err)
 	}
 	return int(rows), nil
 }
