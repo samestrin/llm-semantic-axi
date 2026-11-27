@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -208,5 +209,23 @@ func TestProfileIndexDirNamesTheQdrantCollection(t *testing.T) {
 	}
 	if got := resolveCollectionName(); got != "docs" {
 		t.Errorf("collection = %q, want docs", got)
+	}
+}
+
+// TestCodeSearchAliasReadsTheCodeIndexWhateverTheProfileFlag: code-search
+// sets the code profile after the root hook gave --profile docs its own
+// directory, so it must take that default back, not search the docs index.
+func TestCodeSearchAliasReadsTheCodeIndexWhateverTheProfileFlag(t *testing.T) {
+	fe := profileWorkspace(t)
+	runRoot(t, "index", ".", "--skip-calibration", "--plain", "--api-url", fe.URL)
+	runRoot(t, "index", "docs/", "--profile", "docs", "--skip-calibration", "--plain", "--api-url", fe.URL)
+
+	paths := searchPaths(t, "code-search", "render invoice billing", "--profile", "docs", "--api-url", fe.URL)
+
+	if indexDir != ".index" {
+		t.Errorf("code-search read %q, want .index", indexDir)
+	}
+	if !slices.ContainsFunc(paths, func(p string) bool { return strings.HasSuffix(p, "sample.go") }) {
+		t.Errorf("code-search did not find the code chunk: %v", paths)
 	}
 }
