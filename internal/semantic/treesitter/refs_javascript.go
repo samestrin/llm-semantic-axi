@@ -30,20 +30,32 @@ func (c *TypeScriptChunker) ExtractRefs(path string, content []byte, chunks []se
 // extractJSRefs records calls and imports. It records no uses_type: in
 // JavaScript and TypeScript a member access is a value lookup, not a type
 // use. Each call goes to the innermost chunk holding its line only, so a class
-// does not "call" what its methods call. A construction (`new Foo()`) is a
-// call to its constructor. Recursion writes no edge, by the rule
-// isRecursion states for every language. Text windows the fallback put in for
-// code that did not parse get no edges, since the tree there is not reliable.
-// Imports go to the first chunk, as Go's do, whatever form records them:
-// import statements, re-exports, require() and dynamic import().
+// does not "call" what its methods call. A call no function, class or method
+// chunk holds goes to the `<module>` chunk, which is only ever a fallback
+// owner: it spans the whole file, and on a one-line file it would otherwise
+// win the tie innermostChunk breaks. A construction (`new Foo()`) is a call to
+// its constructor. Recursion writes no edge, by the rule isRecursion states
+// for every language. Text windows the fallback put in for code that did not
+// parse get no edges, since the tree there is not reliable; such a file has no
+// `<module>` chunk either. Imports go to the first chunk, as Go's do, or to
+// `<module>` when the file has no other, whatever form records them: import
+// statements, re-exports, require() and dynamic import().
 func extractJSRefs(lang *gotreesitter.Language, content []byte, chunks []semantic.Chunk) ([]semantic.ChunkRef, error) {
 	var parsed []semantic.Chunk
+	moduleID := ""
 	for _, ch := range chunks {
-		if ch.Type != semantic.ChunkFile {
+		switch {
+		case ch.Type != semantic.ChunkFile:
 			parsed = append(parsed, ch)
+		case ch.Name == moduleChunkName:
+			moduleID = ch.ID
 		}
 	}
-	if len(parsed) == 0 {
+	importsID := moduleID
+	if len(parsed) > 0 {
+		importsID = parsed[0].ID
+	}
+	if importsID == "" {
 		return nil, nil
 	}
 
@@ -62,7 +74,7 @@ func extractJSRefs(lang *gotreesitter.Language, content []byte, chunks []semanti
 			// from "./x"`, `export * from "./x"`); without one it exports local
 			// bindings and the field lookup gives "", so no edge is recorded.
 			if name := jsImportName(GetNodeText(GetChildByFieldName(n, "source", lang), content)); name != "" {
-				refs = append(refs, semantic.ChunkRef{ChunkID: parsed[0].ID, RefType: semantic.RefImports, RefName: name})
+				refs = append(refs, semantic.ChunkRef{ChunkID: importsID, RefType: semantic.RefImports, RefName: name})
 			}
 		case "call_expression", "new_expression":
 			var name string
@@ -84,14 +96,18 @@ func extractJSRefs(lang *gotreesitter.Language, content []byte, chunks []semanti
 					// calls to a chunk named require or import. Only a static
 					// module path can be named; anything else records nothing.
 					if name := jsImportName(jsStaticModuleArg(n, lang, content)); name != "" {
-						refs = append(refs, semantic.ChunkRef{ChunkID: parsed[0].ID, RefType: semantic.RefImports, RefName: name})
+						refs = append(refs, semantic.ChunkRef{ChunkID: importsID, RefType: semantic.RefImports, RefName: name})
 					}
 					break
 				}
 				name = jsCallName(fn, lang, content)
 			}
 			if name != "" {
-				if id := innermostChunk(parsed, int(n.StartPoint().Row)+1); id != "" && !isRecursion(parsed, id, name) {
+				id := innermostChunk(parsed, int(n.StartPoint().Row)+1)
+				if id == "" {
+					id = moduleID
+				}
+				if id != "" && !isRecursion(parsed, id, name) {
 					refs = append(refs, semantic.ChunkRef{ChunkID: id, RefType: semantic.RefCalls, RefName: name})
 				}
 			}

@@ -565,3 +565,10 @@ func TestJSRefs_OnlyTheModuleChunkOwnsFileScopeCalls(t *testing.T) {
 		t.Errorf("want one edge m calls top, got %+v", refs)
 	}
 }
+
+// Defends the commonest module-level case: a plain script with no function or
+// class chunk. Its `<module>` chunk is the only owner, so its import and its
+// call are both recorded there rather than dropped for want of a chunk.
+func TestJSRefs_PlainScriptRecordsEdgesOnModule(t *testing.T) {
+	assertRows(t, refRows(t, "s.js", "import x from 'y';\nfoo();\n"), "<module> imports y", "<module> calls foo")
+}
