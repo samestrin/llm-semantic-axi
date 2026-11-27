@@ -275,7 +275,8 @@ function f() {
 // whose module cannot be known statically (a variable, no argument, several
 // arguments, a template with a substitution) records nothing, and neither
 // does a `require` reached through an object. None of them may fall back to
-// `calls require` or `calls import`.
+// `calls require` or `calls import`. A call inside the argument is still a
+// call and keeps its edge: the module-load branch must not swallow the walk.
 func TestJSRefs_NonStaticModuleLoadsRecordNothing(t *testing.T) {
 	src := `function f() {
     require(x);
@@ -287,11 +288,16 @@ func TestJSRefs_NonStaticModuleLoadsRecordNothing(t *testing.T) {
     import("a", "b");
     import(` + "`./m${n}.js`" + `);
     require(` + "`./m${n}.js`" + `);
+    import(getPath());
+    require(getPath());
 }
 `
 	for _, path := range []string{"q.js", "q.ts"} {
 		t.Run(path, func(t *testing.T) {
-			assertRows(t, refRows(t, path, src))
+			assertRows(t, refRows(t, path, src),
+				"f calls getPath",
+				"f calls getPath",
+			)
 		})
 	}
 }
