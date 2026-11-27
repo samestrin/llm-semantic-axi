@@ -35,7 +35,8 @@ var jsModuleExtensions = []string{".js", ".jsx", ".mjs", ".cjs", ".ts", ".tsx", 
 // extractJSRefs records calls and imports. It records no uses_type: in
 // JavaScript and TypeScript a member access is a value lookup, not a type
 // use. Each call goes to the innermost chunk holding its line only, so a class
-// does not "call" what its methods call. Text windows the fallback put in for
+// does not "call" what its methods call. Recursion writes no edge, by the rule
+// isRecursion states for every language. Text windows the fallback put in for
 // code that did not parse get no edges, since the tree there is not reliable.
 // Imports go to the first chunk, as Go's do.
 func extractJSRefs(lang *gotreesitter.Language, content []byte, chunks []semantic.Chunk) ([]semantic.ChunkRef, error) {
@@ -65,7 +66,7 @@ func extractJSRefs(lang *gotreesitter.Language, content []byte, chunks []semanti
 			}
 		case "call_expression":
 			if name := jsCallName(GetChildByFieldName(n, "function", lang), lang, content); name != "" {
-				if id := innermostChunk(parsed, int(n.StartPoint().Row)+1); id != "" {
+				if id := innermostChunk(parsed, int(n.StartPoint().Row)+1); id != "" && !isRecursion(parsed, id, name) {
 					refs = append(refs, semantic.ChunkRef{ChunkID: id, RefType: semantic.RefCalls, RefName: name})
 				}
 			}
