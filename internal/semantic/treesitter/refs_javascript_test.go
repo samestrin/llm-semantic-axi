@@ -313,19 +313,54 @@ func TestJSRefs_PlainTemplateModuleLoadsRecordImports(t *testing.T) {
 	)
 }
 
-// Defends the jsImportName guards (epic 37 T2): the cut at the first dot must
-// keep a non-empty prefix, so a dotfile keeps its name, and a source with no
-// dot or no path is unchanged.
+// Defends the jsImportName rule (epic 37 T2, epic 40 T4 / debt row
+// c3a446bad584e404): only path sources (./, ../, /) get their module
+// suffixes (.js .mjs .cjs .jsx .ts .tsx .mts .cts .json .test .spec)
+// repeatedly stripped from the final segment; a bare package specifier
+// keeps its dots (`lodash.debounce` was cut to `lodash`), and the dotfile
+// guard keeps a leading-dot name whole rather than stripping it to nothing.
 func TestJSImportName(t *testing.T) {
 	cases := map[string]string{
-		"\"./util/io.js\"": "io",
-		"'./a.test'":       "a",
-		"'./b.test.js'":    "b",
-		"\"react\"":        "react",
-		"lodash/debounce":  "debounce",
-		"@scope/pkg":       "pkg",
-		"'./.hidden'":      ".hidden",
-		"\"\"":             "",
+		"\"./util/io.js\"":    "io",
+		"'./a.test'":          "a",
+		"'./b.test.js'":       "b",
+		"\"react\"":           "react",
+		"lodash/debounce":     "debounce",
+		"@scope/pkg":          "pkg",
+		"'./.hidden'":         ".hidden",
+		"\"\"":                "",
+		"./jquery.min.js":     "jquery.min",
+		"./vue.config.js":     "vue.config",
+		"./a.spec":            "a",
+		"./a.test.spec.js":    "a",
+		"./a.spec.test.ts":    "a",
+		"./m.mjs":             "m",
+		"./c.cjs":             "c",
+		"./x.jsx":             "x",
+		"./t.ts":              "t",
+		"./x.tsx":             "x",
+		"./m.mts":             "m",
+		"./c.cts":             "c",
+		"./data.json":         "data",
+		"./a.js.js":           "a",
+		"../util/io.js":       "io",
+		"../b.test.ts":        "b",
+		"../../c.spec.mjs":    "c",
+		"/abs/path/m.mjs":     "m",
+		"/a.test.js":          "a",
+		"'../vue.config.js'":  "vue.config",
+		"lodash.debounce":     "lodash.debounce",
+		"socket.io":           "socket.io",
+		"chart.js":            "chart.js",
+		"vue.config.js":       "vue.config.js",
+		"\"lodash.debounce\"": "lodash.debounce",
+		"@scope/pkg.js":       "pkg.js",
+		"pkg/sub.js":          "sub.js",
+		"./.test":             ".test",
+		"./.spec.js":          ".spec",
+		"./.hidden.js":        ".hidden",
+		"./a.min":             "a.min",
+		"./a.testx":           "a.testx",
 	}
 	for source, want := range cases {
 		if got := jsImportName(source); got != want {

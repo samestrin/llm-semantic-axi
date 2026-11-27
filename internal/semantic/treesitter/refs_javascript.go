@@ -171,20 +171,39 @@ func jsCallName(fn *gotreesitter.Node, lang *gotreesitter.Language, content []by
 	return ""
 }
 
-// jsImportName turns an import source such as "./util/io.js", "./a.test" or
-// "react" into its last path segment up to the first dot: "io", "a", "react".
-// Imports edges are never resolved to chunks (resolveRefsSQL unlinks them);
-// the name is what `refs` displays and what dedupes identical rows, so a
-// dotted suffix (a module extension like .js, or a convention like .test)
-// would be shown as "a.test" instead of "a".
-// A leading dot is kept, so a dotfile such as "./.hidden" keeps its name.
+// jsImportSuffixes are the module extensions and test conventions stripped
+// from a path import's final segment, repeatedly ("./a.spec.test.js" -> "a").
+var jsImportSuffixes = []string{".js", ".mjs", ".cjs", ".jsx", ".ts", ".tsx", ".mts", ".cts", ".json", ".test", ".spec"}
+
+// jsImportName turns an import source into its last path segment: "./util/io.js"
+// -> "io", "lodash/debounce" -> "debounce", "react" -> "react". Imports edges
+// are never resolved to chunks (resolveRefsSQL unlinks them); the name is what
+// `refs` displays and what dedupes identical rows, so a module suffix (an
+// extension like .js, or a convention like .test) would be shown as "a.test"
+// instead of "a". Only path sources (./, ../, /) get the suffixes above
+// stripped; a bare package specifier keeps its dots, since `lodash.debounce`
+// and `chart.js` are package names, not file names (epic 40 T4). A suffix is
+// stripped only while a non-empty name remains, so a dotfile such as
+// "./.hidden" or "./.test" keeps its name.
 func jsImportName(source string) string {
 	source = strings.Trim(source, "\"'`")
 	name := source[strings.LastIndex(source, "/")+1:]
-	if i := strings.Index(name, "."); i > 0 {
-		return name[:i]
+	if !strings.HasPrefix(source, "./") && !strings.HasPrefix(source, "../") && !strings.HasPrefix(source, "/") {
+		return name
 	}
-	return name
+	for {
+		stripped := false
+		for _, suf := range jsImportSuffixes {
+			if len(name) > len(suf) && strings.HasSuffix(name, suf) {
+				name = name[:len(name)-len(suf)]
+				stripped = true
+				break
+			}
+		}
+		if !stripped {
+			return name
+		}
+	}
 }
 
 // innermostChunk returns the ID of the narrowest chunk holding line. A tie
