@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
@@ -28,6 +29,11 @@ var (
 	// Config file support
 	configPath string // Path to YAML config file
 	profile    string // Profile name: code (default), docs, memory, sprints
+
+	// indexDirFromProfile is set when indexDir is the .index/<profile> default
+	// rather than a path someone chose, so lookups do not fall back to the
+	// code index in .index.
+	indexDirFromProfile bool
 
 	// Loaded config (cached after first load)
 	loadedConfig *config.SemanticConfig
@@ -215,6 +221,7 @@ Supports any OpenAI-compatible embedding API (TEI, Ollama, vLLM, OpenAI, Azure, 
 					return config.ErrProfileNotFound(profile, config.ValidProfiles())
 				}
 			}
+			resolveProfileIndexDir(cmd)
 
 			// Resolve storage type from config (if not explicitly set via flag)
 			// This must happen after loading config but before any command runs
@@ -249,6 +256,7 @@ Supports any OpenAI-compatible embedding API (TEI, Ollama, vLLM, OpenAI, Azure, 
 	// GlobalAXIOutput, which resolveOutputMode sets from all the format flags.
 	rootCmd.PersistentFlags().BoolVar(&axiAlias, "axi", false, "Output as TOON (accepted for compatibility; TOON is the default)")
 	GlobalAXIOutput = false
+	indexDirFromProfile = false
 
 	rootCmd.AddCommand(unwrappedCommands()...)
 
@@ -329,6 +337,29 @@ func resolveCollectionName() string {
 
 	// Priority 5: default
 	return "llm_semantic"
+}
+
+// resolveProfileIndexDir gives a non-code profile its own index directory,
+// .index/<profile>, when nothing else chose one: no --index-dir (even one set
+// to .index) and no config, auto-discovered or not. Sharing .index made a docs
+// index skip every file the code index already held as unchanged, and a docs
+// search answer with code chunks. The code profile keeps .index. Qdrant
+// follows through resolveCollectionName, which derives the collection from
+// the directory. A search alias calls it again after setting its profile, so
+// an earlier default is taken back first.
+func resolveProfileIndexDir(cmd *cobra.Command) {
+	if indexDirFromProfile {
+		indexDir = ".index"
+		indexDirFromProfile = false
+	}
+	if profile == "" || profile == "code" || loadedConfig != nil {
+		return
+	}
+	if f := cmd.Flag("index-dir"); f != nil && f.Changed {
+		return
+	}
+	indexDir = filepath.Join(".index", profile)
+	indexDirFromProfile = true
 }
 
 // resolveStorageType returns the storage type using this priority:
@@ -583,6 +614,7 @@ func ResetGlobalsForTesting() {
 	embedderType = "openai"
 	configPath = ""
 	profile = ""
+	indexDirFromProfile = false
 	loadedConfig = nil
 	GlobalJSONOutput = false
 	GlobalMinOutput = false

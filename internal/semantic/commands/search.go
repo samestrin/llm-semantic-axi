@@ -460,6 +460,11 @@ func findIndexPath() string {
 		if _, err := os.Stat(path); err == nil {
 			return path
 		}
+		// A profile's own index is missing: falling back would answer from
+		// the code index.
+		if indexDirFromProfile {
+			return ""
+		}
 	}
 
 	// Try .index in current directory
@@ -534,8 +539,9 @@ Returns ranked results based on semantic similarity.`, profileName, profileName)
   llm-semantic %[1]s "retry with backoff" --top 5 --hybrid`, name),
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Set the profile
+			// Set the profile, and the index it reads.
 			profile = profileName
+			resolveProfileIndexDir(cmd)
 
 			query := args[0]
 			if len(args) > 1 {
