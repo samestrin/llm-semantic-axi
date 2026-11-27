@@ -246,10 +246,10 @@ func TestTSRefs_ReExportsRecordImports(t *testing.T) {
 }
 
 // Defends debt row 83e7bda1fece283c (epic 37 T2): a dotted file name such as
-// `./a.test` was kept as `a.test`, and the resolver matches on the text after
-// the last dot, so it looked for a chunk named `test`. The name is the last
-// path segment up to its first dot, so `./a.test` is `a` and `./b.test.js`
-// is `b`, in every import form.
+// `./a.test` was kept as `a.test`. Imports are never resolved to chunks; the
+// name is what `refs` displays (and dedupes on), so the dotted suffix showed
+// up in the output. The name is the last path segment up to its first dot,
+// so `./a.test` is `a` and `./b.test.js` is `b`, in every import form.
 func TestJSRefs_DottedImportSuffixIsStripped(t *testing.T) {
 	src := `import "./a.test";
 import "./b.test.js";

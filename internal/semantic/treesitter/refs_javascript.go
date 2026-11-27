@@ -157,9 +157,10 @@ func jsCallName(fn *gotreesitter.Node, lang *gotreesitter.Language, content []by
 
 // jsImportName turns an import source such as "./util/io.js", "./a.test" or
 // "react" into its last path segment up to the first dot: "io", "a", "react".
-// Chunk names are bare identifiers and the resolver matches on the text after
-// the last dot, so any dotted suffix (a module extension like .js, or a
-// convention like .test) would have it look for a chunk named "js" or "test".
+// Imports edges are never resolved to chunks (resolveRefsSQL unlinks them);
+// the name is what `refs` displays and what dedupes identical rows, so a
+// dotted suffix (a module extension like .js, or a convention like .test)
+// would be shown as "a.test" instead of "a".
 // A leading dot is kept, so a dotfile such as "./.hidden" keeps its name.
 func jsImportName(source string) string {
 	source = strings.Trim(source, "\"'`")
