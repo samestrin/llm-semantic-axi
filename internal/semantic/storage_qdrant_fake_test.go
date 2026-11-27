@@ -72,6 +72,11 @@ type fakeQdrant struct {
 	// denseOnly makes returned vectors carry only the Dense oneof and leave
 	// the deprecated flat Data field empty, as newer servers do.
 	denseOnly bool
+
+	// scrollOverride, when set and returning non-nil, answers a Scroll in
+	// place of the stored points, so a test can play a server that ignores
+	// part of the filter.
+	scrollOverride func(req *qdrant.ScrollPoints) *qdrant.ScrollResponse
 }
 
 func newFakeQdrant() *fakeQdrant {
@@ -507,6 +512,11 @@ func (f *fakeQdrant) Scroll(_ context.Context, req *qdrant.ScrollPoints) (*qdran
 	defer f.mu.Unlock()
 
 	f.lastScrollLimit = req.GetLimit()
+	if f.scrollOverride != nil {
+		if resp := f.scrollOverride(req); resp != nil {
+			return resp, nil
+		}
+	}
 
 	c, err := f.collectionLocked(req.GetCollectionName())
 	if err != nil {

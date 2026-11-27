@@ -5,7 +5,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/qdrant/go-client/qdrant"
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -251,6 +255,51 @@ func TestQdrantStorage_DeleteByDomainOrphanCheckReadsPastAFullPage(t *testing.T)
 		if got, err := storage.GetFileHash(ctx, path); err != nil || got != want {
 			t.Errorf("GetFileHash(%s) = %q, %v; want %q", path, got, err, want)
 		}
+	}
+}
+
+// TestQdrantStorage_DeleteByDomainOrphanCheckStopsWithoutProgress defends the
+// no-progress guard in the batched orphan check: a full page that names none
+// of the requested paths would be asked for again forever. The fake answers
+// the orphan-check scroll with a full page of another path's chunks, and the
+// delete must fail with the guard's error, not hang or report success.
+func TestQdrantStorage_DeleteByDomainOrphanCheckStopsWithoutProgress(t *testing.T) {
+	storage, fq := newFakeQdrantStorage(t, "domain_delete_no_progress", 4)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	chunk := Chunk{ID: "d1", FilePath: "/r/doc.md", Name: "d", Content: "d", Type: ChunkFile, Language: "md", Domain: "docs"}
+	if err := storage.Create(ctx, chunk, []float32{0.1, 0.2, 0.3, 0.4}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := storage.SetFileHash(ctx, "/r/doc.md", "h1"); err != nil {
+		t.Fatalf("SetFileHash: %v", err)
+	}
+
+	fq.mu.Lock()
+	fq.scrollOverride = func(req *qdrant.ScrollPoints) *qdrant.ScrollResponse {
+		for _, c := range req.GetFilter().GetMust() {
+			if c.GetField().GetMatch().GetKeywords() == nil {
+				continue
+			}
+			page := make([]*qdrant.RetrievedPoint, req.GetLimit())
+			for i := range page {
+				page[i] = &qdrant.RetrievedPoint{
+					Id:      qdrant.NewID(stringToUUID(fmt.Sprintf("other-%d", i))),
+					Payload: map[string]*qdrant.Value{"file_path": qdrant.NewValueString("/r/other.md")},
+				}
+			}
+			return &qdrant.ScrollResponse{Result: page}
+		}
+		return nil
+	}
+	fq.mu.Unlock()
+
+	_, err := storage.DeleteByDomain(ctx, "docs")
+	if err == nil || !strings.Contains(err.Error(), "returned no requested path") {
+		t.Fatalf("DeleteByDomain error = %v, want the no-progress error", err)
+	}
+	if hash, err := storage.GetFileHash(ctx, "/r/doc.md"); err != nil || hash != "h1" {
+		t.Errorf("GetFileHash = %q, %v; want h1 kept after the failed check", hash, err)
 	}
 }
 
