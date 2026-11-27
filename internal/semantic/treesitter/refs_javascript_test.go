@@ -334,6 +334,126 @@ func TestJSImportName(t *testing.T) {
 	}
 }
 
+// Defends debt row 544b5ce505b7ccbc (epic 37 T3): `new Foo()` recorded no
+// edge, so `callers Foo` missed every construction. A bare constructor name
+// records a `calls` edge, with or without the argument list (`new Bar`
+// constructs too), and a call inside the arguments keeps its own edge.
+func TestJSRefs_NewBareConstructorRecordsCalls(t *testing.T) {
+	src := `function build() {
+    new Foo();
+    new Bar;
+    new Foo(make());
+}
+`
+	for _, path := range []string{"n.js", "n.ts"} {
+		t.Run(path, func(t *testing.T) {
+			assertRows(t, refRows(t, path, src),
+				"build calls Bar",
+				"build calls Foo",
+				"build calls Foo",
+				"build calls make",
+			)
+		})
+	}
+	// TS type arguments sit between the name and the argument list; the
+	// constructor is still a bare identifier.
+	assertRows(t, refRows(t, "g.ts", "function f() { new Map<string, number>(); }\n"), "f calls Map")
+}
+
+// Defends the owner's answer to EST-8928 Q3 (epic 37 T3): only a bare
+// identifier constructor is recorded. `new a.Foo()` stays unrecorded — the
+// resolver links on the text after the last dot, so it would link to any
+// lone chunk named Foo though nothing ties a to it — and so do `new
+// this.Foo()` (the answer says "bare identifier only"), a computed
+// constructor and a parenthesized one. Calls inside those expressions keep
+// their own edges: the new_expression case must not swallow the walk.
+func TestJSRefs_NewWithReceiverOrUnnamedConstructorIsSkipped(t *testing.T) {
+	src := `function build() {
+    new a.Foo();
+    new a.b.Foo();
+    new this.Foo();
+    new obj[k]();
+    new (getFactory())();
+    new make()();
+}
+`
+	for _, path := range []string{"r.js", "r.ts"} {
+		t.Run(path, func(t *testing.T) {
+			assertRows(t, refRows(t, path, src),
+				"build calls getFactory",
+				"build calls make",
+			)
+		})
+	}
+}
+
+// Defends the one recursion rule (epic 37 T1) on the new edge: `new Widget()`
+// inside function Widget is self-construction and writes no edge, while the
+// same bare name inside a method named Widget constructs the free Widget and
+// keeps its edge, exactly as a bare call does.
+func TestJSRefs_NewSelfConstructionFollowsRecursionRule(t *testing.T) {
+	assertRows(t, refRows(t, "rec.js", "function Widget() {\n    new Widget();\n}\n"))
+	assertRows(t, refRows(t, "m.js", "class C {\n    Widget() {\n        new Widget();\n    }\n}\n"), "Widget calls Widget")
+}
+
+// Defends the done-when of epic 37 T3 through a real sqlite store and the
+// resolver: `callers Foo` lists the constructing function. A construction
+// through an object (`new a.Foo()`) must not link to the lone Foo chunk.
+func TestJSRefs_CallersFooListsTheConstructingFunction(t *testing.T) {
+	ctx := context.Background()
+	storage, err := semantic.NewSQLiteStorage(":memory:", 0)
+	if err != nil {
+		t.Fatalf("NewSQLiteStorage: %v", err)
+	}
+	t.Cleanup(func() { storage.Close() })
+
+	files := map[string]string{
+		"foo.ts": "export class Foo {}\n",
+		"app.js": `function build() {
+    new Foo();
+}
+
+function elsewhere() {
+    new a.Foo();
+}
+`,
+	}
+	factory := semantic.NewChunkerFactory()
+	RegisterAll(factory)
+	for path, src := range files {
+		c, _ := factory.GetByExtension(path)
+		chunks, err := c.Chunk(path, []byte(src))
+		if err != nil {
+			t.Fatalf("Chunk %s: %v", path, err)
+		}
+		for _, ch := range chunks {
+			if err := storage.Create(ctx, ch, nil); err != nil {
+				t.Fatalf("Create %s: %v", ch.Name, err)
+			}
+		}
+		refs, err := c.(semantic.RefExtractor).ExtractRefs(path, []byte(src), chunks)
+		if err != nil {
+			t.Fatalf("ExtractRefs %s: %v", path, err)
+		}
+		if err := storage.StoreRefs(ctx, refs); err != nil {
+			t.Fatalf("StoreRefs %s: %v", path, err)
+		}
+	}
+	if err := storage.ResolveRefs(ctx); err != nil {
+		t.Fatalf("ResolveRefs: %v", err)
+	}
+
+	edges, err := storage.GetCallersByName(ctx, "Foo")
+	if err != nil {
+		t.Fatalf("GetCallersByName: %v", err)
+	}
+	var callers []string
+	for _, e := range edges {
+		callers = append(callers, e.Name+" "+e.RefName)
+	}
+	assertRows(t, callers, "build Foo")
+}
+
 // Defends the fallback: calls in lines the parser could not parse are not
 // attributed to the text windows standing in for them, so a broken file
 // yields edges only for the code that parsed.
