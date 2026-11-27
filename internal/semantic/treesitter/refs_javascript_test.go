@@ -510,3 +510,58 @@ func TestJSRefs_NoChunksNoEdges(t *testing.T) {
 		t.Errorf("got %d edges for a file with no chunks: %+v", len(refs), refs)
 	}
 }
+
+// Defends debt row 132c8866610ca361 (epic 40 T2): a call at file scope lay
+// outside every function chunk, so no edge was written and `callers init`
+// came back empty though the file calls it. It now goes to the `<module>`
+// chunk, and only to it: `init` does not call itself, so the recursion rule
+// must not turn the module's call into `init calls init`.
+func TestJSRefs_TopLevelCallGoesToModule(t *testing.T) {
+	src := "function init() {}\n\ninit();\n"
+	for _, path := range []string{"m.js", "m.ts"} {
+		t.Run(path, func(t *testing.T) {
+			assertRows(t, refRows(t, path, src), "<module> calls init")
+		})
+	}
+}
+
+// Defends against `<module>` swallowing calls a narrower chunk holds: a call
+// inside a function or method stays with it, while the file-scope call beside
+// it goes to `<module>`. The one-line file is the tie case: the module spans
+// the same single line as the function, and the function must still win.
+func TestJSRefs_CallInsideAFunctionStaysWithTheFunction(t *testing.T) {
+	src := "function a() {\n    b();\n}\n\nclass C {\n    m() {\n        b();\n    }\n}\n\nb();\n"
+	assertRows(t, refRows(t, "f.js", src), "a calls b", "m calls b", "<module> calls b")
+	assertRows(t, refRows(t, "one.js", "function f() { g(); }"), "f calls g")
+}
+
+// Defends the fallback rule on the new owner: a file that did not parse has
+// no `<module>` chunk, and a call at file scope in it is not handed to a text
+// window instead, since the tree there is not reliable.
+func TestJSRefs_TopLevelCallInABrokenFileRecordsNothing(t *testing.T) {
+	src := "function ok() {\n    helper();\n}\n\ntop();\n\nwhile (true { broken(); }\n"
+	assertRows(t, refRows(t, "d.js", src), "ok calls helper")
+}
+
+// Defends that only the parsed `<module>` chunk owns file-scope calls: a
+// whole-file ChunkFile window with any other name (what the fallback emits)
+// gets no edge, while one named `<module>` gets it.
+func TestJSRefs_OnlyTheModuleChunkOwnsFileScopeCalls(t *testing.T) {
+	src := []byte("top();\n")
+	window := semantic.Chunk{ID: "w", Type: semantic.ChunkFile, Name: "d.js", StartLine: 1, EndLine: 1}
+	refs, err := NewJSChunker().ExtractRefs("d.js", src, []semantic.Chunk{window})
+	if err != nil {
+		t.Fatalf("ExtractRefs: %v", err)
+	}
+	if len(refs) != 0 {
+		t.Errorf("a fallback window got edges: %+v", refs)
+	}
+	module := semantic.Chunk{ID: "m", Type: semantic.ChunkFile, Name: moduleChunkName, StartLine: 1, EndLine: 1}
+	refs, err = NewJSChunker().ExtractRefs("d.js", src, []semantic.Chunk{window, module})
+	if err != nil {
+		t.Fatalf("ExtractRefs: %v", err)
+	}
+	if len(refs) != 1 || refs[0].ChunkID != "m" || refs[0].RefName != "top" {
+		t.Errorf("want one edge m calls top, got %+v", refs)
+	}
+}
