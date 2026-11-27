@@ -6,6 +6,11 @@ import (
 	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
 )
 
+// moduleChunkName names the chunk that spans a whole parsed JavaScript or
+// TypeScript file. The angle brackets keep it from colliding with any
+// identifier, so it reads as module scope wherever a chunk name is printed.
+const moduleChunkName = "<module>"
+
 // JSChunker uses tree-sitter to parse JavaScript source code. TypeScript is
 // TypeScriptChunker's.
 type JSChunker struct {
