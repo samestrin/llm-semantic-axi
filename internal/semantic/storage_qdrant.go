@@ -534,6 +534,29 @@ func (s *QdrantStorage) DeleteByDomain(ctx context.Context, domain string) (int,
 		return 0, nil
 	}
 
+	// A file whose chunks were all in this domain has none left, so its
+	// file_hash point goes too: a surviving point makes index-status list the
+	// file as indexed and makes Update skip it as unchanged, so it could never
+	// be indexed again. The hashes go first, so a failed chunk delete leaves
+	// files Update re-indexes rather than chunks nothing will re-index.
+	hashIDs, err := s.orphanedFileHashIDs(ctx, domain)
+	if err != nil {
+		return 0, err
+	}
+	if len(hashIDs) > 0 {
+		_, err = s.client.Delete(ctx, &qdrant.DeletePoints{
+			CollectionName: s.collectionName,
+			Points: &qdrant.PointsSelector{
+				PointsSelectorOneOf: &qdrant.PointsSelector_Points{
+					Points: &qdrant.PointsIdsList{Ids: hashIDs},
+				},
+			},
+		})
+		if err != nil {
+			return 0, fmt.Errorf("failed to delete file hashes by domain: %w", err)
+		}
+	}
+
 	// Delete by filter
 	_, err = s.client.Delete(ctx, &qdrant.DeletePoints{
 		CollectionName: s.collectionName,
@@ -548,6 +571,60 @@ func (s *QdrantStorage) DeleteByDomain(ctx context.Context, domain string) (int,
 	}
 
 	return int(count), nil
+}
+
+// orphanedFileHashIDs returns the file_hash point IDs of the files that have
+// chunks in domain and none in any other, so deleting the domain leaves them
+// with no chunks at all. The caller holds s.mu.
+func (s *QdrantStorage) orphanedFileHashIDs(ctx context.Context, domain string) ([]*qdrant.PointId, error) {
+	paths := make(map[string]bool)
+	var offset *qdrant.PointId
+	for {
+		page, next, err := s.client.ScrollAndOffset(ctx, &qdrant.ScrollPoints{
+			CollectionName: s.collectionName,
+			Filter: &qdrant.Filter{
+				Must:    []*qdrant.Condition{qdrant.NewMatch("domain", domain)},
+				MustNot: []*qdrant.Condition{qdrant.NewIsEmpty("chunk_id")},
+			},
+			WithPayload: qdrant.NewWithPayloadInclude("file_path"),
+			Limit:       qdrant.PtrOf(uint32(500)),
+			Offset:      offset,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to scroll file paths by domain: %w", err)
+		}
+		for _, point := range page {
+			if path := point.Payload["file_path"].GetStringValue(); path != "" {
+				paths[path] = true
+			}
+		}
+		if next == nil {
+			break
+		}
+		offset = next
+	}
+
+	var ids []*qdrant.PointId
+	for path := range paths {
+		elsewhere, err := s.client.Count(ctx, &qdrant.CountPoints{
+			CollectionName: s.collectionName,
+			Filter: &qdrant.Filter{
+				Must: []*qdrant.Condition{qdrant.NewMatch("file_path", path)},
+				MustNot: []*qdrant.Condition{
+					qdrant.NewIsEmpty("chunk_id"),
+					qdrant.NewMatch("domain", domain),
+				},
+			},
+			Exact: qdrant.PtrOf(true),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to count chunks outside domain: %w", err)
+		}
+		if elsewhere == 0 {
+			ids = append(ids, qdrant.NewID(fileHashID(path)))
+		}
+	}
+	return ids, nil
 }
 
 func (s *QdrantStorage) List(ctx context.Context, opts ListOptions) ([]Chunk, error) {

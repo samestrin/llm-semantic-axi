@@ -5,6 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 // domainDeleteBackends runs a domain-delete check against both backends: a
@@ -149,4 +152,90 @@ func TestDeleteByDomain_KeepsHashOfAPathWithChunksLeft(t *testing.T) {
 			}
 		}
 	})
+}
+
+// TestQdrantStorage_DeleteByDomainFailures defends against a domain delete that
+// reports success when part of it failed. Each failing call must surface as an
+// error. The hashes go before the chunks, so a failed chunk delete leaves files
+// that Update will index again, rather than chunks with no hash to say so.
+func TestQdrantStorage_DeleteByDomainFailures(t *testing.T) {
+	boom := status.Error(codes.Unavailable, "boom")
+	for name, arm := range map[string]func(fq *fakeQdrant){
+		"scroll paths":  func(fq *fakeQdrant) { fq.setFailure("Scroll", boom) },
+		"count paths":   func(fq *fakeQdrant) { fq.setFailureAfter("Count", 1, boom) },
+		"delete hashes": func(fq *fakeQdrant) { fq.setFailure("DeletePoints", boom) },
+		"delete chunks": func(fq *fakeQdrant) { fq.setFailureAfter("DeletePoints", 1, boom) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			storage, fq := newFakeQdrantStorage(t, "domain_delete_failures", 4)
+			ctx := context.Background()
+			chunk := Chunk{ID: "d1", FilePath: "/r/doc.md", Name: "d", Content: "d", Type: ChunkFile, Language: "md", Domain: "docs"}
+			if err := storage.Create(ctx, chunk, []float32{0.1, 0.2, 0.3, 0.4}); err != nil {
+				t.Fatalf("Create: %v", err)
+			}
+			if err := storage.SetFileHash(ctx, "/r/doc.md", "h1"); err != nil {
+				t.Fatalf("SetFileHash: %v", err)
+			}
+
+			arm(fq)
+			if _, err := storage.DeleteByDomain(ctx, "docs"); err == nil {
+				t.Fatal("DeleteByDomain succeeded with a failing call")
+			}
+			fq.clearFailure("Scroll")
+			fq.clearFailure("Count")
+			fq.clearFailure("DeletePoints")
+
+			chunks, err := storage.List(ctx, ListOptions{FilePath: "/r/doc.md"})
+			if err != nil {
+				t.Fatalf("List: %v", err)
+			}
+			if len(chunks) != 1 {
+				t.Errorf("chunks left = %d, want 1: the chunks went though the delete failed", len(chunks))
+			}
+			hash, err := storage.GetFileHash(ctx, "/r/doc.md")
+			if err != nil {
+				t.Fatalf("GetFileHash: %v", err)
+			}
+			wantHash := "h1"
+			if name == "delete chunks" {
+				wantHash = "" // so Update re-indexes the file
+			}
+			if hash != wantHash {
+				t.Errorf("hash after a failed %s = %q, want %q", name, hash, wantHash)
+			}
+		})
+	}
+}
+
+// TestSQLiteStorage_DeleteByDomainFailureKeepsChunks defends the transaction:
+// when the hash cleanup fails the chunks must stay, and the error must reach
+// the caller, or `collection delete --domain` reports a delete that did not
+// happen.
+func TestSQLiteStorage_DeleteByDomainFailureKeepsChunks(t *testing.T) {
+	storage := newFileStorage(t)
+	ctx := context.Background()
+	chunk := Chunk{ID: "d1", FilePath: "/r/doc.md", Name: "d", Content: "d", Type: ChunkFile, Language: "md", Domain: "docs"}
+	if err := storage.Create(ctx, chunk, []float32{0.1, 0.2, 0.3, 0.4}); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err := storage.DeleteByDomain(cancelled, "docs"); err == nil {
+		t.Error("DeleteByDomain succeeded on a cancelled context")
+	}
+
+	if _, err := storage.db.Exec(`DROP TABLE file_hashes`); err != nil {
+		t.Fatalf("drop file_hashes: %v", err)
+	}
+	if _, err := storage.DeleteByDomain(ctx, "docs"); err == nil {
+		t.Error("DeleteByDomain succeeded with the hash cleanup failing")
+	}
+	chunks, err := storage.List(ctx, ListOptions{FilePath: "/r/doc.md"})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(chunks) != 1 {
+		t.Errorf("chunks left = %d, want 1: the chunk delete was not rolled back", len(chunks))
+	}
 }
