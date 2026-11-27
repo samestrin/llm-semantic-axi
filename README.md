@@ -235,7 +235,7 @@ Search-family output also says how far the index is behind the working tree (`fr
 | `1` | The command failed: no index for `index-status`, an unreachable endpoint, an `index` or `index-update` run in which any file failed (even if others were indexed), or a destructive command refused without `--force` or `--yes`. Every error goes to stdout in the active format: a TOON or JSON object with `error: true`, or `Error: ...` under `--plain`. A failed `index` or `index-update` prints its usual counts and `errors` list with `error: true` and a `message` in the same TOON or JSON document; `--plain` prints the summary followed by the `Error: ...` line. stderr carries only diagnostics. |
 | `2` | Usage error: an unknown flag or command, a missing argument, a bad flag value (such as `--top -1`, `--threshold 5` or an unknown `--profile` or `--embedder`), or contradictory format flags. The message names what was wrong; for an unknown flag or command it lists the valid choices. Nothing is created or sent first. |
 
-`llm-semantic -v`, `-V` and `--version` print the bare version and exit 0, and so do the same flags on `llm-semantic-mcp`.
+`llm-semantic -v`, `-V` and `--version` print the bare version and exit 0, also beside the persistent flags when no subcommand is named (`llm-semantic --axi -v`); on a subcommand `-v` keeps its own meaning (`index -v` is `--verbose`). The same three flags print the bare version on `llm-semantic-mcp`. Both binaries print the build's stamp verbatim.
 
 ## Performance
 

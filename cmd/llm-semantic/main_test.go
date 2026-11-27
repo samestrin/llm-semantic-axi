@@ -82,6 +82,117 @@ func TestMain_VersionFlagsPrintTheBareVersion(t *testing.T) {
 	}
 }
 
+// TestMain_VersionFlagsWorkBesidePersistentFlags defends debt row
+// cbdcc7ec71f60b2e / epic 39 T3 (owner decision EST-9193 Q4): `--axi -v` failed
+// with "unknown shorthand flag: 'v'" because only a lone version argument was
+// recognised. A version flag beside the persistent flags, with no subcommand
+// named, must print the version and exit 0.
+func TestMain_VersionFlagsWorkBesidePersistentFlags(t *testing.T) {
+	cases := [][]string{
+		{"--axi", "-v"},
+		{"-v", "--axi"},
+		{"--axi", "-V"},
+		{"--axi", "--version"},
+		{"--json", "-v"},
+		{"--plain", "-v"},
+		{"--min", "-v"},
+		// A valued persistent flag's value must not be read as a subcommand,
+		// even when it is spelled like one.
+		{"--config", "cfg.yaml", "-v"},
+		{"--index-dir", "index", "--version"},
+		{"--config=index", "-v"},
+	}
+	for _, args := range cases {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			stdout, stderr, code := runMain(t, args...)
+			if stdout != version+"\n" {
+				t.Errorf("stdout = %q, want %q", stdout, version+"\n")
+			}
+			if stderr != "" {
+				t.Errorf("stderr = %q, want empty", stderr)
+			}
+			if code != 0 {
+				t.Errorf("exit code = %d, want 0", code)
+			}
+		})
+	}
+}
+
+// TestMain_VersionFlagWithASubcommandIsNotTheVersion is the other half of the
+// owner decision: the version flag is accepted only when no subcommand is
+// named. `index -v` stays --verbose (TestMain_IndexDashVStillMeansVerbose), and
+// a version flag with any positional argument must fall through to normal
+// command execution, never print the version.
+func TestMain_VersionFlagWithASubcommandIsNotTheVersion(t *testing.T) {
+	cases := [][]string{
+		{"-v", "index"},
+		{"--axi", "-v", "index"},
+		{"search", "-v"},
+		{"--axi", "-v", "extra"},
+		// After the "--" terminator -v is a positional argument, not a flag.
+		{"--", "-v"},
+	}
+	for _, args := range cases {
+		t.Run(strings.Join(args, " "), func(t *testing.T) {
+			stdout, _, code := runMain(t, args...)
+			if stdout == version+"\n" {
+				t.Errorf("%v printed the version though a subcommand/positional was named", args)
+			}
+			if code == 0 {
+				t.Errorf("%v exited 0; want the normal command's error exit", args)
+			}
+		})
+	}
+}
+
+// TestMain_VersionStampPrintsVerbatim pins owner decision EST-9193 Q5 (debt
+// row a364fb931ec526b7): the stamp prints exactly as stamped. A release build
+// stamps "v1.2.0"; trimming the leading "v" (as the MCP started banner does)
+// or adding one would make `$(llm-semantic -v)` disagree with the tag. Runs
+// main() in-process so the stamped var is visible; the version path returns
+// without os.Exit.
+func TestMain_VersionStampPrintsVerbatim(t *testing.T) {
+	original := version
+	t.Cleanup(func() { version = original })
+	for _, stamp := range []string{"v1.2.0", "1.2.0"} {
+		for _, args := range [][]string{{"-v"}, {"--axi", "-v"}, {"--version"}} {
+			t.Run(stamp+"/"+strings.Join(args, " "), func(t *testing.T) {
+				version = stamp
+				withArgs(t, append([]string{"llm-semantic"}, args...)...)
+				if out := captureStdout(t, main); out != stamp+"\n" {
+					t.Errorf("stdout = %q, want the stamp verbatim %q", out, stamp+"\n")
+				}
+			})
+		}
+	}
+}
+
+// TestBuild_BothBinariesAreStampedFromTheSameVersion pins the "same stamp for
+// the same build" half of epic 39 T3: the Makefile stamps both binaries from
+// the one $(VERSION). The original bug was hardcoded versions drifting from
+// the tag; a future edit must not stamp the two binaries differently.
+func TestBuild_BothBinariesAreStampedFromTheSameVersion(t *testing.T) {
+	b, err := os.ReadFile(filepath.Join("..", "..", "Makefile"))
+	if err != nil {
+		t.Fatalf("read Makefile: %v", err)
+	}
+	var cli, mcp string
+	for _, line := range strings.Split(string(b), "\n") {
+		if strings.HasPrefix(line, "CLI_LDFLAGS") {
+			cli = line
+		}
+		if strings.HasPrefix(line, "MCP_LDFLAGS") {
+			mcp = line
+		}
+	}
+	if !strings.Contains(cli, "-X main.version=$(VERSION)") {
+		t.Errorf("CLI_LDFLAGS does not stamp main.version from $(VERSION): %q", cli)
+	}
+	if !strings.Contains(mcp, "-X main.serverVersion=$(VERSION)") {
+		t.Errorf("MCP_LDFLAGS does not stamp main.serverVersion from $(VERSION): %q", mcp)
+	}
+}
+
 func TestMain_UnstampedBuildReportsDev(t *testing.T) {
 	// An unstamped build must say "dev", not an empty string or a fake number.
 	if version != "dev" {
