@@ -261,10 +261,10 @@ func TestQdrantStorage_DeleteByDomainOrphanCheckReadsPastAFullPage(t *testing.T)
 func TestQdrantStorage_DeleteByDomainFailures(t *testing.T) {
 	boom := status.Error(codes.Unavailable, "boom")
 	for name, arm := range map[string]func(fq *fakeQdrant){
-		"scroll paths":  func(fq *fakeQdrant) { fq.setFailure("Scroll", boom) },
-		"count paths":   func(fq *fakeQdrant) { fq.setFailureAfter("Count", 1, boom) },
-		"delete hashes": func(fq *fakeQdrant) { fq.setFailure("DeletePoints", boom) },
-		"delete chunks": func(fq *fakeQdrant) { fq.setFailureAfter("DeletePoints", 1, boom) },
+		"scroll paths":         func(fq *fakeQdrant) { fq.setFailure("Scroll", boom) },
+		"scroll other domains": func(fq *fakeQdrant) { fq.setFailureAfter("Scroll", 1, boom) },
+		"delete hashes":        func(fq *fakeQdrant) { fq.setFailure("DeletePoints", boom) },
+		"delete chunks":        func(fq *fakeQdrant) { fq.setFailureAfter("DeletePoints", 1, boom) },
 	} {
 		t.Run(name, func(t *testing.T) {
 			storage, fq := newFakeQdrantStorage(t, "domain_delete_failures", 4)
