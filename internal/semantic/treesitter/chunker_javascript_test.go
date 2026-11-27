@@ -31,6 +31,7 @@ func TestJSChunker_ChunksExportedDefaultClasses(t *testing.T) {
 			t.Fatalf("Chunk(%s) returned %v", path, err)
 		}
 		assertJSChunks(t, chunks, []tsChunk{
+			{"<module>", semantic.ChunkFile, 1, 3},
 			{"Foo", semantic.ChunkStruct, 1, 3},
 			{"bar", semantic.ChunkMethod, 2, 2},
 		})
@@ -57,6 +58,7 @@ func TestJSChunker_ExtractsFunctionValuedClassFieldsAsMethods(t *testing.T) {
 			t.Fatalf("Chunk(%s) returned %v", path, err)
 		}
 		assertJSChunks(t, chunks, []tsChunk{
+			{"<module>", semantic.ChunkFile, 1, 7},
 			{"Foo", semantic.ChunkStruct, 1, 7},
 			{"bar", semantic.ChunkMethod, 2, 4},
 			{"qux", semantic.ChunkMethod, 6, 6},

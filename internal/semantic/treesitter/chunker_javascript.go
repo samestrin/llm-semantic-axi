@@ -1,10 +1,17 @@
 package treesitter
 
 import (
+	"strings"
+
 	"github.com/odvcencio/gotreesitter"
 	"github.com/odvcencio/gotreesitter/grammars"
 	"github.com/samestrin/llm-semantic-axi/v2/internal/semantic"
 )
+
+// moduleChunkName names the chunk that spans a whole parsed JavaScript or
+// TypeScript file. The angle brackets keep it from colliding with any
+// identifier, so it reads as module scope wherever a chunk name is printed.
+const moduleChunkName = "<module>"
 
 // JSChunker uses tree-sitter to parse JavaScript source code. TypeScript is
 // TypeScriptChunker's.
@@ -41,7 +48,37 @@ func (c *JSChunker) Chunk(path string, content []byte) ([]semantic.Chunk, error)
 	root := tree.RootNode()
 
 	c.walkNode(root, lang, content, path, ext, &chunks, "")
-	return chunks, TreeError(tree)
+	return withModuleChunk(tree, chunks, content, path, ext)
+}
+
+// withModuleChunk appends the `<module>` chunk to a cleanly parsed file's
+// chunks and returns them with TreeError(tree). A file that did not parse gets
+// none: the fallback wrapper windows the lines no chunk covers, and a
+// whole-file chunk would cover them all. A blank file gets none either, having
+// no code to search. Appending leaves every declaration chunk as it was.
+func withModuleChunk(tree *gotreesitter.Tree, chunks []semantic.Chunk, content []byte, path, ext string) ([]semantic.Chunk, error) {
+	if err := TreeError(tree); err != nil {
+		return chunks, err
+	}
+	text := string(content)
+	if strings.TrimSpace(text) == "" {
+		return chunks, nil
+	}
+	endLine := strings.Count(text, "\n")
+	if !strings.HasSuffix(text, "\n") {
+		endLine++
+	}
+	module := semantic.Chunk{
+		FilePath:  path,
+		Type:      semantic.ChunkFile,
+		Name:      moduleChunkName,
+		Content:   TruncateContent(text, maxChunkSize),
+		StartLine: 1,
+		EndLine:   endLine,
+		Language:  ext,
+	}
+	module.ID = module.GenerateID()
+	return append(chunks, module), nil
 }
 
 func (c *JSChunker) walkNode(node *gotreesitter.Node, lang *gotreesitter.Language, content []byte, path, ext string, chunks *[]semantic.Chunk, enclosingClass string) {

@@ -55,8 +55,10 @@ func TestRunIndexStoresTypeScriptAndTSXDeclarationsWithTheirLines(t *testing.T) 
 
 	byFile := storedChunks(t)
 
-	// Every construct in the .tsx fixture, including the JSX components.
+	// Every construct in the .tsx fixture, including the JSX components, and
+	// the whole-file <module> chunk every cleanly parsed file gets.
 	wantTSX := []string{
+		"<module> file 1-31",
 		"Button function 10-16",
 		"ButtonProps interface 3-6",
 		"Counter function 18-21",
@@ -92,10 +94,10 @@ func TestRunIndexStoresTypeScriptAndTSXDeclarationsWithTheirLines(t *testing.T) 
 		}
 	}
 
-	if got := storedRows(byFile["esm.mts"]); strings.Join(got, ",") != "loadConfig function 1-3" {
-		t.Errorf("esm.mts rows = %v, want [loadConfig function 1-3]", got)
+	if got := storedRows(byFile["esm.mts"]); strings.Join(got, ",") != "<module> file 1-3,loadConfig function 1-3" {
+		t.Errorf("esm.mts rows = %v, want [<module> file 1-3 loadConfig function 1-3]", got)
 	}
-	if got := storedRows(byFile["cjs.cts"]); strings.Join(got, ",") != "Options interface 1-3" {
-		t.Errorf("cjs.cts rows = %v, want [Options interface 1-3]", got)
+	if got := storedRows(byFile["cjs.cts"]); strings.Join(got, ",") != "<module> file 1-3,Options interface 1-3" {
+		t.Errorf("cjs.cts rows = %v, want [<module> file 1-3 Options interface 1-3]", got)
 	}
 }

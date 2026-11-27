@@ -49,7 +49,7 @@ func (c *TypeScriptChunker) Chunk(path string, content []byte) ([]semantic.Chunk
 
 	var chunks []semantic.Chunk
 	c.walkNode(tree.RootNode(), lang, content, path, ext, &chunks)
-	return chunks, TreeError(tree)
+	return withModuleChunk(tree, chunks, content, path, ext)
 }
 
 func (c *TypeScriptChunker) walkNode(node *gotreesitter.Node, lang *gotreesitter.Language, content []byte, path, ext string, chunks *[]semantic.Chunk) {
