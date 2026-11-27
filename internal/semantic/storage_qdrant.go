@@ -471,8 +471,9 @@ func (s *QdrantStorage) DeleteByFilePath(ctx context.Context, filePath string) (
 		},
 	}
 
-	// Count matching points using Count API (more efficient than Scroll)
-	count, err := s.client.Count(ctx, &qdrant.CountPoints{
+	// Count every point for the path (chunks plus the file_hash record) to
+	// short-circuit a path with nothing stored.
+	total, err := s.client.Count(ctx, &qdrant.CountPoints{
 		CollectionName: s.collectionName,
 		Filter:         filter,
 		Exact:          qdrant.PtrOf(true),
@@ -481,11 +482,28 @@ func (s *QdrantStorage) DeleteByFilePath(ctx context.Context, filePath string) (
 		return 0, fmt.Errorf("failed to count points: %w", err)
 	}
 
-	if count == 0 {
+	if total == 0 {
 		return 0, nil
 	}
 
-	// Delete by filter
+	// The return value counts chunks only, matching sqlite. The file_hash
+	// record shares file_path but is not a chunk; counting it over-reported
+	// ChunksRemoved by one. Only chunk points carry chunk_id (as in List
+	// and Stats).
+	chunkCount, err := s.client.Count(ctx, &qdrant.CountPoints{
+		CollectionName: s.collectionName,
+		Filter: &qdrant.Filter{
+			Must:    filter.Must,
+			MustNot: []*qdrant.Condition{qdrant.NewIsEmpty("chunk_id")},
+		},
+		Exact: qdrant.PtrOf(true),
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to count chunks: %w", err)
+	}
+
+	// Delete by the broad filter so the file_hash record (with its fallback
+	// reason) goes with the chunks, even when there are zero chunks.
 	_, err = s.client.Delete(ctx, &qdrant.DeletePoints{
 		CollectionName: s.collectionName,
 		Points: &qdrant.PointsSelector{
@@ -503,7 +521,7 @@ func (s *QdrantStorage) DeleteByFilePath(ctx context.Context, filePath string) (
 		s.parallelFTS.DeleteByFilePath(ctx, filePath)
 	}
 
-	return int(count), nil
+	return int(chunkCount), nil
 }
 
 func (s *QdrantStorage) DeleteByDomain(ctx context.Context, domain string) (int, error) {
