@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -642,27 +643,82 @@ func (s *QdrantStorage) orphanedFileHashIDs(ctx context.Context, domain string) 
 		offset = next
 	}
 
-	var ids []*qdrant.PointId
+	sorted := make([]string, 0, len(paths))
 	for path := range paths {
-		elsewhere, err := s.client.Count(ctx, &qdrant.CountPoints{
+		sorted = append(sorted, path)
+	}
+	sort.Strings(sorted)
+
+	var ids []*qdrant.PointId
+	for start := 0; start < len(sorted); start += orphanCheckBatch {
+		batch := sorted[start:min(start+orphanCheckBatch, len(sorted))]
+		orphans, err := s.pathsWithNoChunksOutside(ctx, domain, batch)
+		if err != nil {
+			return nil, err
+		}
+		for _, path := range orphans {
+			ids = append(ids, qdrant.NewID(fileHashID(path)))
+		}
+	}
+	return ids, nil
+}
+
+// orphanCheckBatch is how many paths one orphan-check scroll asks about.
+const orphanCheckBatch = 100
+
+// pathsWithNoChunksOutside returns the paths in batch that have no chunk in
+// any domain but domain. It scrolls the chunks of the batch's paths that sit
+// outside domain; each path seen there is kept. A full page means more may
+// follow, so it scrolls again for only the paths not seen yet: every page
+// drops at least one path, and no page re-reads a path already kept.
+func (s *QdrantStorage) pathsWithNoChunksOutside(ctx context.Context, domain string, batch []string) ([]string, error) {
+	const pageSize = 500
+	remaining := make(map[string]bool, len(batch))
+	for _, path := range batch {
+		remaining[path] = true
+	}
+	for len(remaining) > 0 {
+		keywords := make([]string, 0, len(remaining))
+		for _, path := range batch {
+			if remaining[path] {
+				keywords = append(keywords, path)
+			}
+		}
+		page, err := s.client.Scroll(ctx, &qdrant.ScrollPoints{
 			CollectionName: s.collectionName,
 			Filter: &qdrant.Filter{
-				Must: []*qdrant.Condition{qdrant.NewMatch("file_path", path)},
+				Must: []*qdrant.Condition{qdrant.NewMatchKeywords("file_path", keywords...)},
 				MustNot: []*qdrant.Condition{
 					qdrant.NewIsEmpty("chunk_id"),
 					qdrant.NewMatch("domain", domain),
 				},
 			},
-			Exact: qdrant.PtrOf(true),
+			WithPayload: qdrant.NewWithPayloadInclude("file_path"),
+			Limit:       qdrant.PtrOf(uint32(pageSize)),
 		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to count chunks outside domain: %w", err)
+			return nil, fmt.Errorf("failed to scroll chunks outside domain: %w", err)
 		}
-		if elsewhere == 0 {
-			ids = append(ids, qdrant.NewID(fileHashID(path)))
+		before := len(remaining)
+		for _, point := range page {
+			delete(remaining, point.Payload["file_path"].GetStringValue())
+		}
+		if len(page) < pageSize {
+			break
+		}
+		if len(remaining) == before {
+			// A full page that named none of the paths asked about would
+			// repeat forever; report it rather than guess an answer.
+			return nil, fmt.Errorf("scroll of chunks outside domain returned no requested path")
 		}
 	}
-	return ids, nil
+	var orphans []string
+	for _, path := range batch {
+		if remaining[path] {
+			orphans = append(orphans, path)
+		}
+	}
+	return orphans, nil
 }
 
 func (s *QdrantStorage) List(ctx context.Context, opts ListOptions) ([]Chunk, error) {
