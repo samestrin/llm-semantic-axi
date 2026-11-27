@@ -64,3 +64,40 @@ func TestReadmeStatesProfileIndexDefault(t *testing.T) {
 		t.Error("README.md no longer says collection delete acts on the profile's own index, which is the false-empty delete this documents")
 	}
 }
+
+// TestReadmeStatesSetupOpencodeLimits defends two limits of `setup`'s OpenCode
+// target that a user only learned by losing work or by a plugin that silently
+// did nothing: setup writes .opencode/plugins/llm-semantic.ts as fixed content
+// (planFixedFile), so a re-run replaces local edits instead of merging them,
+// and the generated plugin runs its command through `sh -c`, so a machine
+// without `sh` on PATH gets no session status. The README called setup "safe to
+// re-run" without saying the first, and said nothing about the second.
+func TestReadmeStatesSetupOpencodeLimits(t *testing.T) {
+	readme := readPublicDoc(t, "README.md")
+
+	para := paragraphStartingWith(readme, "- `llm-semantic setup`")
+	if para == "" {
+		t.Fatal("README.md lost the setup paragraph")
+	}
+	// The sentence must name the file and say edits to it do not survive.
+	if !strings.Contains(para, "`.opencode/plugins/llm-semantic.ts`") {
+		t.Error("README.md setup paragraph no longer names .opencode/plugins/llm-semantic.ts")
+	}
+	if !strings.Contains(para, "local edits") || !strings.Contains(para, "overwritten") {
+		t.Error("README.md setup paragraph does not say setup overwrites local edits to .opencode/plugins/llm-semantic.ts, so a user who customises the plugin loses the edit on the next run")
+	}
+	// The OpenCode plugin shell is the reason `sh` is required; keep both.
+	if !strings.Contains(para, "`sh`") || !strings.Contains(para, "`PATH`") {
+		t.Error("README.md setup paragraph does not say the OpenCode plugin needs sh on PATH, so a missing sh reads as a plugin that silently does nothing")
+	}
+
+	// The sentences stay true: the generated plugin runs through sh -c and its
+	// own header says a rerun overwrites edits.
+	plugin := string(opencodePluginContent("llm-semantic index-status"))
+	if !strings.Contains(plugin, "sh -c") {
+		t.Error("opencodePluginContent no longer runs the command through sh -c, so the README's sh requirement is stale")
+	}
+	if !strings.Contains(plugin, "edits here are overwritten") {
+		t.Error("opencodePluginContent no longer says a rerun overwrites edits, so the README's overwrite sentence is stale")
+	}
+}
