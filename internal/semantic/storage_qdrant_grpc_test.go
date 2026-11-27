@@ -437,6 +437,84 @@ func TestQdrantStorage_DeleteByFilePathNoMatch(t *testing.T) {
 	}
 }
 
+// TestQdrantStorage_DeleteByFilePathCountsChunksOnly defends debt row
+// aee061755179882e: the count included the file_hash bookkeeping point, so
+// deleting a file with 1 chunk reported 2 removed while sqlite reports 1.
+// The hash record must still go with the chunks (Storage contract), and
+// other files must be untouched.
+func TestQdrantStorage_DeleteByFilePathCountsChunksOnly(t *testing.T) {
+	storage, _ := newFakeQdrantStorage(t, "bypath_count", 4)
+	ctx := context.Background()
+
+	for _, c := range []Chunk{
+		{ID: "c1", FilePath: "/a.go", Type: ChunkFunction, Domain: "code", Language: "go"},
+		{ID: "c2", FilePath: "/b.go", Type: ChunkFunction, Domain: "code", Language: "go"},
+	} {
+		if err := storage.Create(ctx, c, []float32{1, 0, 0, 0}); err != nil {
+			t.Fatalf("Create %s: %v", c.ID, err)
+		}
+	}
+	if err := storage.SetFileHash(ctx, "/a.go", "hash-a"); err != nil {
+		t.Fatalf("SetFileHash: %v", err)
+	}
+
+	n, err := storage.DeleteByFilePath(ctx, "/a.go")
+	if err != nil {
+		t.Fatalf("DeleteByFilePath: %v", err)
+	}
+	if n != 1 {
+		t.Errorf("DeleteByFilePath = %d, want 1 (the chunk only, matching sqlite)", n)
+	}
+
+	hash, err := storage.GetFileHash(ctx, "/a.go")
+	if err != nil {
+		t.Fatalf("GetFileHash: %v", err)
+	}
+	if hash != "" {
+		t.Errorf("file hash after delete = %q, want gone with the chunks", hash)
+	}
+
+	remaining, err := storage.List(ctx, ListOptions{})
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if len(remaining) != 1 || remaining[0].ID != "c2" {
+		t.Errorf("remaining chunks = %v, want only c2", remaining)
+	}
+}
+
+// TestQdrantStorage_DeleteByFilePathHashOnly pins that a path holding only a
+// file_hash point (zero chunks) returns 0 but still removes the hash record:
+// a surviving record makes index-status list a deleted file as indexed.
+func TestQdrantStorage_DeleteByFilePathHashOnly(t *testing.T) {
+	storage, fq := newFakeQdrantStorage(t, "bypath_hashonly", 4)
+	ctx := context.Background()
+
+	if err := storage.SetFileHash(ctx, "/gone.go", "hash-gone"); err != nil {
+		t.Fatalf("SetFileHash: %v", err)
+	}
+
+	before := fq.callCount("DeletePoints")
+	n, err := storage.DeleteByFilePath(ctx, "/gone.go")
+	if err != nil {
+		t.Fatalf("DeleteByFilePath: %v", err)
+	}
+	if n != 0 {
+		t.Errorf("DeleteByFilePath = %d, want 0 (no chunks)", n)
+	}
+	if got := fq.callCount("DeletePoints"); got != before+1 {
+		t.Errorf("DeletePoints calls = %d, want %d: the hash record must be deleted even with zero chunks", got, before+1)
+	}
+
+	hash, err := storage.GetFileHash(ctx, "/gone.go")
+	if err != nil {
+		t.Fatalf("GetFileHash: %v", err)
+	}
+	if hash != "" {
+		t.Errorf("file hash after delete = %q, want gone", hash)
+	}
+}
+
 // TestQdrantStorage_ListPaginatesScroll pins that List keeps scrolling past
 // the 256-point page size instead of returning only the first page.
 func TestQdrantStorage_ListPaginatesScroll(t *testing.T) {
