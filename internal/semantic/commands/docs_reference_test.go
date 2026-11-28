@@ -194,10 +194,15 @@ func TestReadmeDocumentationSectionLinksReferencePages(t *testing.T) {
 }
 
 // conformanceVerdictOK reports whether a conformance-table status cell states
-// a Met or Exception verdict.
+// a Met or Exception verdict. A cell that starts with "Not" ("Not Met") is a
+// failure verdict, not a Met one, even though it contains "Met": accepting it
+// would report a failed principle as conforming (debt row 7c7eb10bef97791e).
 func conformanceVerdictOK(cell string) bool {
 	status := strings.Trim(cell, "*")
-	return status != "" && (strings.Contains(status, "Met") || strings.Contains(status, "Exception"))
+	if status == "" || strings.HasPrefix(status, "Not") {
+		return false
+	}
+	return strings.Contains(status, "Met") || strings.Contains(status, "Exception")
 }
 
 // TestConformanceVerdictGuardRejectsNotVerdicts is the sabotage list for the
