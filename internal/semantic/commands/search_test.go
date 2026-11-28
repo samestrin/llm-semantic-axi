@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bytes"
+	"os"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -123,6 +124,51 @@ func executeCommand(root *cobra.Command, args ...string) (string, error) {
 
 	err := root.Execute()
 	return buf.String(), err
+}
+
+// TestExecuteCommandRestoresOutputModeGlobals defends debt 3e27964e44251fbe:
+// executeCommand runs a real invocation, and resolveOutputMode publishes its
+// flags to the package globals. Without a restore, a --json run leaks JSON
+// mode into every test that runs after it. The second subtest is "the next
+// test": t.Run is synchronous, so it observes exactly what a later test would.
+// No t.Parallel(): these globals are package-level.
+func TestExecuteCommandRestoresOutputModeGlobals(t *testing.T) {
+	newWorkspace(t)
+	// RootCmd() itself writes the globals (flag registration binds them and
+	// clears GlobalAXIOutput), so build the tree before planting prior values.
+	root := RootCmd()
+	// Deliberately not the defaults, so "restored" cannot be confused with
+	// "reset to false".
+	const prevAXI, prevJSON, prevMin = true, false, true
+	GlobalAXIOutput, GlobalJSONOutput, GlobalMinOutput = prevAXI, prevJSON, prevMin
+	t.Cleanup(func() { GlobalAXIOutput, GlobalJSONOutput, GlobalMinOutput = false, false, false })
+
+	t.Run("json invocation", func(t *testing.T) {
+		// Not captureStdout: it resets the globals itself at test end, which
+		// would mask whether executeCommand restored them. Silence the JSON
+		// payload with /dev/null instead.
+		devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+		if err != nil {
+			t.Fatalf("open %s: %v", os.DevNull, err)
+		}
+		orig := os.Stdout
+		os.Stdout = devNull
+		// No index: index-status fails, but PersistentPreRunE has already
+		// resolved --json; the mode publish is what this test exercises.
+		_, _ = executeCommand(root, "index-status", "--json")
+		os.Stdout = orig
+		_ = devNull.Close()
+		if !GlobalJSONOutput || GlobalAXIOutput {
+			t.Fatalf("--json did not take effect (axi=%v json=%v); the ordering assertion below would prove nothing", GlobalAXIOutput, GlobalJSONOutput)
+		}
+	})
+
+	t.Run("next test sees the prior values", func(t *testing.T) {
+		if GlobalAXIOutput != prevAXI || GlobalJSONOutput != prevJSON || GlobalMinOutput != prevMin {
+			t.Errorf("output-mode globals leaked: axi=%v json=%v min=%v, want %v %v %v",
+				GlobalAXIOutput, GlobalJSONOutput, GlobalMinOutput, prevAXI, prevJSON, prevMin)
+		}
+	})
 }
 
 func TestSearchCmd_HelpOutput(t *testing.T) {
