@@ -355,7 +355,7 @@ func TestRootCmdLoadsAConfigFile(t *testing.T) {
 
 	root := RootCmd()
 	// the error is expected (no index); only the config load matters here.
-	if _, err := executeCommand(root, "--config", cfgPath, "index-status"); err == nil {
+	if _, err := executeCommand(t, root, "--config", cfgPath, "index-status"); err == nil {
 		t.Fatal("index-status with no index should error")
 	}
 	if loadedConfig == nil {
@@ -372,7 +372,7 @@ func TestRootCmdRejectsAMissingConfigFile(t *testing.T) {
 	newWorkspace(t)
 
 	root := RootCmd()
-	_, err := executeCommand(root, "--config", "no-such-config.yaml", "index-status")
+	_, err := executeCommand(t, root, "--config", "no-such-config.yaml", "index-status")
 	if err == nil {
 		t.Fatal("a missing --config file was accepted")
 	}
@@ -385,7 +385,7 @@ func TestRootCmdRejectsAnUnknownProfile(t *testing.T) {
 	cfgPath := writeFile(t, dir+"/semantic.yaml", "semantic:\n  code_collection: configured_code\n")
 
 	root := RootCmd()
-	_, err := executeCommand(root, "--config", cfgPath, "--profile", "nonsense", "index-status")
+	_, err := executeCommand(t, root, "--config", cfgPath, "--profile", "nonsense", "index-status")
 	if err == nil {
 		t.Fatal("an unknown --profile was accepted")
 	}
@@ -406,7 +406,7 @@ func TestRootCmdPromotesALocalJSONFlagToTheGlobal(t *testing.T) {
 
 	root := RootCmd()
 	captureStdout(t, func() {
-		if _, err := executeCommand(root, "index-status", "--json"); err != nil {
+		if _, err := executeCommand(t, root, "index-status", "--json"); err != nil {
 			t.Fatalf("index-status --json: %v", err)
 		}
 	})
@@ -425,7 +425,7 @@ func TestBareRunShowsStatusPathAndDescription(t *testing.T) {
 		indexedWorkspace(t)
 		var runErr error
 		// --plain: since epic 27 the default is TOON, covered below.
-		out := captureStdout(t, func() { _, runErr = executeCommand(RootCmd(), "--plain") })
+		out := captureStdout(t, func() { _, runErr = executeCommand(t, RootCmd(), "--plain") })
 		if runErr != nil {
 			t.Fatalf("bare run: %v", runErr)
 		}
@@ -447,7 +447,7 @@ func TestBareRunShowsStatusPathAndDescription(t *testing.T) {
 			indexedWorkspace(t)
 			t.Cleanup(func() { GlobalAXIOutput = false; GlobalJSONOutput = false })
 			var runErr error
-			out := captureStdout(t, func() { _, runErr = executeCommand(RootCmd(), flag) })
+			out := captureStdout(t, func() { _, runErr = executeCommand(t, RootCmd(), flag) })
 			if runErr != nil {
 				t.Fatalf("bare run %s: %v", flag, runErr)
 			}
@@ -478,7 +478,7 @@ func TestBareRunShowsStatusPathAndDescription(t *testing.T) {
 	t.Run("index-status has no bin", func(t *testing.T) {
 		indexedWorkspace(t)
 		t.Cleanup(func() { GlobalAXIOutput = false; GlobalJSONOutput = false })
-		out := captureStdout(t, func() { _, _ = executeCommand(RootCmd(), "index-status", "--json") })
+		out := captureStdout(t, func() { _, _ = executeCommand(t, RootCmd(), "index-status", "--json") })
 		var p map[string]any
 		if err := json.Unmarshal([]byte(out), &p); err != nil {
 			t.Fatalf("not JSON: %v (%q)", err, out)
@@ -489,7 +489,7 @@ func TestBareRunShowsStatusPathAndDescription(t *testing.T) {
 	})
 	t.Run("help unchanged", func(t *testing.T) {
 		newWorkspace(t)
-		out, err := executeCommand(RootCmd(), "--help")
+		out, err := executeCommand(t, RootCmd(), "--help")
 		if err != nil {
 			t.Fatalf("--help: %v", err)
 		}
@@ -560,7 +560,7 @@ func TestBareRunWithNoIndexReportsNotIndexed(t *testing.T) {
 				args = append(args, m.flag)
 			}
 			var runErr error
-			out := captureStdout(t, func() { _, runErr = executeCommand(RootCmd(), args...) })
+			out := captureStdout(t, func() { _, runErr = executeCommand(t, RootCmd(), args...) })
 			if runErr != nil {
 				t.Fatalf("bare run %s with no index returned %v; want exit 0", m.flag, runErr)
 			}
@@ -592,7 +592,7 @@ func TestBareRunWithQdrantNeverReportsNotIndexed(t *testing.T) {
 				args = append(args, flag)
 			}
 			var runErr error
-			out := captureStdout(t, func() { _, runErr = executeCommand(RootCmd(), args...) })
+			out := captureStdout(t, func() { _, runErr = executeCommand(t, RootCmd(), args...) })
 			if runErr != nil {
 				t.Fatalf("bare run %s with qdrant: %v", flag, runErr)
 			}
@@ -623,7 +623,7 @@ func TestBareRunWithAnUnreadableIndexStillFails(t *testing.T) {
 				args = append(args, flag)
 			}
 			var runErr error
-			out := captureStdout(t, func() { _, runErr = executeCommand(RootCmd(), args...) })
+			out := captureStdout(t, func() { _, runErr = executeCommand(t, RootCmd(), args...) })
 			if runErr == nil {
 				t.Fatalf("bare run %s over a corrupt index returned nil; it would exit 0:\n%s", flag, out)
 			}
@@ -666,7 +666,7 @@ func TestRootCmd_AutoDiscoversTheSharedDefaultConfigPath(t *testing.T) {
 	loadedConfig = nil
 	t.Cleanup(func() { loadedConfig = prev })
 
-	_, _ = executeCommand(RootCmd(), "index-status")
+	_, _ = executeCommand(t, RootCmd(), "index-status")
 
 	if loadedConfig == nil || loadedConfig.MaxResults != 7 {
 		t.Fatalf("default config was not auto-loaded: %+v", loadedConfig)
@@ -682,7 +682,7 @@ func TestUnknownStorageIsRejected(t *testing.T) {
 	t.Run("flag", func(t *testing.T) {
 		newWorkspace(t)
 		var err error
-		out := captureStdout(t, func() { _, err = executeCommand(RootCmd(), "--storage", "redis") })
+		out := captureStdout(t, func() { _, err = executeCommand(t, RootCmd(), "--storage", "redis") })
 		if err == nil {
 			t.Fatalf("--storage redis succeeded:\n%s", out)
 		}
@@ -704,7 +704,7 @@ func TestUnknownStorageIsRejected(t *testing.T) {
 			t.Fatal(err)
 		}
 		var err error
-		out := captureStdout(t, func() { _, err = executeCommand(RootCmd(), "--config", cfgPath, "--profile", "code") })
+		out := captureStdout(t, func() { _, err = executeCommand(t, RootCmd(), "--config", cfgPath, "--profile", "code") })
 		if err == nil {
 			t.Fatalf("code_storage: redis succeeded:\n%s", out)
 		}

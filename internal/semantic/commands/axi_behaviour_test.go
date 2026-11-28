@@ -162,7 +162,7 @@ func TestIndexStatusWithNoIndexFailsInEveryMode(t *testing.T) {
 				args = append(args, m.flag)
 			}
 			var runErr error
-			captureStdout(t, func() { _, runErr = executeCommand(RootCmd(), args...) })
+			captureStdout(t, func() { _, runErr = executeCommand(t, RootCmd(), args...) })
 			if runErr == nil {
 				t.Fatal("index-status returned nil with no index; the command would exit 0")
 			}

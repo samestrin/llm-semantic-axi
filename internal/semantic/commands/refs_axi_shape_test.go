@@ -59,7 +59,7 @@ func TestCallersAXIDefaultIsShapedAndStatesTotal(t *testing.T) {
 	callGraphWorkspace(t)
 
 	out := captureStdout(t, func() {
-		if _, err := executeCommand(RootCmd(), "callers", "Authenticate"); err != nil {
+		if _, err := executeCommand(t, RootCmd(), "callers", "Authenticate"); err != nil {
 			t.Fatalf("callers: %v", err)
 		}
 	})
@@ -116,7 +116,7 @@ func TestCallersAXIFullRestoresEveryField(t *testing.T) {
 	callGraphWorkspace(t)
 
 	out := captureStdout(t, func() {
-		if _, err := executeCommand(RootCmd(), "callers", "--full", "Authenticate"); err != nil {
+		if _, err := executeCommand(t, RootCmd(), "callers", "--full", "Authenticate"); err != nil {
 			t.Fatalf("callers --full: %v", err)
 		}
 	})
@@ -133,7 +133,7 @@ func TestRefsAXIFullRestoresEveryField(t *testing.T) {
 	callGraphWorkspace(t)
 
 	out := captureStdout(t, func() {
-		if _, err := executeCommand(RootCmd(), "refs", "--full", "Caller"); err != nil {
+		if _, err := executeCommand(t, RootCmd(), "refs", "--full", "Caller"); err != nil {
 			t.Fatalf("refs --full: %v", err)
 		}
 	})
