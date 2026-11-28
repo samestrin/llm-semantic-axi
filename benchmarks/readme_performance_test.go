@@ -12,20 +12,22 @@ import (
 // page: with a relative path out of the package directory.
 const readmePath = "../README.md"
 
-// sectionBody returns the body of a markdown section, from its heading line to
-// the next "## " heading (or the end of the file).
+// sectionBody returns the body of a markdown section, from just after its
+// heading line to the next "## " heading (or the end of the file). A marker on
+// the first line is stripped exactly like one that follows other content, so
+// neither case leaves the marker's trailing newline in the body.
 func sectionBody(t *testing.T, doc, heading string) string {
 	t.Helper()
 	marker := heading + "\n"
-	start := strings.Index(doc, "\n"+marker)
-	if start < 0 {
-		if strings.HasPrefix(doc, marker) {
-			start = -1
-		} else {
-			t.Fatalf("no %q section", heading)
-		}
+	var body string
+	switch {
+	case strings.HasPrefix(doc, marker):
+		body = doc[len(marker):]
+	case strings.Contains(doc, "\n"+marker):
+		body = doc[strings.Index(doc, "\n"+marker)+len("\n"+marker):]
+	default:
+		t.Fatalf("no %q section", heading)
 	}
-	body := doc[start+len(marker):]
 	if k := strings.Index(body, "\n## "); k >= 0 {
 		body = body[:k]
 	}
@@ -70,6 +72,23 @@ func TestReadmePerformanceTableMatchesTheGeneratedResults(t *testing.T) {
 		if got[i] != want[i] {
 			t.Errorf("%s Performance row %d does not match %s; run `make bench-perf` and copy the table\n want: %s\n  got: %s", readmePath, i+1, PerfResultsFile, want[i], got[i])
 		}
+	}
+}
+
+// Defends sectionBody when the heading is the first line of the document. The
+// body must start after the marker, exactly as it does when other content
+// precedes the heading; start=-1 used to leave the marker's trailing newline in
+// both bodies, so a one-byte slice shift stayed green. The exact body assertion
+// is what reddens a shift that moves both cases together.
+func TestSectionBodyFirstLineHeadingMatchesALaterHeading(t *testing.T) {
+	const body = "| case | value |\n| first line | 1 |\n"
+	first := sectionBody(t, "# Performance\n"+body, "# Performance")
+	later := sectionBody(t, "intro\n\n# Performance\n"+body, "# Performance")
+	if first != later {
+		t.Fatalf("first-line heading body %q, later-heading body %q; want the same", first, later)
+	}
+	if first != body {
+		t.Fatalf("first-line heading body %q, want exactly %q", first, body)
 	}
 }
 
