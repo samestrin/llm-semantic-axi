@@ -193,6 +193,47 @@ func TestReadmeDocumentationSectionLinksReferencePages(t *testing.T) {
 	}
 }
 
+// conformanceVerdictOK reports whether a conformance-table status cell states
+// a Met or Exception verdict. A cell that starts with "Not" ("Not Met") is a
+// failure verdict, not a Met one, even though it contains "Met": accepting it
+// would report a failed principle as conforming (debt row 7c7eb10bef97791e).
+func conformanceVerdictOK(cell string) bool {
+	status := strings.Trim(cell, "*")
+	if status == "" || strings.HasPrefix(status, "Not") {
+		return false
+	}
+	return strings.Contains(status, "Met") || strings.Contains(status, "Exception")
+}
+
+// TestConformanceVerdictGuardRejectsNotVerdicts is the sabotage list for the
+// conformance verdict guard (debt row 7c7eb10bef97791e). The old check accepted
+// any cell containing "Met", so a row rewritten to "Not Met" -- a failure
+// verdict -- passed a guard whose own message says "want a Met or Exception
+// verdict". Each rejected row below is a sabotage the guard must catch; each
+// accepted row is a verdict the current docs use, which must keep passing.
+func TestConformanceVerdictGuardRejectsNotVerdicts(t *testing.T) {
+	cases := []struct {
+		cell string
+		ok   bool
+	}{
+		{"Not Met", false},     // the debt row's sabotage: contains "Met" but says the opposite
+		{"**Not Met**", false}, // bold cells are trimmed before the verdict is read
+		{"Not met", false},
+		{"", false},
+		{"**", false},
+		{"Pending", false},
+		{"Met", true},
+		{"**Met**", true},
+		{"Met, with an exception", true}, // principle 7's actual verdict
+		{"Exception", true},
+	}
+	for _, tc := range cases {
+		if got := conformanceVerdictOK(tc.cell); got != tc.ok {
+			t.Errorf("conformanceVerdictOK(%q) = %v, want %v", tc.cell, got, tc.ok)
+		}
+	}
+}
+
 // TestAxiConformanceDocKeepsTenPrinciples defends the move of the conformance
 // table into docs/axi-conformance.md: all ten principles must arrive, in order,
 // each with a verdict and a note. A truncated move that dropped a row would
@@ -228,8 +269,7 @@ func TestAxiConformanceDocKeepsTenPrinciples(t *testing.T) {
 		if cells[1] == "" {
 			t.Errorf("docs/axi-conformance.md principle %s has no name", cells[0])
 		}
-		status := strings.Trim(cells[2], "*")
-		if status == "" || (!strings.Contains(status, "Met") && !strings.Contains(status, "Exception")) {
+		if !conformanceVerdictOK(cells[2]) {
 			t.Errorf("docs/axi-conformance.md principle %s status = %q, want a Met or Exception verdict", cells[0], cells[2])
 		}
 		if cells[3] == "" {
