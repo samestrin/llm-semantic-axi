@@ -104,7 +104,7 @@ func TestLanguagesDocKeepsCallEdgeLimits(t *testing.T) {
 		}
 	}
 
-	// An imports edge names a module, which has no chunk: never a resolved link.
+	// An imports edge is never resolved to a chunk.
 	if !strings.Contains(page, "`refs` always lists it as unresolved") {
 		t.Error("docs/languages.md lost the rule that an imports edge is always unresolved")
 	}
@@ -116,6 +116,18 @@ func TestLanguagesDocKeepsCallEdgeLimits(t *testing.T) {
 	}
 	if !strings.Contains(page, "does not re-chunk files whose hash is unchanged") {
 		t.Error("docs/languages.md lost the note that index-update does not re-chunk unchanged files")
+	}
+
+	// A module-level call is recorded against the file's `<module>` chunk
+	// (epic 40 T5). The page must name that owner and must not regress to
+	// saying the call records no edge, which would tell a user an empty
+	// `callers` answer is proof when the edge is there.
+	jsPara := paragraphStartingWith(page, "JavaScript and TypeScript record a call")
+	if strings.Contains(jsPara, "has no caller chunk and records no edge") {
+		t.Error("docs/languages.md still says a module-level call has no caller chunk and records no edge")
+	}
+	if !strings.Contains(jsPara, "`<module>`") {
+		t.Error("docs/languages.md does not name `<module>` as the owner of a module-level call")
 	}
 
 	// The three cases an empty answer can be, which the commands report.
