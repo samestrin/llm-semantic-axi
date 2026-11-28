@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bytes"
+	"os"
 	"testing"
 
 	"github.com/spf13/cobra"
@@ -115,7 +116,17 @@ func TestRootCmd_GlobalFlags(t *testing.T) {
 	}
 }
 
-func executeCommand(root *cobra.Command, args ...string) (string, error) {
+// executeCommand runs root with args and returns its combined output. Every
+// Execute resolves the invocation's flags into the output-mode globals, so it
+// snapshots them and restores the prior values with t.Cleanup: without that,
+// a --json run leaks JSON mode into every later test (debt 3e27964e44251fbe).
+// These globals are package-level; tests here must never use t.Parallel().
+func executeCommand(t *testing.T, root *cobra.Command, args ...string) (string, error) {
+	t.Helper()
+	axi, jsonOut, minOut := GlobalAXIOutput, GlobalJSONOutput, GlobalMinOutput
+	t.Cleanup(func() {
+		GlobalAXIOutput, GlobalJSONOutput, GlobalMinOutput = axi, jsonOut, minOut
+	})
 	buf := new(bytes.Buffer)
 	root.SetOut(buf)
 	root.SetErr(buf)
@@ -125,9 +136,58 @@ func executeCommand(root *cobra.Command, args ...string) (string, error) {
 	return buf.String(), err
 }
 
+// TestExecuteCommandRestoresOutputModeGlobals defends debt 3e27964e44251fbe:
+// executeCommand runs a real invocation, and resolveOutputMode publishes its
+// flags to the package globals. Without a restore, a --json run leaks JSON
+// mode into every test that runs after it. The second subtest is "the next
+// test": t.Run is synchronous, so it observes exactly what a later test would.
+// No t.Parallel(): these globals are package-level.
+func TestExecuteCommandRestoresOutputModeGlobals(t *testing.T) {
+	newWorkspace(t)
+	// RootCmd() itself writes the globals (flag registration binds them and
+	// clears GlobalAXIOutput), so build the tree before planting prior values.
+	root := RootCmd()
+	// Deliberately not the defaults, so "restored" cannot be confused with
+	// "reset to false".
+	const prevAXI, prevJSON, prevMin = true, false, true
+	GlobalAXIOutput, GlobalJSONOutput, GlobalMinOutput = prevAXI, prevJSON, prevMin
+	t.Cleanup(func() { GlobalAXIOutput, GlobalJSONOutput, GlobalMinOutput = false, false, false })
+
+	t.Run("json invocation", func(t *testing.T) {
+		// Not captureStdout: it resets the globals itself at test end, which
+		// would mask whether executeCommand restored them. Silence the JSON
+		// payload with /dev/null instead.
+		devNull, err := os.OpenFile(os.DevNull, os.O_WRONLY, 0)
+		if err != nil {
+			t.Fatalf("open %s: %v", os.DevNull, err)
+		}
+		orig := os.Stdout
+		// Restore registered before the swap so a panic inside executeCommand
+		// cannot leave later tests writing to /dev/null (same defect captureStdout
+		// guards). Double restore/close is harmless.
+		t.Cleanup(func() { os.Stdout = orig; _ = devNull.Close() })
+		os.Stdout = devNull
+		// No index: index-status fails, but PersistentPreRunE has already
+		// resolved --json; the mode publish is what this test exercises.
+		_, _ = executeCommand(t, root, "index-status", "--json")
+		os.Stdout = orig
+		_ = devNull.Close()
+		if !GlobalJSONOutput || GlobalAXIOutput {
+			t.Fatalf("--json did not take effect (axi=%v json=%v); the ordering assertion below would prove nothing", GlobalAXIOutput, GlobalJSONOutput)
+		}
+	})
+
+	t.Run("next test sees the prior values", func(t *testing.T) {
+		if GlobalAXIOutput != prevAXI || GlobalJSONOutput != prevJSON || GlobalMinOutput != prevMin {
+			t.Errorf("output-mode globals leaked: axi=%v json=%v min=%v, want %v %v %v",
+				GlobalAXIOutput, GlobalJSONOutput, GlobalMinOutput, prevAXI, prevJSON, prevMin)
+		}
+	})
+}
+
 func TestSearchCmd_HelpOutput(t *testing.T) {
 	root := RootCmd()
-	output, err := executeCommand(root, "search", "--help")
+	output, err := executeCommand(t, root, "search", "--help")
 
 	if err != nil {
 		t.Fatalf("Help command failed: %v", err)
@@ -180,7 +240,7 @@ func TestSearchCmd_HybridFlags(t *testing.T) {
 // TestSearchCmd_HybridFlag_HelpOutput verifies that hybrid flags appear in help output.
 func TestSearchCmd_HybridFlag_HelpOutput(t *testing.T) {
 	root := RootCmd()
-	output, err := executeCommand(root, "search", "--help")
+	output, err := executeCommand(t, root, "search", "--help")
 
 	if err != nil {
 		t.Fatalf("Help command failed: %v", err)
@@ -214,7 +274,7 @@ func TestSearchCmd_InvalidFusionAlpha_Error(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			root := RootCmd()
-			_, err := executeCommand(root, "search", "--hybrid", "--fusion-alpha", tt.alpha, "test query")
+			_, err := executeCommand(t, root, "search", "--hybrid", "--fusion-alpha", tt.alpha, "test query")
 
 			// Should fail with validation error
 			if err == nil {
@@ -237,7 +297,7 @@ func TestSearchCmd_InvalidFusionK_Error(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			root := RootCmd()
-			_, err := executeCommand(root, "search", "--hybrid", "--fusion-k", tt.k, "test query")
+			_, err := executeCommand(t, root, "search", "--hybrid", "--fusion-k", tt.k, "test query")
 
 			// Should fail with validation error
 			if err == nil {
@@ -398,7 +458,7 @@ func TestSearchCmd_OutputFlags_Unchanged(t *testing.T) {
 // TestSearchCmd_HelpOutput_ContainsOriginalFlags verifies help output has all original flags.
 func TestSearchCmd_HelpOutput_ContainsOriginalFlags(t *testing.T) {
 	root := RootCmd()
-	output, err := executeCommand(root, "search", "--help")
+	output, err := executeCommand(t, root, "search", "--help")
 
 	if err != nil {
 		t.Fatalf("Help command failed: %v", err)
@@ -536,7 +596,7 @@ func TestSearchCmd_RecencyFlags(t *testing.T) {
 // TestSearchCmd_RecencyFlag_HelpOutput verifies that recency flags appear in help output.
 func TestSearchCmd_RecencyFlag_HelpOutput(t *testing.T) {
 	root := RootCmd()
-	output, err := executeCommand(root, "search", "--help")
+	output, err := executeCommand(t, root, "search", "--help")
 
 	if err != nil {
 		t.Fatalf("Help command failed: %v", err)
@@ -569,7 +629,7 @@ func TestSearchCmd_InvalidRecencyFactor_Error(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			root := RootCmd()
-			_, err := executeCommand(root, "search", "--recency-boost", "--recency-factor", tt.factor, "test query")
+			_, err := executeCommand(t, root, "search", "--recency-boost", "--recency-factor", tt.factor, "test query")
 
 			// Should fail with validation error
 			if err == nil {
@@ -592,7 +652,7 @@ func TestSearchCmd_InvalidRecencyDecay_Error(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			root := RootCmd()
-			_, err := executeCommand(root, "search", "--recency-boost", "--recency-decay", tt.decay, "test query")
+			_, err := executeCommand(t, root, "search", "--recency-boost", "--recency-decay", tt.decay, "test query")
 
 			// Should fail with validation error
 			if err == nil {

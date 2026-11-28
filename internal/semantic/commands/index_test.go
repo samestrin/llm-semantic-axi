@@ -171,7 +171,7 @@ func TestRootCmd_HasIndexCommands(t *testing.T) {
 
 func TestIndexCmd_HelpOutput(t *testing.T) {
 	root := RootCmd()
-	output, err := executeCommand(root, "index", "--help")
+	output, err := executeCommand(t, root, "index", "--help")
 
 	if err != nil {
 		t.Fatalf("Help command failed: %v", err)
@@ -195,7 +195,7 @@ func TestIndexCmd_HelpOutput(t *testing.T) {
 
 func TestIndexStatusCmd_HelpOutput(t *testing.T) {
 	root := RootCmd()
-	output, err := executeCommand(root, "index-status", "--help")
+	output, err := executeCommand(t, root, "index-status", "--help")
 
 	if err != nil {
 		t.Fatalf("Help command failed: %v", err)
@@ -208,7 +208,7 @@ func TestIndexStatusCmd_HelpOutput(t *testing.T) {
 
 func TestIndexUpdateCmd_HelpOutput(t *testing.T) {
 	root := RootCmd()
-	output, err := executeCommand(root, "index-update", "--help")
+	output, err := executeCommand(t, root, "index-update", "--help")
 
 	if err != nil {
 		t.Fatalf("Help command failed: %v", err)

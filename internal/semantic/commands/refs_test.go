@@ -31,7 +31,7 @@ func TestRefCommands_RegisteredInRoot(t *testing.T) {
 
 func TestRefCommands_RequireASymbol(t *testing.T) {
 	for _, name := range []string{"callers", "refs"} {
-		if _, err := executeCommand(RootCmd(), name); err == nil {
+		if _, err := executeCommand(t, RootCmd(), name); err == nil {
 			t.Errorf("%q without a symbol should be an error", name)
 		}
 	}
